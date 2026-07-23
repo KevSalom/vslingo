@@ -25,6 +25,28 @@ La Alpha se organiza alrededor de tres módulos objetivo:
 - **Proveedores:** OpenRouter para Whisper y LLM, AWS Polly Neural y Microsoft Edge Neural para TTS, y `youtube-transcript-api` para subtítulos.
 - **Estado local:** `localStorage` versionado; sin autenticación ni base de datos en el alcance de la Alpha.
 
+## Validación local
+
+Los comandos reproducibles de la base son:
+
+```powershell
+# Backend
+Set-Location backend
+uv sync --frozen --all-groups
+uv lock --check
+uv run ruff check app tests
+uv run mypy
+uv run pytest
+
+# Frontend (desde la raíz del repositorio)
+Set-Location ..\frontend
+pnpm install --frozen-lockfile
+pnpm run quality
+```
+
+Los smoke tests live se ejecutan por proveedor y sólo de forma opt-in; consulta
+[`backend/README.md`](backend/README.md). No forman parte de las suites normales.
+
 ## Documentación
 
 - [Especificación de producto y decisiones técnicas](docs/product-spec.md)

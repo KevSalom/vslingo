@@ -1,0 +1,30 @@
+"""Explicit asynchronous boundaries for external AI and speech providers."""
+
+from collections.abc import AsyncIterator, Sequence
+from typing import Protocol, runtime_checkable
+
+from app.domain.models import ChatMessage, SynthesizedSpeech, Transcription
+
+
+@runtime_checkable
+class SpeechToTextPort(Protocol):
+    """Transcribe one complete audio segment."""
+
+    async def transcribe(self, audio: bytes, *, media_type: str) -> Transcription:
+        """Return normalized text for ``audio``."""
+
+
+@runtime_checkable
+class LanguageModelPort(Protocol):
+    """Stream conversational text from a provider-neutral message list."""
+
+    def stream_chat(self, messages: Sequence[ChatMessage]) -> AsyncIterator[str]:
+        """Yield normalized text fragments in provider order."""
+
+
+@runtime_checkable
+class SpeechSynthesizerPort(Protocol):
+    """Synthesize one text segment as MP3 without implicit fallback."""
+
+    async def synthesize(self, text: str, *, voice: str | None = None) -> SynthesizedSpeech:
+        """Return MP3 bytes for ``text``."""

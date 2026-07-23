@@ -1,0 +1,65 @@
+"""Deterministic provider adapters used by normal tests and local demos."""
+
+from collections.abc import AsyncIterator, Sequence
+from dataclasses import dataclass, field
+
+from app.domain.errors import IntegrationError, IntegrationErrorCode
+from app.domain.models import ChatMessage, SynthesizedSpeech, Transcription
+
+
+@dataclass(slots=True)
+class FakeSpeechToText:
+    """Return a preconfigured transcript without network access."""
+
+    result: Transcription = field(
+        default_factory=lambda: Transcription(text="This is a deterministic transcript.")
+    )
+
+    async def transcribe(self, audio: bytes, *, media_type: str) -> Transcription:
+        if not audio:
+            raise IntegrationError(
+                "fake_stt",
+                IntegrationErrorCode.INVALID_REQUEST,
+                "Audio must not be empty.",
+            )
+        if not media_type.startswith("audio/"):
+            raise IntegrationError(
+                "fake_stt",
+                IntegrationErrorCode.INVALID_REQUEST,
+                "An audio media type is required.",
+            )
+        return self.result
+
+
+@dataclass(slots=True)
+class FakeLanguageModel:
+    """Stream fixed chunks so orchestration can be exercised deterministically."""
+
+    chunks: tuple[str, ...] = ("Your explanation ", "is clear.")
+
+    async def stream_chat(self, messages: Sequence[ChatMessage]) -> AsyncIterator[str]:
+        if not messages:
+            raise IntegrationError(
+                "fake_llm",
+                IntegrationErrorCode.INVALID_REQUEST,
+                "At least one chat message is required.",
+            )
+        for chunk in self.chunks:
+            yield chunk
+
+
+@dataclass(slots=True)
+class FakeSpeechSynthesizer:
+    """Return stable MP3-like bytes without contacting a speech service."""
+
+    audio: bytes = b"ID3-vslingo-fake-audio"
+
+    async def synthesize(self, text: str, *, voice: str | None = None) -> SynthesizedSpeech:
+        del voice
+        if not text.strip():
+            raise IntegrationError(
+                "fake_tts",
+                IntegrationErrorCode.INVALID_REQUEST,
+                "Text must not be empty.",
+            )
+        return SynthesizedSpeech(audio=self.audio)

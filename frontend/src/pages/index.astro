@@ -1,17 +1,37 @@
 ---
-
+import '../styles/global.css';
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <meta
+      name="description"
+      content="Practica inglés profesional para desarrollo de software con VSLingo."
+    />
+    <title>VSLingo</title>
+  </head>
+  <body class="bg-slate-950 text-slate-100">
+    <main class="mx-auto flex min-h-screen max-w-4xl items-center px-6 py-16">
+      <div>
+        <p class="font-mono text-sm font-semibold uppercase tracking-[0.2em] text-cyan-300">
+          Public Alpha
+        </p>
+        <h1 class="mt-4 text-5xl font-semibold tracking-tight sm:text-7xl">VSLingo</h1>
+        <p class="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
+          El workspace para practicar el inglés que usas al diseñar, explicar y entregar
+          software.
+        </p>
+        <a
+          class="mt-8 inline-flex rounded-xl bg-cyan-400 px-5 py-3 font-semibold text-slate-950 transition-colors hover:bg-cyan-300 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-300"
+          href="/demo"
+        >
+          Probar demo
+        </a>
+      </div>
+    </main>
+  </body>
 </html>

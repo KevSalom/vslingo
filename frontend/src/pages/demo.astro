@@ -1,0 +1,21 @@
+---
+import { DemoWorkspace } from '../components/DemoWorkspace';
+import '../styles/global.css';
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <meta
+      name="description"
+      content="Workspace de práctica de inglés profesional para desarrolladores."
+    />
+    <title>Demo | VSLingo</title>
+  </head>
+  <body>
+    <DemoWorkspace client:load />
+  </body>
+</html>
