@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator, Sequence
 from typing import Protocol, runtime_checkable
 
 from app.domain.models import ChatMessage, SynthesizedSpeech, Transcription
+from app.domain.writing import CorrectionResult
 
 
 @runtime_checkable
@@ -12,6 +13,14 @@ class SpeechToTextPort(Protocol):
 
     async def transcribe(self, audio: bytes, *, media_type: str) -> Transcription:
         """Return normalized text for ``audio``."""
+
+
+@runtime_checkable
+class CorrectionProviderPort(Protocol):
+    """Return one structured correction for an English text."""
+
+    async def correct(self, text: str) -> CorrectionResult:
+        """Return a provider-neutral structured correction."""
 
 
 @runtime_checkable

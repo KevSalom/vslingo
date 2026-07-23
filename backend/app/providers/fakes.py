@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 
 from app.domain.errors import IntegrationError, IntegrationErrorCode
 from app.domain.models import ChatMessage, SynthesizedSpeech, Transcription
+from app.domain.writing import CorrectionResult
 
 
 @dataclass(slots=True)
@@ -46,6 +47,27 @@ class FakeLanguageModel:
             )
         for chunk in self.chunks:
             yield chunk
+
+
+@dataclass(slots=True)
+class FakeCorrectionProvider:
+    """Return a configured correction or echo a valid unchanged result."""
+
+    result: CorrectionResult | None = None
+    error: IntegrationError | None = None
+
+    async def correct(self, text: str) -> CorrectionResult:
+        if self.error is not None:
+            raise self.error
+        if self.result is not None:
+            return self.result
+        return CorrectionResult(
+            original_text=text,
+            corrected_text=text,
+            has_corrections=False,
+            corrections=(),
+            general_feedback="El texto es correcto y natural.",
+        )
 
 
 @dataclass(slots=True)

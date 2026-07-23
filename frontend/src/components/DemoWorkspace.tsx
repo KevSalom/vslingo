@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+import { WritingStudio } from '../features/writing/WritingStudio';
+
 type ModuleId = 'voice' | 'writing' | 'video';
 
 type WorkspaceModule = {
@@ -76,22 +78,30 @@ export function DemoWorkspace() {
             </div>
           </nav>
 
-          <section className="flex items-center p-6 sm:p-10" aria-live="polite">
-            <div className="max-w-2xl">
-              <p className="mb-3 font-mono text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
-                {activeModule.eyebrow}
-              </p>
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">
-                {activeModule.label}
-              </h1>
-              <p className="mt-5 max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
-                {activeModule.description}
-              </p>
-              <div className="mt-8 rounded-xl border border-dashed border-slate-700 bg-slate-950/40 p-5 text-sm text-slate-400">
-                Punto de entrada preparado. La funcionalidad vertical se implementará en su
-                incremento correspondiente.
+          <section
+            className={`min-w-0 p-5 sm:p-7 lg:p-10 ${
+              activeId === 'writing' ? '' : 'flex items-center'
+            }`}
+          >
+            {activeId === 'writing' ? (
+              <WritingStudio />
+            ) : (
+              <div className="max-w-2xl">
+                <p className="mb-3 font-mono text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
+                  {activeModule.eyebrow}
+                </p>
+                <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">
+                  {activeModule.label}
+                </h1>
+                <p className="mt-5 max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
+                  {activeModule.description}
+                </p>
+                <div className="mt-8 rounded-xl border border-dashed border-slate-700 bg-slate-950/40 p-5 text-sm text-slate-400">
+                  Punto de entrada preparado. La funcionalidad vertical se implementará en su
+                  incremento correspondiente.
+                </div>
               </div>
-            </div>
+            )}
           </section>
         </div>
       </section>

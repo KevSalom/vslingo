@@ -14,12 +14,26 @@ Run these commands from `frontend/`:
 | Command | Action |
 | :-- | :-- |
 | `pnpm install --frozen-lockfile` | Install the exact locked dependencies. |
-| `pnpm run dev` | Start the local Astro development server at `http://localhost:4321`. |
+| `pnpm exec astro dev --background` | Start the managed Astro server at `http://localhost:4321`. |
+| `pnpm exec astro dev status` | Check the background development server. |
+| `pnpm exec astro dev logs` | Read background development logs. |
+| `pnpm exec astro dev stop` | Stop the background development server. |
 | `pnpm run check` | Run Astro and TypeScript diagnostics. |
 | `pnpm run test` | Run the Vitest suite once. |
 | `pnpm run build` | Build static assets into `dist/`. |
 | `pnpm run quality` | Run check, tests, and build in sequence. |
 
-The static landing is available at `/`; the interactive T01 workspace is at
-`/demo`. T02 will add the Writing Studio vertical without changing the package
-manager or lockfile workflow.
+## API configuration
+
+Copy the public example when you need to override the backend URL:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+`PUBLIC_API_URL` defaults to `http://127.0.0.1:8000` and is embedded into the
+static build; it never contains provider secrets.
+
+The static landing is available at `/`; `/demo` contains the interactive
+workspace and the functional Writing Studio vertical. Voice Studio and Video
+Lab remain placeholders until their roadmap increments.

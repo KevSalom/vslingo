@@ -1,6 +1,6 @@
 # VSLingo Backend
 
-FastAPI walking skeleton and provider boundaries for the VSLingo Public Alpha.
+FastAPI API with typed provider boundaries and the Writing Studio correction vertical for the VSLingo Public Alpha.
 
 ## Local setup
 
@@ -22,10 +22,23 @@ already prepared with empty, safe placeholders for OpenRouter and AWS:
 Copy-Item .env.example .env
 ```
 
-Keep `OPENROUTER_API_KEY`, `OPENROUTER_LLM_MODEL`, `AWS_ACCESS_KEY_ID`, and
-`AWS_SECRET_ACCESS_KEY` empty until a live smoke has explicit authorization,
-credentials, and a known cost limit. `EDGE_TTS_VOICE` has a safe default and
-requires no Azure SDK credential.
+Set `OPENROUTER_API_KEY` and `OPENROUTER_LLM_MODEL` only when a live Writing
+request or OpenRouter smoke is explicitly authorized and has a known cost
+limit. The selected model must support Structured Outputs. Without those
+values, startup and health still work, while Writing returns a safe typed 503.
+Keep AWS credentials empty until an authorized Polly smoke; `EDGE_TTS_VOICE`
+has a safe default and requires no Azure SDK credential.
+
+## Writing endpoint
+
+`POST /api/writing/correct` accepts up to 1000 characters and returns a typed
+correction with categorized changes and Spanish feedback. With authorized
+OpenRouter values in `.env`, try it from another PowerShell terminal:
+
+```powershell
+$body = @{ text = "Yesterday I deploy the API and the tests was passing." } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/writing/correct -ContentType "application/json" -Body $body
+```
 
 ## Quality checks
 

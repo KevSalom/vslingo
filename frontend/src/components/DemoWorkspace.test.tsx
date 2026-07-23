@@ -12,12 +12,15 @@ describe('DemoWorkspace', () => {
     expect(screen.getByText('Public Alpha')).toBeInTheDocument();
   });
 
-  it('switches between the three integrated module placeholders', async () => {
+  it('switches between the integrated Writing feature and remaining module placeholders', async () => {
     const user = userEvent.setup();
     render(<DemoWorkspace />);
 
     await user.click(screen.getByRole('button', { name: 'Writing Studio' }));
     expect(screen.getByRole('heading', { name: 'Writing Studio' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: 'Tu texto en inglés' }).closest('[aria-live]'),
+    ).toBeNull();
 
     await user.click(screen.getByRole('button', { name: 'Video Lab' }));
     expect(screen.getByRole('heading', { name: 'Video Lab' })).toBeInTheDocument();

@@ -4,12 +4,19 @@ from typing import Final
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app import __version__
+from app.api.writing import (
+    build_writing_router,
+    handle_request_validation_error,
+)
 from app.core.config import Settings
+from app.providers.openrouter_writing import OpenRouterCorrectionProvider
 from app.providers.readiness import get_provider_readiness
+from app.services.correction import CorrectionService
 
 SERVICE_NAME: Final = "VSLingo API"
 
@@ -30,19 +37,31 @@ class HealthResponse(BaseModel):
     providers: dict[str, ProviderHealth]
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
-    """Build an isolated FastAPI application with explicit settings."""
+def create_app(
+    settings: Settings | None = None,
+    *,
+    correction_service: CorrectionService | None = None,
+) -> FastAPI:
+    """Build an isolated FastAPI application with explicit dependencies."""
 
     runtime_settings = settings or Settings()
+    runtime_correction_service = correction_service or CorrectionService(
+        OpenRouterCorrectionProvider(runtime_settings)
+    )
     application = FastAPI(title=SERVICE_NAME, version=__version__)
     application.state.settings = runtime_settings
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[str(runtime_settings.frontend_origin).rstrip("/")],
         allow_credentials=False,
-        allow_methods=["GET"],
+        allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"],
     )
+    application.add_exception_handler(
+        RequestValidationError,
+        handle_request_validation_error,
+    )
+    application.include_router(build_writing_router(runtime_correction_service))
 
     @application.get("/api/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
