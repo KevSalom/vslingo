@@ -8,7 +8,7 @@ describe('DemoWorkspace', () => {
   it('starts in Voice Studio and exposes the Public Alpha state', () => {
     render(<DemoWorkspace />);
 
-    expect(screen.getByRole('heading', { name: 'Voice Studio' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Voice Studio/i })).toBeInTheDocument();
     expect(screen.getByText('Public Alpha')).toBeInTheDocument();
   });
 
@@ -32,6 +32,6 @@ describe('DemoWorkspace', () => {
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Voice Studio' }));
-    expect(screen.getByRole('heading', { name: 'Voice Studio' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Voice Studio/i })).toBeInTheDocument();
   });
 });

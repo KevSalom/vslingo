@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { VideoLab } from '../features/video/VideoLab';
+import { VoiceStudio } from '../features/voice/VoiceStudio';
 import { WritingStudio } from '../features/writing/WritingStudio';
 
 type ModuleId = 'voice' | 'writing' | 'video';
@@ -35,7 +36,6 @@ const MODULES: readonly WorkspaceModule[] = [
 
 export function DemoWorkspace() {
   const [activeId, setActiveId] = useState<ModuleId>('voice');
-  const activeModule = MODULES.find((module) => module.id === activeId) ?? MODULES[0];
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
@@ -81,7 +81,7 @@ export function DemoWorkspace() {
 
           <section
             className={`min-w-0 p-5 sm:p-7 lg:p-10 ${
-              activeId === 'voice' ? 'flex items-center' : ''
+              activeId === 'voice' ? 'flex items-center justify-center' : ''
             }`}
           >
             {activeId === 'writing' ? (
@@ -89,21 +89,7 @@ export function DemoWorkspace() {
             ) : activeId === 'video' ? (
               <VideoLab />
             ) : (
-              <div className="max-w-2xl">
-                <p className="mb-3 font-mono text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
-                  {activeModule.eyebrow}
-                </p>
-                <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">
-                  {activeModule.label}
-                </h1>
-                <p className="mt-5 max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
-                  {activeModule.description}
-                </p>
-                <div className="mt-8 rounded-xl border border-dashed border-slate-700 bg-slate-950/40 p-5 text-sm text-slate-400">
-                  Punto de entrada preparado. La funcionalidad vertical se implementará en su
-                  incremento correspondiente.
-                </div>
-              </div>
+              <VoiceStudio />
             )}
           </section>
         </div>

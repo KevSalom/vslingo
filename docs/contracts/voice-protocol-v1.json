@@ -1,0 +1,70 @@
+{
+  "protocol_version": 1,
+  "client_events": {
+    "session_start": {
+      "type": "session.start",
+      "protocol_version": 1
+    },
+    "session_config": {
+      "type": "session.config",
+      "scenario": "daily_standup",
+      "speech_provider": "aws_polly"
+    },
+    "speech_started": {
+      "type": "speech.started",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1
+    },
+    "utterance_begin": {
+      "type": "utterance.begin",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "media_type": "audio/wav",
+      "byte_length": 32044,
+      "duration_ms": 1000
+    },
+    "response_cancel": {
+      "type": "response.cancel",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1
+    },
+    "session_end": {
+      "type": "session.end"
+    }
+  },
+  "server_events": {
+    "session_ready": {
+      "type": "session.ready",
+      "protocol_version": 1,
+      "session_id": "98765432-e89b-12d3-a456-426614174000",
+      "generation": 0
+    },
+    "session_configured": {
+      "type": "session.configured",
+      "scenario": "daily_standup",
+      "speech_provider": "aws_polly",
+      "config_revision": 1
+    },
+    "transcript_final": {
+      "type": "transcript.final",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "text": "I deployed the API.",
+      "duration_seconds": 1.0
+    },
+    "response_cancelled": {
+      "type": "response.cancelled",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1
+    },
+    "error": {
+      "type": "error",
+      "code": "invalid_audio",
+      "message": "El audio no es válido.",
+      "retryable": false,
+      "fatal": false,
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1
+    }
+  }
+}
