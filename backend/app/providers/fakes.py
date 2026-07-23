@@ -5,6 +5,12 @@ from dataclasses import dataclass, field
 
 from app.domain.errors import IntegrationError, IntegrationErrorCode
 from app.domain.models import ChatMessage, SynthesizedSpeech, Transcription
+from app.domain.video import (
+    TranscriptResult,
+    TranscriptSegment,
+    TranscriptSource,
+    VideoProviderError,
+)
 from app.domain.writing import CorrectionResult
 
 
@@ -68,6 +74,33 @@ class FakeCorrectionProvider:
             corrections=(),
             general_feedback="El texto es correcto y natural.",
         )
+
+
+@dataclass(slots=True)
+class FakeTranscriptProvider:
+    """Return one scripted transcript without contacting YouTube."""
+
+    result: TranscriptResult = field(
+        default_factory=lambda: TranscriptResult(
+            video_id="aircAruvnKk",
+            source=TranscriptSource.FIXTURE,
+            segments=(
+                TranscriptSegment(
+                    text="A deterministic technical transcript.",
+                    start=0.0,
+                    duration=3.0,
+                ),
+            ),
+        )
+    )
+    error: VideoProviderError | None = None
+    calls: list[str] = field(default_factory=list, init=False)
+
+    async def fetch(self, video_id: str) -> TranscriptResult:
+        self.calls.append(video_id)
+        if self.error is not None:
+            raise self.error
+        return self.result
 
 
 @dataclass(slots=True)

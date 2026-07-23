@@ -1,6 +1,6 @@
 # VSLingo Backend
 
-FastAPI API with typed provider boundaries and the Writing Studio correction vertical for the VSLingo Public Alpha.
+FastAPI API with typed provider boundaries and complete Writing Studio and Video Lab verticals for the VSLingo Public Alpha.
 
 ## Local setup
 
@@ -39,6 +39,25 @@ OpenRouter values in `.env`, try it from another PowerShell terminal:
 $body = @{ text = "Yesterday I deploy the API and the tests was passing." } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/writing/correct -ContentType "application/json" -Body $body
 ```
+
+## Video transcript endpoint
+
+`POST /api/video/transcript` accepts a trusted YouTube URL and returns
+`video_id`, `source`, and chronologically ordered `{ text, start, duration }`
+segments. The parser supports canonical watch, short, Shorts, Live and embed
+URLs on explicit YouTube hosts; lookalike hosts and raw IDs are rejected.
+
+```powershell
+$body = @{ url = "https://www.youtube.com/watch?v=aircAruvnKk" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/video/transcript -ContentType "application/json" -Body $body
+```
+
+The adapter prefers direct English captions, then translates the first
+translatable track to English. Its synchronous library call runs outside the
+event loop with a bounded timeout. Missing captions, provider blocking,
+timeouts and malformed responses use stable public error codes. Normal tests
+never contact YouTube; the frontend also bundles a technical transcript
+fixture for a stable demo when YouTube is unavailable.
 
 ## Quality checks
 

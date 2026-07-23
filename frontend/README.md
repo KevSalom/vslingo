@@ -35,5 +35,9 @@ Copy-Item .env.example .env
 static build; it never contains provider secrets.
 
 The static landing is available at `/`; `/demo` contains the interactive
-workspace and the functional Writing Studio vertical. Voice Studio and Video
-Lab remain placeholders until their roadmap increments.
+workspace with functional Writing Studio and Video Lab verticals. Video Lab
+uses the YouTube IFrame API for playback, polls the playhead every 200 ms,
+keeps paragraph and line transcript views synchronized, and stores its library,
+notes, and view preference in versioned `localStorage`. Its bundled technical
+fixture keeps the complete demo path available without a transcript API call.
+Voice Studio remains a placeholder until its roadmap increments.

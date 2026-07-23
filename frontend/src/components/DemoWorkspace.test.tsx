@@ -24,6 +24,12 @@ describe('DemoWorkspace', () => {
 
     await user.click(screen.getByRole('button', { name: 'Video Lab' }));
     expect(screen.getByRole('heading', { name: 'Video Lab' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: 'URL de YouTube' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Abrir demo técnica' }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Voice Studio' }));
     expect(screen.getByRole('heading', { name: 'Voice Studio' })).toBeInTheDocument();

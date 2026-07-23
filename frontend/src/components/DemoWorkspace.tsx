@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { VideoLab } from '../features/video/VideoLab';
 import { WritingStudio } from '../features/writing/WritingStudio';
 
 type ModuleId = 'voice' | 'writing' | 'video';
@@ -80,11 +81,13 @@ export function DemoWorkspace() {
 
           <section
             className={`min-w-0 p-5 sm:p-7 lg:p-10 ${
-              activeId === 'writing' ? '' : 'flex items-center'
+              activeId === 'voice' ? 'flex items-center' : ''
             }`}
           >
             {activeId === 'writing' ? (
               <WritingStudio />
+            ) : activeId === 'video' ? (
+              <VideoLab />
             ) : (
               <div className="max-w-2xl">
                 <p className="mb-3 font-mono text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">

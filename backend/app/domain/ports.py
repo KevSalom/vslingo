@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator, Sequence
 from typing import Protocol, runtime_checkable
 
 from app.domain.models import ChatMessage, SynthesizedSpeech, Transcription
+from app.domain.video import TranscriptResult
 from app.domain.writing import CorrectionResult
 
 
@@ -21,6 +22,14 @@ class CorrectionProviderPort(Protocol):
 
     async def correct(self, text: str) -> CorrectionResult:
         """Return a provider-neutral structured correction."""
+
+
+@runtime_checkable
+class TranscriptProviderPort(Protocol):
+    """Return normalized timed captions for one YouTube video ID."""
+
+    async def fetch(self, video_id: str) -> TranscriptResult:
+        """Return a provider-neutral transcript."""
 
 
 @runtime_checkable
