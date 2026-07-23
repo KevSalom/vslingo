@@ -6,6 +6,8 @@ import {
   type SyntheticEvent,
 } from 'react';
 
+import { SpeechProviderControl } from '../../shared/speech/SpeechProviderControl';
+import { useSpeechPlayer } from '../../shared/speech/useSpeechPlayer';
 import {
   MAX_CORRECTION_TEXT_LENGTH,
   type CorrectionCategory,
@@ -62,6 +64,8 @@ export function WritingStudio({
   const [storageReady, setStorageReady] = useState(false);
   const skipNextPersistence = useRef(false);
 
+  const speechPlayer = useSpeechPlayer();
+
   useEffect(() => {
     const stored = loadWritingState();
     setDraft(stored.draft);
@@ -89,6 +93,7 @@ export function WritingStudio({
     setIsSubmitting(true);
     setError(null);
     setCopied(false);
+    speechPlayer.stop();
     try {
       setResult(await correctText(draft));
     } catch (cause) {
@@ -114,6 +119,7 @@ export function WritingStudio({
     setError(null);
     setCopied(false);
     if (result && value !== result.original_text) {
+      speechPlayer.stop();
       setResult(null);
     }
   };
@@ -133,10 +139,22 @@ export function WritingStudio({
   const handleClear = () => {
     skipNextPersistence.current = true;
     clearWritingState();
+    speechPlayer.stop();
     setDraft('');
     setResult(null);
     setError(null);
     setCopied(false);
+  };
+
+  const handleToggleSpeech = () => {
+    if (!result) {
+      return;
+    }
+    if (speechPlayer.isBusy) {
+      speechPlayer.stop();
+    } else {
+      speechPlayer.play(result.corrected_text);
+    }
   };
 
   return (
@@ -221,6 +239,15 @@ export function WritingStudio({
         </div>
       ) : null}
 
+      {speechPlayer.error ? (
+        <div
+          className="mt-4 rounded-lg border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-100"
+          role="alert"
+        >
+          {speechPlayer.error}
+        </div>
+      ) : null}
+
       {result ? (
         <div aria-live="polite" className="mt-6 space-y-5">
           <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/45">
@@ -231,14 +258,33 @@ export function WritingStudio({
                 </p>
                 <h2 className="mt-1 text-base font-semibold text-slate-100">Texto corregido</h2>
               </div>
-              <button
-                aria-label={copied ? 'Corrección copiada' : 'Copiar corrección'}
-                className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-emerald-400/60 hover:text-emerald-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
-                onClick={handleCopy}
-                type="button"
-              >
-                {copied ? 'Copiado' : 'Copiar'}
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <SpeechProviderControl
+                  provider={speechPlayer.provider}
+                  onChange={speechPlayer.setProvider}
+                  disabled={speechPlayer.isBusy}
+                />
+                <button
+                  aria-label={speechPlayer.isBusy ? 'Detener reproducción' : 'Escuchar reproducción de texto'}
+                  className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-cyan-400/60 hover:text-cyan-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+                  onClick={handleToggleSpeech}
+                  type="button"
+                >
+                  {speechPlayer.speechState === 'synthesizing'
+                    ? 'Sintetizando…'
+                    : speechPlayer.speechState === 'playing'
+                    ? 'Detener'
+                    : 'Escuchar'}
+                </button>
+                <button
+                  aria-label={copied ? 'Corrección copiada' : 'Copiar corrección'}
+                  className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-emerald-400/60 hover:text-emerald-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+                  onClick={handleCopy}
+                  type="button"
+                >
+                  {copied ? 'Copiado' : 'Copiar'}
+                </button>
+              </div>
             </header>
             <p className="whitespace-pre-wrap px-4 py-5 text-base leading-7 text-slate-100 sm:px-5">
               {result.corrected_text}

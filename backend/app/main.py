@@ -10,16 +10,24 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app import __version__
+from app.api.speech import (
+    build_speech_router,
+    handle_speech_validation_error,
+)
 from app.api.video import build_video_router, video_validation_error_response
 from app.api.writing import build_writing_router
 from app.api.writing import (
     handle_request_validation_error as handle_writing_validation_error,
 )
 from app.core.config import Settings
+from app.domain.speech import SpeechProvider
+from app.providers.aws_polly import AWSPollySynthesizer
+from app.providers.edge_speech import EdgeTTSSynthesizer
 from app.providers.openrouter_writing import OpenRouterCorrectionProvider
 from app.providers.readiness import get_provider_readiness
 from app.providers.youtube_transcript import YouTubeTranscriptProvider
 from app.services.correction import CorrectionService
+from app.services.speech import SpeechService
 from app.services.video import VideoService
 
 SERVICE_NAME: Final = "VSLingo API"
@@ -46,6 +54,7 @@ def create_app(
     *,
     correction_service: CorrectionService | None = None,
     video_service: VideoService | None = None,
+    speech_service: SpeechService | None = None,
 ) -> FastAPI:
     """Build an isolated FastAPI application with explicit dependencies."""
 
@@ -57,6 +66,12 @@ def create_app(
         YouTubeTranscriptProvider(
             timeout_seconds=runtime_settings.provider_timeout_seconds,
         )
+    )
+    runtime_speech_service = speech_service or SpeechService(
+        providers={
+            SpeechProvider.AWS_POLLY: AWSPollySynthesizer(runtime_settings),
+            SpeechProvider.EDGE_TTS: EdgeTTSSynthesizer(runtime_settings),
+        }
     )
     application = FastAPI(title=SERVICE_NAME, version=__version__)
     application.state.settings = runtime_settings
@@ -74,6 +89,8 @@ def create_app(
     ) -> JSONResponse:
         if request.url.path.startswith("/api/video/"):
             return video_validation_error_response()
+        if request.url.path.startswith("/api/speech"):
+            return await handle_speech_validation_error(request, error)
         return await handle_writing_validation_error(request, error)
 
     application.add_exception_handler(
@@ -82,6 +99,7 @@ def create_app(
     )
     application.include_router(build_writing_router(runtime_correction_service))
     application.include_router(build_video_router(runtime_video_service))
+    application.include_router(build_speech_router(runtime_speech_service))
 
     @application.get("/api/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
@@ -100,6 +118,7 @@ def create_app(
         )
 
     return application
+
 
 
 app = create_app()

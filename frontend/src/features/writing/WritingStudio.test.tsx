@@ -137,4 +137,22 @@ describe('WritingStudio', () => {
 
     expect(await screen.findByText('Sin cambios necesarios')).toBeInTheDocument();
   });
+
+  it('renders speech provider control and handle listening toggle', async () => {
+    const user = userEvent.setup();
+    render(<WritingStudio correctText={vi.fn().mockResolvedValue(MULTIPLE_CORRECTIONS)} />);
+
+    await user.type(screen.getByRole('textbox', { name: 'Tu texto en inglés' }), MULTIPLE_CORRECTIONS.original_text);
+    await user.click(screen.getByRole('button', { name: 'Revisar texto' }));
+
+    const listenButton = await screen.findByRole('button', { name: 'Escuchar reproducción de texto' });
+    expect(listenButton).toBeInTheDocument();
+
+    const providerSelect = screen.getByLabelText('Proveedor de voz');
+    expect(providerSelect).toBeInTheDocument();
+    expect(providerSelect).toHaveValue('aws_polly');
+
+    await user.selectOptions(providerSelect, 'edge_tts');
+    expect(providerSelect).toHaveValue('edge_tts');
+  });
 });
