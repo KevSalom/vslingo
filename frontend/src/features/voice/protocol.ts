@@ -12,7 +12,31 @@ export type ErrorCodeType =
   | 'provider_not_configured'
   | 'provider_unavailable'
   | 'invalid_provider_response'
-  | 'internal_error';
+  | 'internal_error'
+  | 'feedback_unavailable'
+  | 'conversation_unavailable';
+
+export type CorrectionCategoryType = 'grammar' | 'vocabulary' | 'clarity' | 'tone';
+
+export type CorrectionItem = {
+  category: CorrectionCategoryType;
+  original: string;
+  corrected: string;
+  explanation_es: string;
+};
+
+export type VocabularyItem = {
+  term: string;
+  meaning_es: string;
+  example_en: string;
+};
+
+export type VoiceFeedback = {
+  summary_es: string;
+  strengths: string[];
+  corrections: CorrectionItem[];
+  vocabulary: VocabularyItem[];
+};
 
 // Client Messages
 export type SessionStartMessage = {
@@ -82,6 +106,27 @@ export type TranscriptFinalMessage = {
   duration_seconds: number;
 };
 
+export type AssistantDeltaMessage = {
+  type: 'assistant.delta';
+  turn_id: string;
+  generation: number;
+  delta: string;
+};
+
+export type AssistantDoneMessage = {
+  type: 'assistant.done';
+  turn_id: string;
+  generation: number;
+  text: string;
+};
+
+export type FeedbackReadyMessage = {
+  type: 'feedback.ready';
+  turn_id: string;
+  generation: number;
+  feedback: VoiceFeedback;
+};
+
 export type ResponseCancelledMessage = {
   type: 'response.cancelled';
   turn_id: string;
@@ -102,6 +147,9 @@ export type ServerVoiceMessage =
   | SessionReadyMessage
   | SessionConfiguredMessage
   | TranscriptFinalMessage
+  | AssistantDeltaMessage
+  | AssistantDoneMessage
+  | FeedbackReadyMessage
   | ResponseCancelledMessage
   | ErrorMessage;
 
@@ -145,6 +193,37 @@ export function parseServerMessage(data: string): ServerVoiceMessage | null {
           typeof raw.duration_seconds === 'number'
         ) {
           return raw as TranscriptFinalMessage;
+        }
+        return null;
+
+      case 'assistant.delta':
+        if (
+          typeof raw.turn_id === 'string' &&
+          typeof raw.generation === 'number' &&
+          typeof raw.delta === 'string'
+        ) {
+          return raw as AssistantDeltaMessage;
+        }
+        return null;
+
+      case 'assistant.done':
+        if (
+          typeof raw.turn_id === 'string' &&
+          typeof raw.generation === 'number' &&
+          typeof raw.text === 'string'
+        ) {
+          return raw as AssistantDoneMessage;
+        }
+        return null;
+
+      case 'feedback.ready':
+        if (
+          typeof raw.turn_id === 'string' &&
+          typeof raw.generation === 'number' &&
+          isRecord(raw.feedback) &&
+          typeof raw.feedback.summary_es === 'string'
+        ) {
+          return raw as FeedbackReadyMessage;
         }
         return null;
 

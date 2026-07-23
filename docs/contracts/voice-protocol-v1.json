@@ -52,6 +52,42 @@
       "text": "I deployed the API.",
       "duration_seconds": 1.0
     },
+    "assistant_delta": {
+      "type": "assistant.delta",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "delta": "Thanks for the update."
+    },
+    "assistant_done": {
+      "type": "assistant.done",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "text": "Thanks for the update. What will you work on today?"
+    },
+    "feedback_ready": {
+      "type": "feedback.ready",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "feedback": {
+        "summary_es": "La idea se entiende; ajusta el pasado simple.",
+        "strengths": ["Explicaste el resultado con claridad."],
+        "corrections": [
+          {
+            "category": "grammar",
+            "original": "I deploy yesterday",
+            "corrected": "I deployed yesterday",
+            "explanation_es": "Usa pasado simple para una acción terminada."
+          }
+        ],
+        "vocabulary": [
+          {
+            "term": "rollout",
+            "meaning_es": "despliegue gradual",
+            "example_en": "We started a gradual rollout."
+          }
+        ]
+      }
+    },
     "response_cancelled": {
       "type": "response.cancelled",
       "turn_id": "123e4567-e89b-12d3-a456-426614174000",

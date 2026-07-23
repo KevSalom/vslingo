@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AudioRecorder } from './audioCapture';
-import type { ErrorMessage, ScenarioType, SpeechProviderType } from './protocol';
+import type {
+  ErrorMessage,
+  ScenarioType,
+  SpeechProviderType,
+  VoiceFeedback,
+} from './protocol';
 import { VoiceSocketClient } from './voiceSocket';
+import {
+  SCENARIO_LABELS,
+  loadVoicePreferences,
+  saveVoicePreferences,
+  type TurnRecord,
+} from './voiceState';
 
 export type VoiceState =
   | 'idle'
@@ -14,15 +25,35 @@ export type VoiceState =
 
 export function VoiceStudio() {
   const [state, setState] = useState<VoiceState>('idle');
-  const [scenario, setScenario] = useState<ScenarioType>('daily_standup');
+  const [scenario, setScenario] = useState<ScenarioType>(loadVoicePreferences);
   const [speechProvider, setSpeechProvider] = useState<SpeechProviderType>('aws_polly');
   const [generation, setGeneration] = useState(0);
-  const [transcript, setTranscript] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Turn states for T06
+  const [turnHistory, setTurnHistory] = useState<TurnRecord[]>([]);
+  const [userTranscript, setUserTranscript] = useState('');
+  const [streamingAssistant, setStreamingAssistant] = useState('');
+  const [isAssistantStreaming, setIsAssistantStreaming] = useState(false);
+  const [isFeedbackPending, setIsFeedbackPending] = useState(false);
+  const [activeFeedback, setActiveFeedback] = useState<VoiceFeedback | null>(null);
+  const [feedbackErrorMsg, setFeedbackErrorMsg] = useState<string | null>(null);
 
   const socketRef = useRef<VoiceSocketClient | null>(null);
   const recorderRef = useRef<AudioRecorder | null>(null);
   const currentTurnIdRef = useRef<string | null>(null);
+  const accumulatedAssistantRef = useRef('');
+  const userTranscriptRef = useRef('');
+  const scenarioRef = useRef<ScenarioType>(scenario);
+  const speechProviderRef = useRef<SpeechProviderType>(speechProvider);
+
+  useEffect(() => {
+    scenarioRef.current = scenario;
+  }, [scenario]);
+
+  useEffect(() => {
+    speechProviderRef.current = speechProvider;
+  }, [speechProvider]);
 
   const handleConnect = async () => {
     setState('connecting');
@@ -42,20 +73,86 @@ export function VoiceStudio() {
           case 'session.ready':
             setGeneration(msg.generation);
             setState('ready');
+            // Send initial config with latest scenarioRef
+            client.sendMessage({
+              type: 'session.config',
+              scenario: scenarioRef.current,
+              speech_provider: speechProviderRef.current,
+            });
             break;
+
           case 'session.configured':
             setScenario(msg.scenario);
             setSpeechProvider(msg.speech_provider);
+            setTurnHistory([]);
+            setUserTranscript('');
+            setStreamingAssistant('');
+            setActiveFeedback(null);
+            setFeedbackErrorMsg(null);
             break;
+
           case 'transcript.final':
-            setTranscript(msg.text);
+            setUserTranscript(msg.text);
+            userTranscriptRef.current = msg.text;
+            setIsAssistantStreaming(true);
+            setIsFeedbackPending(true);
+            setStreamingAssistant('');
+            accumulatedAssistantRef.current = '';
+            setActiveFeedback(null);
+            setFeedbackErrorMsg(null);
             setState('ready');
             break;
+
+          case 'assistant.delta':
+            accumulatedAssistantRef.current += msg.delta;
+            setStreamingAssistant(accumulatedAssistantRef.current);
+            break;
+
+          case 'assistant.done':
+            setIsAssistantStreaming(false);
+            setStreamingAssistant(msg.text);
+            // Append to turn history (max 6 pairs)
+            setTurnHistory((prev) => {
+              const updated = [
+                ...prev,
+                {
+                  turnId: msg.turn_id,
+                  userText: userTranscriptRef.current,
+                  assistantText: msg.text,
+                },
+              ];
+              return updated.slice(-6);
+            });
+            break;
+
+          case 'feedback.ready':
+            setIsFeedbackPending(false);
+            setActiveFeedback(msg.feedback);
+            // Attach feedback to the latest turn record in history if matching turn_id
+            setTurnHistory((prev) =>
+              prev.map((t) => (t.turnId === msg.turn_id ? { ...t, feedback: msg.feedback } : t))
+            );
+            break;
+
           case 'response.cancelled':
+            setIsAssistantStreaming(false);
+            setIsFeedbackPending(false);
             setState('ready');
             break;
+
           case 'error':
-            handleServerError(msg);
+            if (msg.code === 'feedback_unavailable') {
+              setIsFeedbackPending(false);
+              setFeedbackErrorMsg('La conversación continúa, pero el feedback no está disponible.');
+            } else if (msg.code === 'conversation_unavailable') {
+              setIsAssistantStreaming(false);
+              setIsFeedbackPending(false);
+              setErrorMessage('La conversación no está disponible.');
+            } else {
+              setIsAssistantStreaming(false);
+              setIsFeedbackPending(false);
+              handleServerError(msg);
+            }
             break;
         }
       });
@@ -92,6 +189,26 @@ export function VoiceStudio() {
     }
   };
 
+  const handleScenarioChange = (newScenario: ScenarioType) => {
+    scenarioRef.current = newScenario;
+    setScenario(newScenario);
+    saveVoicePreferences(newScenario);
+
+    if (socketRef.current && state === 'ready') {
+      socketRef.current.sendMessage({
+        type: 'session.config',
+        scenario: newScenario,
+        speech_provider: speechProviderRef.current,
+      });
+    } else {
+      setTurnHistory([]);
+      setUserTranscript('');
+      setStreamingAssistant('');
+      setActiveFeedback(null);
+      setFeedbackErrorMsg(null);
+    }
+  };
+
   const startRecording = useCallback(async () => {
     if (state !== 'ready' || !socketRef.current) return;
 
@@ -100,7 +217,6 @@ export function VoiceStudio() {
       currentTurnIdRef.current = turnId;
       const nextGeneration = generation + 1;
 
-      // Send speech.started
       socketRef.current.sendMessage({
         type: 'speech.started',
         turn_id: turnId,
@@ -108,7 +224,6 @@ export function VoiceStudio() {
       });
       setGeneration(nextGeneration);
 
-      // Start audio recorder
       const recorder = new AudioRecorder();
       recorderRef.current = recorder;
       await recorder.start();
@@ -131,7 +246,6 @@ export function VoiceStudio() {
       recorderRef.current = null;
 
       if (!turnId || durationMs < 100 || wavBytes.length <= 44) {
-        // Audio too short or empty -> cancel turn
         if (turnId) {
           socketRef.current.sendMessage({
             type: 'response.cancel',
@@ -145,7 +259,6 @@ export function VoiceStudio() {
 
       setState('transcribing');
 
-      // Send utterance.begin
       socketRef.current.sendMessage({
         type: 'utterance.begin',
         turn_id: turnId,
@@ -155,7 +268,6 @@ export function VoiceStudio() {
         duration_ms: Math.max(100, Math.min(60000, durationMs)),
       });
 
-      // Send binary frame
       socketRef.current.sendBinary(wavBytes);
     } catch (err) {
       console.error('Error stopping recording:', err);
@@ -164,7 +276,6 @@ export function VoiceStudio() {
     }
   }, [state, generation]);
 
-  // Clean up on unmount
   useEffect(() => {
     return () => {
       if (socketRef.current) {
@@ -177,20 +288,17 @@ export function VoiceStudio() {
   }, []);
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-3xl mx-auto p-6 bg-slate-900/90 text-slate-100 rounded-2xl border border-slate-800 shadow-2xl backdrop-blur-md">
+    <div className="flex flex-col gap-6 w-full max-w-4xl mx-auto p-6 bg-slate-900/90 text-slate-100 rounded-2xl border border-slate-800 shadow-2xl backdrop-blur-md">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-4">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
-              Voice Studio — Push To Talk
+              Voice Studio — Practice & Feedback
             </h2>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
-              {scenario}
-            </span>
           </div>
           <p className="text-sm text-slate-400 mt-1">
-            Práctica de pronunciación y conversación fluida con feedback en tiempo real.
+            Conversación fluida B1-B2 con respuestas en streaming y feedback en paralelo.
           </p>
         </div>
         <div>
@@ -209,6 +317,38 @@ export function VoiceStudio() {
               Desconectar
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Scenario Selector */}
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          Escenario de Conversación
+        </label>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {(Object.keys(SCENARIO_LABELS) as ScenarioType[]).map((scKey) => {
+            const isSelected = scenario === scKey;
+            return (
+              <button
+                key={scKey}
+                type="button"
+                aria-pressed={isSelected}
+                disabled={isAssistantStreaming || isFeedbackPending || state === 'recording'}
+                onClick={() => handleScenarioChange(scKey)}
+                className={`px-3 py-2 text-xs font-semibold rounded-xl border transition-all duration-200 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                  isSelected
+                    ? 'bg-indigo-600 text-white border-indigo-400 shadow-lg shadow-indigo-600/40 ring-1 ring-indigo-400 font-bold'
+                    : 'bg-slate-950/80 text-slate-400 border-slate-800/80 hover:bg-slate-800 hover:text-slate-200'
+                } ${
+                  isAssistantStreaming || isFeedbackPending || state === 'recording'
+                    ? 'opacity-50 cursor-not-allowed'
+                    : ''
+                }`}
+              >
+                {SCENARIO_LABELS[scKey]}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -233,23 +373,29 @@ export function VoiceStudio() {
           />
           <span className="capitalize font-medium text-slate-200">
             {state === 'idle' && 'Desconectado'}
-            {state === 'connecting' && 'Conectando con el servidor...'}
+            {state === 'connecting' && 'Conectando...'}
             {state === 'ready' && 'Listo para hablar'}
             {state === 'recording' && 'Grabando audio (PTT)...'}
-            {state === 'transcribing' && 'Transcribiendo respuesta...'}
+            {state === 'transcribing' && 'Procesando transcripción...'}
             {state === 'error' && 'Error de conexión'}
             {state === 'closed' && 'Conexión cerrada'}
           </span>
         </div>
-        {state === 'ready' && (
-          <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
-            <span>Proveedor: {speechProvider}</span>
-            <span>Generación: {generation}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {isAssistantStreaming && (
+            <span className="text-xs px-2.5 py-1 rounded-full bg-blue-950 text-blue-300 border border-blue-800 animate-pulse">
+              Generando respuesta...
+            </span>
+          )}
+          {isFeedbackPending && (
+            <span className="text-xs px-2.5 py-1 rounded-full bg-purple-950 text-purple-300 border border-purple-800 animate-pulse">
+              Analizando tu inglés...
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Error notification */}
+      {/* Error Notifications */}
       {errorMessage && (
         <div className="p-4 bg-red-950/50 border border-red-800/80 rounded-xl text-red-200 text-sm flex items-center justify-between">
           <span>{errorMessage}</span>
@@ -262,8 +408,20 @@ export function VoiceStudio() {
         </div>
       )}
 
-      {/* Main PTT Interactive Area */}
-      <div className="flex flex-col items-center justify-center p-8 bg-slate-950/40 rounded-2xl border border-slate-800/50 min-h-[220px] gap-6">
+      {feedbackErrorMsg && (
+        <div className="p-3 bg-amber-950/40 border border-amber-800/60 rounded-xl text-amber-300 text-xs flex items-center justify-between">
+          <span>{feedbackErrorMsg}</span>
+          <button
+            onClick={() => setFeedbackErrorMsg(null)}
+            className="text-xs text-amber-400 hover:text-amber-200 underline ml-4"
+          >
+            Descartar
+          </button>
+        </div>
+      )}
+
+      {/* Main PTT Button */}
+      <div className="flex flex-col items-center justify-center p-6 bg-slate-950/40 rounded-2xl border border-slate-800/50 min-h-[180px] gap-4">
         <button
           disabled={state !== 'ready' && state !== 'recording'}
           onPointerDown={startRecording}
@@ -281,7 +439,7 @@ export function VoiceStudio() {
               stopRecording();
             }
           }}
-          className={`relative group flex flex-col items-center justify-center w-36 h-36 rounded-full transition-all duration-300 shadow-2xl focus:outline-none focus:ring-4 focus:ring-indigo-500/50 ${
+          className={`relative group flex flex-col items-center justify-center w-32 h-32 rounded-full transition-all duration-300 shadow-2xl focus:outline-none focus:ring-4 focus:ring-indigo-500/50 ${
             state === 'recording'
               ? 'bg-gradient-to-tr from-red-600 to-amber-500 scale-105 shadow-red-500/40 ring-4 ring-red-500/30'
               : state === 'ready'
@@ -291,7 +449,7 @@ export function VoiceStudio() {
           aria-label="Mantén pulsado para hablar"
         >
           <svg
-            className={`w-12 h-12 transition-transform duration-200 ${
+            className={`w-10 h-10 transition-transform duration-200 ${
               state === 'recording' ? 'scale-110 text-white animate-bounce' : 'text-white'
             }`}
             fill="none"
@@ -305,33 +463,128 @@ export function VoiceStudio() {
               d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
             />
           </svg>
-          <span className="text-xs font-semibold text-white/90 mt-2 px-2 text-center">
+          <span className="text-xs font-semibold text-white/90 mt-1 px-2 text-center">
             {state === 'recording' ? 'Soltar para enviar' : 'Mantén presionado'}
           </span>
         </button>
-
-        <p className="text-xs text-slate-400 text-center max-w-sm">
-          Mantén pulsado el botón o la barra espaciadora para grabar tu mensaje de voz. El audio se procesará automáticamente al soltar.
-        </p>
       </div>
 
-      {/* Transcript Display Section */}
-      <div className="flex flex-col gap-2">
-        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">
-          Transcripción Final (STT)
-        </h3>
-        <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-xl min-h-[80px] flex items-center">
-          {transcript ? (
-            <p className="text-slate-100 font-medium text-base leading-relaxed">
-              "{transcript}"
-            </p>
-          ) : (
-            <p className="text-slate-500 text-sm italic">
-              Aún no hay transcripción. Mantén presionado para hablar y verás tu texto aquí.
-            </p>
+      {/* Current Turn Area */}
+      {(userTranscript || streamingAssistant) && (
+        <div className="flex flex-col gap-4 p-5 bg-slate-950/80 border border-slate-800 rounded-2xl">
+          {/* User Transcript */}
+          {userTranscript && (
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">
+                Tú (Transcripción STT):
+              </span>
+              <p className="text-slate-100 font-medium text-base">"{userTranscript}"</p>
+            </div>
+          )}
+
+          {/* Assistant Response Streaming */}
+          {streamingAssistant && (
+            <div className="flex flex-col gap-1 pt-3 border-t border-slate-800/80">
+              <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                Asistente (VSLingo):
+                {isAssistantStreaming && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                )}
+              </span>
+              <p
+                aria-live="polite"
+                className="text-slate-200 text-base leading-relaxed whitespace-pre-wrap font-sans"
+              >
+                {streamingAssistant}
+              </p>
+            </div>
           )}
         </div>
-      </div>
+      )}
+
+      {/* Structured Feedback Section */}
+      {activeFeedback && (
+        <div className="flex flex-col gap-4 p-5 bg-slate-950/90 border border-purple-900/50 rounded-2xl shadow-xl">
+          <h3 className="text-sm font-bold text-purple-300 uppercase tracking-wider flex items-center gap-2">
+            <span>✨ Feedback Estructurado</span>
+          </h3>
+
+          {/* Summary & Strengths */}
+          <div className="p-4 bg-purple-950/30 border border-purple-900/40 rounded-xl flex flex-col gap-2">
+            <p className="text-purple-100 text-sm font-medium">{activeFeedback.summary_es}</p>
+            {activeFeedback.strengths.length > 0 && (
+              <ul className="list-disc list-inside text-xs text-purple-200/90 space-y-1 mt-1">
+                {activeFeedback.strengths.map((st, i) => (
+                  <li key={i}>{st}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Corrections (Diffs) */}
+          {activeFeedback.corrections.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <h4 className="text-xs font-semibold text-slate-300 uppercase">Cambios Sugeridos</h4>
+              <div className="grid grid-cols-1 gap-2">
+                {activeFeedback.corrections.map((corr, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3 bg-slate-900 border border-slate-800 rounded-xl text-xs flex flex-col gap-1"
+                  >
+                    <div className="flex items-center justify-between text-slate-400 text-[10px] uppercase font-mono">
+                      <span>Categoría: {corr.category}</span>
+                    </div>
+                    <div className="flex items-center gap-2 font-mono text-xs">
+                      <span className="text-red-400 line-through">- {corr.original}</span>
+                      <span className="text-slate-500">→</span>
+                      <span className="text-emerald-400 font-semibold">+ {corr.corrected}</span>
+                    </div>
+                    <p className="text-slate-300 text-xs mt-0.5">{corr.explanation_es}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Vocabulary */}
+          {activeFeedback.vocabulary.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <h4 className="text-xs font-semibold text-slate-300 uppercase">Vocabulario Sugerido</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {activeFeedback.vocabulary.map((vocab, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3 bg-slate-900 border border-slate-800 rounded-xl text-xs flex flex-col gap-1"
+                  >
+                    <div className="flex items-baseline justify-between">
+                      <span className="font-bold text-indigo-300 text-sm">{vocab.term}</span>
+                      <span className="text-slate-400 text-xs">{vocab.meaning_es}</span>
+                    </div>
+                    <p className="text-slate-300 text-xs italic">"{vocab.example_en}"</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* History of Past Turns */}
+      {turnHistory.length > 1 && (
+        <div className="flex flex-col gap-3 pt-4 border-t border-slate-800/80">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+            Historial de Conversación (Últimos Turnos)
+          </h3>
+          <div className="flex flex-col gap-3">
+            {turnHistory.slice(0, -1).map((turn, i) => (
+              <div key={i} className="p-3 bg-slate-950/40 border border-slate-800/60 rounded-xl text-xs flex flex-col gap-1.5">
+                <p className="text-indigo-300 font-medium">Tú: "{turn.userText}"</p>
+                <p className="text-slate-200">VSLingo: "{turn.assistantText}"</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

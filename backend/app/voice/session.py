@@ -1,4 +1,4 @@
-"""VoiceSession handling WebSocket v1 lifecycle, actor tasks, and WAV validation."""
+"""VoiceSession handling WebSocket v1 lifecycle, actor tasks, and T06 conversation/feedback."""
 
 import asyncio
 import json
@@ -10,13 +10,16 @@ from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
 from app.domain.errors import IntegrationError, IntegrationErrorCode
-from app.domain.ports import SpeechToTextPort
+from app.domain.history import ConversationHistory
+from app.domain.models import ChatMessage
+from app.domain.ports import LanguageModelPort, SpeechToTextPort, VoiceFeedbackPort
 from app.domain.voice_protocol import (
     ScenarioType,
     SpeechProviderType,
     UtteranceBeginMessage,
     client_adapter,
 )
+from app.prompts.voice import get_voice_system_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +37,6 @@ def validate_wav_pcm_16k_mono(audio_bytes: bytes) -> bool:
     if not audio_bytes.startswith(b"RIFF") or audio_bytes[8:12] != b"WAVE":
         return False
 
-    # Parse chunks looking for 'fmt '
     offset = 12
     fmt_found = False
     data_found = False
@@ -63,7 +65,6 @@ def validate_wav_pcm_16k_mono(audio_bytes: bytes) -> bool:
             break
 
         offset += 8 + chunk_size
-        # Handle word alignment
         if chunk_size % 2 == 1:
             offset += 1
 
@@ -73,19 +74,30 @@ def validate_wav_pcm_16k_mono(audio_bytes: bytes) -> bool:
 class VoiceSession:
     """Manages actor-like lifecycle for a single WebSocket Voice connection."""
 
-    def __init__(self, websocket: WebSocket, stt_provider: SpeechToTextPort) -> None:
+    def __init__(
+        self,
+        websocket: WebSocket,
+        stt_provider: SpeechToTextPort,
+        llm_provider: LanguageModelPort | None = None,
+        feedback_provider: VoiceFeedbackPort | None = None,
+    ) -> None:
         self.websocket = websocket
         self.stt_provider = stt_provider
+        self.llm_provider = llm_provider
+        self.feedback_provider = feedback_provider
+
         self.session_id = str(uuid4())
         self.current_generation = 0
         self.config_revision = 0
         self.scenario: ScenarioType = "daily_standup"
         self.speech_provider: SpeechProviderType = "aws_polly"
 
+        self.history = ConversationHistory()
         self.started = False
         self.pending_begin: UtteranceBeginMessage | None = None
         self.begin_timeout_task: asyncio.Task[None] | None = None
         self.active_stt_task: asyncio.Task[None] | None = None
+        self.active_generation_tasks: list[asyncio.Task[None]] = []
 
         self.outbound_queue: asyncio.Queue[dict[str, object]] = asyncio.Queue(maxsize=32)
         self.writer_task: asyncio.Task[None] | None = None
@@ -118,6 +130,12 @@ class VoiceSession:
             )
         finally:
             await self._cleanup()
+
+    def _cancel_active_generation_tasks(self) -> None:
+        for task in self.active_generation_tasks:
+            if not task.done():
+                task.cancel()
+        self.active_generation_tasks.clear()
 
     async def _handle_text(self, text_data: str) -> None:
         try:
@@ -160,7 +178,6 @@ class VoiceSession:
                 )
             return
 
-        # Session already started
         if parsed_msg.type == "session.start":
             await self._send_error(
                 code="invalid_event",
@@ -170,7 +187,8 @@ class VoiceSession:
             )
         elif parsed_msg.type == "session.config":
             stt_active = self.active_stt_task and not self.active_stt_task.done()
-            if self.pending_begin is not None or stt_active:
+            gen_active = any(not t.done() for t in self.active_generation_tasks)
+            if self.pending_begin is not None or stt_active or gen_active:
                 await self._send_error(
                     code="invalid_event",
                     message="No se puede cambiar la configuración durante un turno activo.",
@@ -178,6 +196,10 @@ class VoiceSession:
                     fatal=False,
                 )
                 return
+
+            if parsed_msg.scenario != self.scenario:
+                self.history.clear()
+
             self.scenario = parsed_msg.scenario
             self.speech_provider = parsed_msg.speech_provider
             self.config_revision += 1
@@ -187,6 +209,7 @@ class VoiceSession:
                 "speech_provider": self.speech_provider,
                 "config_revision": self.config_revision,
             })
+
         elif parsed_msg.type == "speech.started":
             if parsed_msg.generation != self.current_generation + 1:
                 gen_err_msg = (
@@ -206,6 +229,8 @@ class VoiceSession:
             self.current_generation = parsed_msg.generation
             if self.active_stt_task and not self.active_stt_task.done():
                 self.active_stt_task.cancel()
+            self._cancel_active_generation_tasks()
+
             if self.begin_timeout_task and not self.begin_timeout_task.done():
                 self.begin_timeout_task.cancel()
             self.pending_begin = None
@@ -237,6 +262,7 @@ class VoiceSession:
 
             if self.active_stt_task and not self.active_stt_task.done():
                 self.active_stt_task.cancel()
+            self._cancel_active_generation_tasks()
 
             await self._enqueue_message({
                 "type": "response.cancelled",
@@ -288,7 +314,6 @@ class VoiceSession:
             )
             return
 
-        # Start STT transcription background task
         if self.active_stt_task and not self.active_stt_task.done():
             self.active_stt_task.cancel()
 
@@ -302,7 +327,6 @@ class VoiceSession:
         try:
             result = await self.stt_provider.transcribe(audio_bytes, media_type="audio/wav")
             if generation != self.current_generation:
-                # Generation superseded
                 return
 
             await self._enqueue_message({
@@ -312,6 +336,20 @@ class VoiceSession:
                 "text": result.text,
                 "duration_seconds": round(duration_ms / 1000.0, 2),
             })
+
+            # Launch parallel conversation and feedback tasks if configured
+            if self.llm_provider is not None:
+                conv_task = asyncio.create_task(
+                    self._process_conversation(turn_id, generation, result.text)
+                )
+                self.active_generation_tasks.append(conv_task)
+
+            if self.feedback_provider is not None:
+                fb_task = asyncio.create_task(
+                    self._process_feedback(turn_id, generation, result.text)
+                )
+                self.active_generation_tasks.append(fb_task)
+
         except asyncio.CancelledError:
             pass
         except IntegrationError as exc:
@@ -343,6 +381,98 @@ class VoiceSession:
             await self._send_error(
                 code="internal_error",
                 message="Error durante el procesamiento STT.",
+                retryable=True,
+                fatal=False,
+                turn_id=turn_id,
+                generation=generation,
+            )
+
+    async def _process_conversation(
+        self, turn_id: str, generation: int, user_text: str
+    ) -> None:
+        if not self.llm_provider:
+            return
+        full_assistant_text = ""
+        sys_prompt = get_voice_system_prompt(self.scenario)
+        messages = [
+            ChatMessage(role="system", content=sys_prompt),
+            *self.history.get_messages(),
+            ChatMessage(role="user", content=user_text),
+        ]
+
+        try:
+            async for delta in self.llm_provider.stream_chat(messages):
+                if generation != self.current_generation:
+                    return
+                if not delta:
+                    continue
+                full_assistant_text += delta
+                await self._enqueue_message({
+                    "type": "assistant.delta",
+                    "turn_id": turn_id,
+                    "generation": generation,
+                    "delta": delta,
+                })
+
+            if generation != self.current_generation:
+                return
+
+            if full_assistant_text:
+                await self._enqueue_message({
+                    "type": "assistant.done",
+                    "turn_id": turn_id,
+                    "generation": generation,
+                    "text": full_assistant_text,
+                })
+                self.history.add_completed_turn(user_text, full_assistant_text)
+            else:
+                await self._send_error(
+                    code="conversation_unavailable",
+                    message="La conversación no devolvió respuesta válida.",
+                    retryable=True,
+                    fatal=False,
+                    turn_id=turn_id,
+                    generation=generation,
+                )
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            if generation != self.current_generation:
+                return
+            logger.error("Error in conversation stream: %s", exc)
+            await self._send_error(
+                code="conversation_unavailable",
+                message="La conversación no está disponible.",
+                retryable=True,
+                fatal=False,
+                turn_id=turn_id,
+                generation=generation,
+            )
+
+    async def _process_feedback(
+        self, turn_id: str, generation: int, user_text: str
+    ) -> None:
+        if not self.feedback_provider:
+            return
+        try:
+            feedback = await self.feedback_provider.generate(user_text, self.scenario)
+            if generation != self.current_generation:
+                return
+            await self._enqueue_message({
+                "type": "feedback.ready",
+                "turn_id": turn_id,
+                "generation": generation,
+                "feedback": feedback.model_dump(),
+            })
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            if generation != self.current_generation:
+                return
+            logger.error("Error in feedback generation: %s", exc)
+            await self._send_error(
+                code="feedback_unavailable",
+                message="El feedback no está disponible.",
                 retryable=True,
                 fatal=False,
                 turn_id=turn_id,
@@ -410,5 +540,6 @@ class VoiceSession:
             self.begin_timeout_task.cancel()
         if self.active_stt_task and not self.active_stt_task.done():
             self.active_stt_task.cancel()
+        self._cancel_active_generation_tasks()
         if self.writer_task and not self.writer_task.done():
             self.writer_task.cancel()

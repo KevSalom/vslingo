@@ -21,10 +21,12 @@ from app.api.writing import (
     handle_request_validation_error as handle_writing_validation_error,
 )
 from app.core.config import Settings
-from app.domain.ports import SpeechToTextPort
+from app.domain.ports import LanguageModelPort, SpeechToTextPort, VoiceFeedbackPort
 from app.domain.speech import SpeechProvider
 from app.providers.aws_polly import AWSPollySynthesizer
 from app.providers.edge_speech import EdgeTTSSynthesizer
+from app.providers.openrouter_chat import OpenRouterChatLanguageModel
+from app.providers.openrouter_feedback import OpenRouterVoiceFeedbackProvider
 from app.providers.openrouter_stt import OpenRouterSpeechToTextProvider
 from app.providers.openrouter_writing import OpenRouterCorrectionProvider
 from app.providers.readiness import get_provider_readiness
@@ -59,6 +61,8 @@ def create_app(
     video_service: VideoService | None = None,
     speech_service: SpeechService | None = None,
     stt_provider: SpeechToTextPort | None = None,
+    llm_provider: LanguageModelPort | None = None,
+    feedback_provider: VoiceFeedbackPort | None = None,
 ) -> FastAPI:
     """Build an isolated FastAPI application with explicit dependencies."""
 
@@ -85,6 +89,11 @@ def create_app(
         base_url=str(runtime_settings.openrouter_base_url),
         timeout_seconds=runtime_settings.provider_timeout_seconds,
     )
+    runtime_llm_provider = llm_provider or OpenRouterChatLanguageModel(runtime_settings)
+    runtime_feedback_provider = feedback_provider or OpenRouterVoiceFeedbackProvider(
+        runtime_settings
+    )
+
     application = FastAPI(title=SERVICE_NAME, version=__version__)
     application.state.settings = runtime_settings
     application.add_middleware(
@@ -112,7 +121,13 @@ def create_app(
     application.include_router(build_writing_router(runtime_correction_service))
     application.include_router(build_video_router(runtime_video_service))
     application.include_router(build_speech_router(runtime_speech_service))
-    application.include_router(build_voice_router(runtime_stt_provider))
+    application.include_router(
+        build_voice_router(
+            runtime_stt_provider,
+            llm_provider=runtime_llm_provider,
+            feedback_provider=runtime_feedback_provider,
+        )
+    )
 
     @application.get("/api/health", response_model=HealthResponse)
     async def health() -> HealthResponse:

@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 
 from app.domain.errors import IntegrationError, IntegrationErrorCode
+from app.domain.feedback import CorrectionItem, VocabularyItem, VoiceFeedback
 from app.domain.models import ChatMessage, SynthesizedSpeech, Transcription
 from app.domain.video import (
     TranscriptResult,
@@ -118,3 +119,36 @@ class FakeSpeechSynthesizer:
                 "Text must not be empty.",
             )
         return SynthesizedSpeech(audio=self.audio)
+
+
+@dataclass(slots=True)
+class FakeVoiceFeedback:
+    """Return configured structured feedback or a default valid feedback."""
+
+    result: VoiceFeedback | None = None
+    error: Exception | None = None
+
+    async def generate(self, transcript: str, scenario: str) -> VoiceFeedback:
+        if self.error is not None:
+            raise self.error
+        if self.result is not None:
+            return self.result
+        return VoiceFeedback(
+            summary_es="La idea se entiende; buen intento en la respuesta.",
+            strengths=["Expresaste tu punto claramente."],
+            corrections=[
+                CorrectionItem(
+                    category="grammar",
+                    original=transcript[:100] if transcript else "sample",
+                    corrected=transcript[:100] if transcript else "sample",
+                    explanation_es="Texto de prueba.",
+                )
+            ],
+            vocabulary=[
+                VocabularyItem(
+                    term="feedback",
+                    meaning_es="retroalimentación",
+                    example_en="Thanks for the feedback.",
+                )
+            ],
+        )

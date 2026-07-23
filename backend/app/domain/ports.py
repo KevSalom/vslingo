@@ -3,6 +3,7 @@
 from collections.abc import AsyncIterator, Sequence
 from typing import Protocol, runtime_checkable
 
+from app.domain.feedback import VoiceFeedback
 from app.domain.models import ChatMessage, SynthesizedSpeech, Transcription
 from app.domain.video import TranscriptResult
 from app.domain.writing import CorrectionResult
@@ -38,6 +39,14 @@ class LanguageModelPort(Protocol):
 
     def stream_chat(self, messages: Sequence[ChatMessage]) -> AsyncIterator[str]:
         """Yield normalized text fragments in provider order."""
+
+
+@runtime_checkable
+class VoiceFeedbackPort(Protocol):
+    """Return structured feedback for a user transcript and scenario."""
+
+    async def generate(self, transcript: str, scenario: str) -> VoiceFeedback:
+        """Return provider-neutral voice feedback."""
 
 
 @runtime_checkable

@@ -4,6 +4,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
+from app.domain.feedback import VoiceFeedback
+
 
 class BaseVoiceMessage(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -84,6 +86,27 @@ class TranscriptFinalMessage(BaseVoiceMessage):
     duration_seconds: float = Field(ge=0.0)
 
 
+class AssistantDeltaMessage(BaseVoiceMessage):
+    type: Literal["assistant.delta"] = "assistant.delta"
+    turn_id: str
+    generation: int = Field(ge=1)
+    delta: str = Field(min_length=1, max_length=2000)
+
+
+class AssistantDoneMessage(BaseVoiceMessage):
+    type: Literal["assistant.done"] = "assistant.done"
+    turn_id: str
+    generation: int = Field(ge=1)
+    text: str = Field(min_length=1, max_length=600)
+
+
+class FeedbackReadyMessage(BaseVoiceMessage):
+    type: Literal["feedback.ready"] = "feedback.ready"
+    turn_id: str
+    generation: int = Field(ge=1)
+    feedback: VoiceFeedback
+
+
 class ResponseCancelledMessage(BaseVoiceMessage):
     type: Literal["response.cancelled"] = "response.cancelled"
     turn_id: str
@@ -102,6 +125,8 @@ ErrorCodeType = Literal[
     "provider_unavailable",
     "invalid_provider_response",
     "internal_error",
+    "feedback_unavailable",
+    "conversation_unavailable",
 ]
 
 
@@ -119,6 +144,9 @@ ServerVoiceMessage = Annotated[
     SessionReadyMessage
     | SessionConfiguredMessage
     | TranscriptFinalMessage
+    | AssistantDeltaMessage
+    | AssistantDoneMessage
+    | FeedbackReadyMessage
     | ResponseCancelledMessage
     | ErrorMessage,
     Field(discriminator="type"),
