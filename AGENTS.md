@@ -10,8 +10,9 @@ Antes de cambiar código o documentación:
 2. Leer [`docs/product-spec.md`](docs/product-spec.md) para conocer alcance, arquitectura, contratos y decisiones aprobadas.
 3. Leer [`docs/implementation-plan.md`](docs/implementation-plan.md) para identificar la secuencia estable `T01`–`T10` y los límites del incremento.
 4. Leer [`docs/progress.md`](docs/progress.md) para conocer el estado real, el próximo incremento y las validaciones pendientes.
-5. Inspeccionar el código y las pruebas relevantes; no asumir que la estructura objetivo ya está implementada.
-6. Leer la skill canónica aplicable antes de diseñar, implementar React/Tailwind o preparar E2E.
+5. Si el incremento activo está entre `T04` y `T10`, leer su especificación operativa exacta en [`docs/spec/`](docs/spec/README.md). No usar la spec de un incremento posterior como autorización para adelantar trabajo.
+6. Inspeccionar el código y las pruebas relevantes; no asumir que la estructura objetivo ya está implementada.
+7. Leer la skill canónica aplicable antes de diseñar, implementar React/Tailwind o preparar E2E.
 
 ## Fuentes de verdad
 
@@ -21,9 +22,10 @@ Antes de cambiar código o documentación:
 | Alcance, arquitectura, contratos y decisiones | [`docs/product-spec.md`](docs/product-spec.md) |
 | Roadmap estable `T01`–`T10` | [`docs/implementation-plan.md`](docs/implementation-plan.md) |
 | Estado actual, próximo incremento, bloqueos y evidencia | [`docs/progress.md`](docs/progress.md) |
+| Ejecución detallada del incremento activo `T04`–`T10` | [`docs/spec/`](docs/spec/README.md) y la spec enlazada allí |
 | Forma de trabajar de agentes | [`AGENTS.md`](AGENTS.md) |
 
-Si aparece una contradicción, no inventar una resolución: detenerse, describirla y pedir una decisión. No convertir observaciones del árbol actual en nuevas decisiones de producto.
+Las specs de `docs/spec/` son instrucciones operativas derivadas: cierran payloads, secuencias, pruebas y criterios de aceptación sin reemplazar las tres fuentes superiores. Si una spec no coincide con `product-spec.md`, `implementation-plan.md`, `progress.md` o con el estado real del árbol, no elegir una interpretación ni adaptar el producto silenciosamente: detenerse, citar la contradicción y pedir una decisión. No convertir observaciones del árbol actual en nuevas decisiones de producto.
 
 ## Un solo incremento cada vez
 
@@ -50,11 +52,11 @@ Aplicar sólo las comprobaciones relevantes al cambio, pero completar todas las 
 - Pruebas unitarias o de integración dirigidas al comportamiento modificado.
 - Lint y comprobación de tipos del paquete afectado.
 - Build no interactivo cuando cambie código de entrega o configuración de empaquetado.
-- E2E determinista para recorridos de usuario afectados, con red y proveedores falsos.
+- E2E determinista para recorridos de usuario afectados cuando el harness ya exista; la introducción y consolidación inicial de Playwright pertenece a `T10`, que debe cubrir retrospectivamente los tres recorridos con red y proveedores falsos.
 - `git diff --check` y revisión de que el diff no excede el incremento.
 - Para cambios sólo documentales: enlaces/rutas, reglas de ignore cuando proceda y `git diff --check`; no ejecutar suites de aplicación sin una razón específica.
 
-No iniciar servidores, watchers ni procesos interactivos como parte de la validación automatizada. No usar el éxito de un comando irrelevante como evidencia del criterio de aceptación.
+No iniciar manualmente servidores persistentes, watchers ni procesos interactivos como parte de la validación automatizada. Se permiten servidores efímeros no interactivos iniciados y detenidos por el propio comando de prueba —por ejemplo `astro preview` bajo LHCI o `webServer` de Playwright—; el comando debe garantizar cleanup incluso al fallar. No usar el éxito de un comando irrelevante como evidencia del criterio de aceptación.
 
 ## Proveedores y pruebas live
 
