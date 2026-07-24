@@ -74,6 +74,9 @@ export function VideoLab({
   const transcriptRef = useRef<HTMLDivElement>(null);
   const requestGenerationRef = useRef(0);
   const activeRequestRef = useRef<AbortController | null>(null);
+  const scrollAnimRef = useRef<number>(0);
+  const videoPanelRef = useRef<HTMLDivElement>(null);
+  const [videoPanelHeight, setVideoPanelHeight] = useState(0);
 
   useEffect(() => {
     setVideoState(loadVideoState());
@@ -95,15 +98,55 @@ export function VideoLab({
   );
 
   useEffect(() => {
-    if (activeIndex < 0) {
-      return;
-    }
-    const element = transcriptRef.current?.querySelector<HTMLElement>(
+    const el = videoPanelRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setVideoPanelHeight(entry.contentBoxSize?.[0]?.blockSize ?? entry.contentRect.height);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [result]);
+
+  useEffect(() => {
+    if (activeIndex < 0) return;
+    const container = transcriptRef.current;
+    if (!container) return;
+    const element = container.querySelector<HTMLElement>(
       `[data-segment-index="${activeIndex}"]`,
     );
-    if (element && typeof element.scrollIntoView === 'function') {
-      element.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
+    if (!element) return;
+
+    // Calculate position relative to scroll container (scroll-independent)
+    const containerRect = container.getBoundingClientRect();
+    const elementRect = element.getBoundingClientRect();
+    const absoluteTop =
+      elementRect.top - containerRect.top + container.scrollTop;
+    // Center at 45% of container height (slightly above center for readability)
+    const targetScroll =
+      absoluteTop - container.clientHeight * 0.45 + elementRect.height / 2;
+
+    // Cancel previous animation
+    if (scrollAnimRef.current) cancelAnimationFrame(scrollAnimRef.current);
+
+    const start = container.scrollTop;
+    const change = targetScroll - start;
+    const duration = 750; // Gentle glide
+    let startTime: number | null = null;
+
+    const animate = (currentTime: number) => {
+      if (!startTime) startTime = currentTime;
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      // easeOutCubic: fast start, gentle deceleration
+      const ease = 1 - Math.pow(1 - progress, 3);
+      container.scrollTop = start + change * ease;
+      if (elapsed < duration) {
+        scrollAnimRef.current = requestAnimationFrame(animate);
+      }
+    };
+    scrollAnimRef.current = requestAnimationFrame(animate);
   }, [activeIndex, videoState.viewMode]);
 
   const openTranscript = useCallback(
@@ -303,18 +346,7 @@ export function VideoLab({
           >
             {isLoading ? 'Buscando subtítulos…' : 'Cargar transcripción'}
           </button>
-          <button
-            className="rounded-lg border border-violet-400/40 bg-violet-400/10 px-4 py-2.5 text-sm font-semibold text-violet-200 transition-colors hover:bg-violet-400/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300"
-            onClick={() => openFixture()}
-            type="button"
-          >
-            Abrir demo técnica
-          </button>
         </div>
-        <p className="mt-2 text-xs leading-5 text-slate-500">
-          Si YouTube limita el acceso a subtítulos, la demo incluida conserva todo el
-          recorrido de práctica.
-        </p>
       </form>
 
       {error ? (
@@ -336,9 +368,9 @@ export function VideoLab({
 
       {result ? (
         <div className="mt-6 space-y-5">
-          <section className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(20rem,2fr)]">
-            <div className="overflow-hidden rounded-xl border border-slate-800 bg-black shadow-xl shadow-black/20">
-              <div className="relative aspect-video">
+          <section className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(20rem,2fr)] lg:items-start">
+            <div ref={videoPanelRef} className="overflow-hidden rounded-xl border border-slate-800 bg-black shadow-xl shadow-black/20">
+              <div className="relative aspect-video w-full overflow-hidden [&>iframe]:absolute [&>iframe]:inset-0 [&>iframe]:h-full [&>iframe]:w-full [&>iframe]:border-0">
                 {result.source === 'fixture' ? (
                   <FixturePlayer
                     key={`fixture-${result.video_id}`}
@@ -373,8 +405,11 @@ export function VideoLab({
               </div>
             </div>
 
-            <section className="flex min-h-96 flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-950/55">
-              <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
+            <section
+              className="flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-950/55 min-h-0 max-h-[32rem]"
+              style={videoPanelHeight > 0 ? { maxHeight: `${videoPanelHeight}px` } : undefined}
+            >
+              <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
                 <div>
                   <p className="font-mono text-xs uppercase tracking-[0.16em] text-cyan-300">
                     Transcript
@@ -412,44 +447,47 @@ export function VideoLab({
               </header>
 
               <div
-                className="max-h-[31rem] flex-1 overflow-y-auto px-4 py-5 [scrollbar-color:theme(colors.slate.600)_transparent]"
+                className="h-72 lg:h-0 flex-1 min-h-0 overflow-y-auto px-6 pt-8 pb-24 [scrollbar-color:theme(colors.slate.600)_transparent]"
                 ref={transcriptRef}
+                style={{
+                  maskImage:
+                    'linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)',
+                  WebkitMaskImage:
+                    'linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)',
+                }}
               >
                 {videoState.viewMode === 'paragraph' ? (
-                  <div className="text-left text-base leading-8 text-slate-400">
+                  <div className="text-left text-[1.25rem] font-semibold leading-[2] text-slate-500">
                     {result.segments.map((segment, index) => {
-                      const isActive = index === activeIndex;
-                      const isPast = index < activeIndex;
+                      const isActive =
+                        activeIndex >= 0 && index <= activeIndex + 1;
                       return (
-                        <button
+                        <span
                           aria-current={isActive ? 'true' : undefined}
-                          aria-label={segment.text}
-                          className={`mr-1 inline rounded px-1 py-0.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 ${
+                          className={`cursor-pointer transition-all duration-150 ${
                             isActive
-                              ? 'bg-cyan-300 text-slate-950 shadow-sm shadow-cyan-300/20'
-                              : isPast
-                                ? 'text-slate-200'
-                                : 'hover:bg-slate-800 hover:text-white'
+                              ? 'text-cyan-100 font-bold'
+                              : 'hover:text-cyan-100 hover:underline'
                           }`}
                           data-segment-index={index}
                           key={`${segment.start}-${index}`}
                           onClick={() => handleSeek(segment.start)}
-                          type="button"
                         >
-                          {segment.text}
-                        </button>
+                          {segment.text}{' '}
+                        </span>
                       );
                     })}
                   </div>
                 ) : (
                   <ol className="space-y-2">
                     {result.segments.map((segment, index) => {
-                      const isActive = index === activeIndex;
+                      const isActive =
+                        activeIndex >= 0 && index <= activeIndex + 1;
                       return (
                         <li
-                          className={`grid grid-cols-[3.25rem_1fr] gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
+                          className={`grid grid-cols-[3.25rem_1fr] gap-3 rounded-lg border px-3 py-2.5 transition-all duration-150 ${
                             isActive
-                              ? 'border-cyan-300/50 bg-cyan-300/10'
+                              ? 'border-cyan-400/30 bg-white/10 font-semibold text-cyan-100'
                               : 'border-transparent hover:border-slate-700 hover:bg-slate-900'
                           }`}
                           data-segment-index={index}

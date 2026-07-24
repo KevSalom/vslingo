@@ -53,7 +53,7 @@ describe('DemoWorkspace', () => {
       'page',
     );
     expect(screen.getByRole('textbox', { name: 'URL de YouTube' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Abrir demo técnica' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cargar transcripción' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Voice Studio' }));
     expect(await screen.findByRole('heading', { name: /Voice Studio/i })).toBeInTheDocument();

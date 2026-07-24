@@ -33,6 +33,8 @@ type YouTubeNamespace = {
     element: HTMLElement,
     options: {
       videoId: string;
+      width?: string | number;
+      height?: string | number;
       playerVars: {
         playsinline: number;
         rel: number;
@@ -98,6 +100,8 @@ export const YouTubePlayer = forwardRef<VideoPlayerHandle, YouTubePlayerProps>(
 
           const player = new youtube.Player(container, {
             videoId,
+            width: '100%',
+            height: '100%',
             playerVars: {
               playsinline: 1,
               rel: 0,
@@ -144,7 +148,7 @@ export const YouTubePlayer = forwardRef<VideoPlayerHandle, YouTubePlayerProps>(
     return (
       <div
         aria-label="Reproductor de YouTube"
-        className="absolute inset-0"
+        className="absolute inset-0 h-full w-full [&>iframe]:absolute [&>iframe]:inset-0 [&>iframe]:h-full [&>iframe]:w-full [&>iframe]:border-0"
         ref={containerRef}
         role="region"
       />

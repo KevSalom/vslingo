@@ -14,6 +14,7 @@ import {
   MAX_NOTES,
   VIDEO_STORAGE_KEY,
 } from './videoStorage';
+import { SAMPLE_VIDEO_TITLE } from './fixture';
 
 const RESULT: TranscriptResponse = {
   video_id: 'aircAruvnKk',
@@ -58,24 +59,43 @@ describe('VideoLab', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Cargar transcripción' }));
 
-    expect(await screen.findByText('Neural networks recognize patterns.')).toBeInTheDocument();
+    expect(await screen.findByText(/Neural networks recognize patterns\./)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Simular 00:05' }));
 
-    const activeSegment = screen.getByRole('button', {
-      name: 'Layers transform those patterns.',
-    });
-    expect(activeSegment).toHaveAttribute('aria-current', 'true');
+    // Paragraph view uses <span> elements, not buttons — query by text
+    const activeSpan = screen.getByText('Layers transform those patterns.').closest('[data-segment-index]');
+    expect(activeSpan).toHaveAttribute('aria-current', 'true');
 
-    await user.click(activeSegment);
+    await user.click(screen.getByText('Layers transform those patterns.'));
     expect(seekTo).toHaveBeenCalledWith(5);
 
     await user.click(screen.getByRole('button', { name: 'Vista línea a línea' }));
     expect(screen.getByText('00:05')).toBeInTheDocument();
   });
 
-  it('opens the built-in technical fixture without contacting the API', async () => {
+  it('opens the built-in technical fixture from a saved library entry', async () => {
     const user = userEvent.setup();
     const loadTranscript = vi.fn().mockRejectedValue(new Error('Network unavailable'));
+    // Pre-seed a fixture-sourced library entry so the user can open it
+    window.localStorage.setItem(
+      VIDEO_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        state: {
+          library: [
+            {
+              id: 'video-fixture',
+              title: SAMPLE_VIDEO_TITLE,
+              url: 'https://youtu.be/aircAruvnKk',
+              videoId: 'aircAruvnKk',
+              source: 'fixture',
+            },
+          ],
+          notes: [],
+          viewMode: 'paragraph',
+        },
+      }),
+    );
     render(
       <VideoLab
         loadTranscript={loadTranscript}
@@ -83,7 +103,7 @@ describe('VideoLab', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Abrir demo técnica' }));
+    await user.click(screen.getByText(SAMPLE_VIDEO_TITLE));
 
     expect(await screen.findByText(/A neural network receives numbers as input/i)).toBeInTheDocument();
     expect(loadTranscript).not.toHaveBeenCalled();
@@ -133,9 +153,29 @@ describe('VideoLab', () => {
 
   it('uses the network-free player for the built-in fixture', async () => {
     const user = userEvent.setup();
+    // Pre-seed a fixture-sourced library entry
+    window.localStorage.setItem(
+      VIDEO_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        state: {
+          library: [
+            {
+              id: 'video-fixture',
+              title: SAMPLE_VIDEO_TITLE,
+              url: 'https://youtu.be/aircAruvnKk',
+              videoId: 'aircAruvnKk',
+              source: 'fixture',
+            },
+          ],
+          notes: [],
+          viewMode: 'paragraph',
+        },
+      }),
+    );
     render(<VideoLab loadTranscript={vi.fn()} />);
 
-    await user.click(screen.getByRole('button', { name: 'Abrir demo técnica' }));
+    await user.click(screen.getByText(SAMPLE_VIDEO_TITLE));
 
     expect(
       await screen.findByRole('region', { name: 'Reproductor de demo local' }),
@@ -152,6 +192,26 @@ describe('VideoLab', () => {
     const loadTranscript = vi.fn(
       (_url: string, _options?: { signal?: AbortSignal }) => pendingRequest,
     );
+    // Pre-seed a fixture-sourced library entry
+    window.localStorage.setItem(
+      VIDEO_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        state: {
+          library: [
+            {
+              id: 'video-fixture',
+              title: SAMPLE_VIDEO_TITLE,
+              url: 'https://youtu.be/aircAruvnKk',
+              videoId: 'aircAruvnKk',
+              source: 'fixture',
+            },
+          ],
+          notes: [],
+          viewMode: 'paragraph',
+        },
+      }),
+    );
     render(
       <VideoLab
         loadTranscript={loadTranscript}
@@ -164,7 +224,8 @@ describe('VideoLab', () => {
       'https://youtu.be/aircAruvnKk',
     );
     await user.click(screen.getByRole('button', { name: 'Cargar transcripción' }));
-    await user.click(screen.getByRole('button', { name: 'Abrir demo técnica' }));
+    // Open fixture via saved library entry instead of removed demo button
+    await user.click(screen.getByText(SAMPLE_VIDEO_TITLE));
 
     expect(loadTranscript.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
     resolveRequest(RESULT);
