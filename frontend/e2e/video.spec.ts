@@ -20,15 +20,18 @@ test.describe('Video Lab E2E', () => {
     await expect(page.getByRole('button', { name: /Vista línea/i })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('creates a timestamped local note', async ({ page }) => {
-    const sampleBtn = page.getByRole('button', { name: /Abrir demo técnica/i });
-    await expect(sampleBtn).toBeVisible();
-    await sampleBtn.click();
+  test('creates a local note from the explorer and lists it in the tree', async ({ page }) => {
+    await page.getByRole('button', { name: /Abrir demo técnica/i }).click();
 
-    const noteInput = page.getByPlaceholder(/Anota vocabulario/i);
-    await expect(noteInput).toBeVisible();
-    await noteInput.fill('Key architectural concept explained here.');
-    await page.getByRole('button', { name: /Guardar nota/i }).click();
-    await expect(page.getByText('Key architectural concept explained here.')).toBeVisible();
+    await page.getByRole('button', { name: 'Nueva nota' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Nueva nota' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel('Nombre').fill('Architectural concept');
+    await dialog.getByLabel('Contenido').fill('Key architectural concept explained here.');
+    await dialog.getByRole('button', { name: 'Guardar nota' }).click();
+
+    await expect(
+      page.getByRole('button', { name: 'Architectural concept' }),
+    ).toBeVisible();
   });
 });

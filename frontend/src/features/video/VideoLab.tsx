@@ -17,21 +17,14 @@ import { FixturePlayer } from './FixturePlayer';
 import { findActiveSegmentIndex, formatTimestamp } from './sync';
 import type {
   TranscriptResponse,
-  TranscriptViewMode,
   VideoLibraryItem,
   VideoNote,
 } from './types';
+import { deriveNoteTitle } from './types';
 import { fetchVideoTranscript } from './videoApi';
-import {
-  addVideoNote,
-  addVideoToLibrary,
-  EMPTY_VIDEO_STATE,
-  loadVideoState,
-  MAX_LIBRARY_ITEMS,
-  MAX_NOTES,
-  saveVideoState,
-  type VideoState,
-} from './videoStorage';
+import { VideoFileTree } from './VideoFileTree';
+import { useVideoLab } from './VideoLabContext';
+import { VsCodeModal } from './VsCodeModal';
 import {
   YouTubePlayer,
   type VideoPlayerHandle,
@@ -54,22 +47,31 @@ type VideoLabProps = {
   PlayerComponent?: VideoPlayerComponent;
 };
 
+type NoteDraftModal = {
+  title: string;
+  text: string;
+  timestamp?: number;
+};
+
 export function VideoLab({
   loadTranscript = fetchVideoTranscript,
   PlayerComponent = YouTubePlayer,
 }: VideoLabProps) {
+  const { state: videoState, setViewMode, saveLibraryItem, saveNote, registerOpenVideo } =
+    useVideoLab();
   const [url, setUrl] = useState('');
   const [currentUrl, setCurrentUrl] = useState('');
   const [result, setResult] = useState<TranscriptResponse | null>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [playbackTime, setPlaybackTime] = useState(0);
-  const [libraryTitle, setLibraryTitle] = useState('');
-  const [noteDraft, setNoteDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [storageReady, setStorageReady] = useState(false);
-  const [videoState, setVideoState] = useState<VideoState>(EMPTY_VIDEO_STATE);
+  const [saveVideoOpen, setSaveVideoOpen] = useState(false);
+  const [libraryTitle, setLibraryTitle] = useState('');
+  const [noteDraft, setNoteDraft] = useState<NoteDraftModal | null>(null);
+  const [explorerOpen, setExplorerOpen] = useState(false);
+  const [copyFlashId, setCopyFlashId] = useState<number | null>(null);
   const playerRef = useRef<VideoPlayerHandle>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const requestGenerationRef = useRef(0);
@@ -78,16 +80,81 @@ export function VideoLab({
   const videoPanelRef = useRef<HTMLDivElement>(null);
   const [videoPanelHeight, setVideoPanelHeight] = useState(0);
 
-  useEffect(() => {
-    setVideoState(loadVideoState());
-    setStorageReady(true);
-  }, []);
+  const openTranscript = useCallback(
+    (transcript: TranscriptResponse, nextUrl: string, title?: string) => {
+      setResult(transcript);
+      setCurrentUrl(nextUrl);
+      setUrl(nextUrl);
+      setActiveIndex(-1);
+      setPlaybackTime(0);
+      setLibraryTitle(title ?? `Video ${transcript.video_id}`);
+      setError(null);
+      setStatus(null);
+    },
+    [],
+  );
+
+  const openFixture = useCallback((title = SAMPLE_VIDEO_TITLE) => {
+    requestGenerationRef.current += 1;
+    activeRequestRef.current?.abort();
+    activeRequestRef.current = null;
+    setIsLoading(false);
+    openTranscript(SAMPLE_TRANSCRIPT, SAMPLE_VIDEO_URL, title);
+  }, [openTranscript]);
+
+  const requestTranscript = useCallback(
+    async (nextUrl: string, title?: string) => {
+      const generation = requestGenerationRef.current + 1;
+      requestGenerationRef.current = generation;
+      activeRequestRef.current?.abort();
+      const controller = new AbortController();
+      activeRequestRef.current = controller;
+      setIsLoading(true);
+      setError(null);
+      setStatus(null);
+      try {
+        const transcript = await loadTranscript(nextUrl, {
+          signal: controller.signal,
+        });
+        if (generation === requestGenerationRef.current) {
+          openTranscript(transcript, nextUrl, title);
+        }
+      } catch (cause) {
+        if (
+          generation === requestGenerationRef.current &&
+          !isAbortError(cause)
+        ) {
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : 'No se pudo cargar la transcripción. Usa la demo técnica.',
+          );
+        }
+      } finally {
+        if (generation === requestGenerationRef.current) {
+          activeRequestRef.current = null;
+          setIsLoading(false);
+        }
+      }
+    },
+    [loadTranscript, openTranscript],
+  );
+
+  const handleOpenSavedVideo = useCallback(
+    (item: VideoLibraryItem) => {
+      if (item.source === 'fixture') {
+        openFixture(item.title);
+        return;
+      }
+      void requestTranscript(item.url, item.title);
+    },
+    [openFixture, requestTranscript],
+  );
 
   useEffect(() => {
-    if (storageReady) {
-      saveVideoState(videoState);
-    }
-  }, [storageReady, videoState]);
+    registerOpenVideo(handleOpenSavedVideo);
+    return () => registerOpenVideo(null);
+  }, [handleOpenSavedVideo, registerOpenVideo]);
 
   useEffect(
     () => () => {
@@ -99,10 +166,12 @@ export function VideoLab({
 
   useEffect(() => {
     const el = videoPanelRef.current;
-    if (!el) return;
+    if (!el || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        setVideoPanelHeight(entry.contentBoxSize?.[0]?.blockSize ?? entry.contentRect.height);
+        setVideoPanelHeight(
+          entry.contentBoxSize?.[0]?.blockSize ?? entry.contentRect.height,
+        );
       }
     });
     observer.observe(el);
@@ -118,28 +187,24 @@ export function VideoLab({
     );
     if (!element) return;
 
-    // Calculate position relative to scroll container (scroll-independent)
     const containerRect = container.getBoundingClientRect();
     const elementRect = element.getBoundingClientRect();
     const absoluteTop =
       elementRect.top - containerRect.top + container.scrollTop;
-    // Center at 45% of container height (slightly above center for readability)
     const targetScroll =
       absoluteTop - container.clientHeight * 0.45 + elementRect.height / 2;
 
-    // Cancel previous animation
     if (scrollAnimRef.current) cancelAnimationFrame(scrollAnimRef.current);
 
     const start = container.scrollTop;
     const change = targetScroll - start;
-    const duration = 750; // Gentle glide
+    const duration = 750;
     let startTime: number | null = null;
 
     const animate = (currentTime: number) => {
       if (!startTime) startTime = currentTime;
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      // easeOutCubic: fast start, gentle deceleration
       const ease = 1 - Math.pow(1 - progress, 3);
       container.scrollTop = start + change * ease;
       if (elapsed < duration) {
@@ -148,21 +213,6 @@ export function VideoLab({
     };
     scrollAnimRef.current = requestAnimationFrame(animate);
   }, [activeIndex, videoState.viewMode]);
-
-  const openTranscript = useCallback(
-    (transcript: TranscriptResponse, nextUrl: string, title?: string) => {
-      setResult(transcript);
-      setCurrentUrl(nextUrl);
-      setUrl(nextUrl);
-      setActiveIndex(-1);
-      setPlaybackTime(0);
-      setLibraryTitle(title ?? `Video ${transcript.video_id}`);
-      setNoteDraft('');
-      setError(null);
-      setStatus(null);
-    },
-    [],
-  );
 
   const handleTimeChange = useCallback(
     (seconds: number) => {
@@ -173,49 +223,6 @@ export function VideoLab({
     },
     [result],
   );
-
-  const openFixture = (title = SAMPLE_VIDEO_TITLE) => {
-    requestGenerationRef.current += 1;
-    activeRequestRef.current?.abort();
-    activeRequestRef.current = null;
-    setIsLoading(false);
-    openTranscript(SAMPLE_TRANSCRIPT, SAMPLE_VIDEO_URL, title);
-  };
-
-  const requestTranscript = async (nextUrl: string, title?: string) => {
-    const generation = requestGenerationRef.current + 1;
-    requestGenerationRef.current = generation;
-    activeRequestRef.current?.abort();
-    const controller = new AbortController();
-    activeRequestRef.current = controller;
-    setIsLoading(true);
-    setError(null);
-    setStatus(null);
-    try {
-      const transcript = await loadTranscript(nextUrl, {
-        signal: controller.signal,
-      });
-      if (generation === requestGenerationRef.current) {
-        openTranscript(transcript, nextUrl, title);
-      }
-    } catch (cause) {
-      if (
-        generation === requestGenerationRef.current &&
-        !isAbortError(cause)
-      ) {
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : 'No se pudo cargar la transcripción. Usa la demo técnica.',
-        );
-      }
-    } finally {
-      if (generation === requestGenerationRef.current) {
-        activeRequestRef.current = null;
-        setIsLoading(false);
-      }
-    }
-  };
 
   const handleSubmit = (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -229,11 +236,7 @@ export function VideoLab({
     handleTimeChange(seconds);
   };
 
-  const handleViewMode = (viewMode: TranscriptViewMode) => {
-    setVideoState((current) => ({ ...current, viewMode }));
-  };
-
-  const handleSaveVideo = () => {
+  const handleConfirmSaveVideo = () => {
     if (!result || !libraryTitle.trim()) {
       return;
     }
@@ -244,65 +247,77 @@ export function VideoLab({
       videoId: result.video_id,
       source: result.source,
     };
-    const nextState = addVideoToLibrary(videoState, item);
-    if (nextState === null) {
-      setStatus(`La biblioteca admite hasta ${MAX_LIBRARY_ITEMS} videos.`);
+    const message = saveLibraryItem(item);
+    if (message) {
+      setStatus(message);
+    } else {
+      setStatus('Video guardado en este navegador.');
+    }
+    setSaveVideoOpen(false);
+  };
+
+  const handleConfirmSaveNote = () => {
+    if (!noteDraft) {
       return;
     }
-    setVideoState(nextState);
-    setStatus('Video guardado en este navegador.');
-  };
-
-  const handleOpenSavedVideo = (item: VideoLibraryItem) => {
-    if (item.source === 'fixture') {
-      openFixture(item.title);
-      return;
-    }
-    void requestTranscript(item.url, item.title);
-  };
-
-  const handleRemoveSavedVideo = (id: string) => {
-    setVideoState((current) => ({
-      ...current,
-      library: current.library.filter((item) => item.id !== id),
-    }));
-  };
-
-  const handleSaveNote = () => {
-    if (!result || !noteDraft.trim()) {
+    const title = noteDraft.title.trim();
+    const text = noteDraft.text.trim();
+    if (!title || !text) {
       return;
     }
     const note: VideoNote = {
       id: createLocalId('note'),
-      videoId: result.video_id,
-      timestamp: playbackTime,
-      text: noteDraft.trim(),
+      title,
+      text,
       createdAt: new Date().toISOString(),
+      ...(noteDraft.timestamp !== undefined
+        ? { timestamp: noteDraft.timestamp }
+        : {}),
     };
-    const nextState = addVideoNote(videoState, note);
-    if (nextState === null) {
-      setStatus(`Puedes guardar hasta ${MAX_NOTES} notas locales.`);
-      return;
+    const message = saveNote(note);
+    if (message) {
+      setStatus(message);
+    } else {
+      setStatus(
+        note.timestamp !== undefined
+          ? `Nota guardada · ${formatTimestamp(note.timestamp)}`
+          : 'Nota guardada en este navegador.',
+      );
     }
-    setVideoState(nextState);
-    setNoteDraft('');
-    setStatus(`Nota guardada en ${formatTimestamp(playbackTime)}.`);
+    setNoteDraft(null);
   };
 
-  const visibleNotes = result
-    ? videoState.notes.filter((note) => note.videoId === result.video_id)
-    : [];
+  const handleCopySegment = async (text: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyFlashId(index);
+      window.setTimeout(() => {
+        setCopyFlashId((current) => (current === index ? null : current));
+      }, 1200);
+    } catch {
+      setStatus('No se pudo copiar al portapapeles.');
+    }
+  };
 
   return (
     <section aria-labelledby="video-lab-title" className="mx-auto w-full max-w-6xl">
-      <header className="mb-6 border-b border-slate-800 pb-5">
+      <header className="mb-5 border-b border-slate-800 pb-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="font-mono text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
             Video / playback.clock
           </p>
-          <span className="font-mono text-xs text-slate-500">
-            Sincronización cada 200 ms
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              className="video-explorer-toggle"
+              onClick={() => setExplorerOpen(true)}
+              type="button"
+            >
+              Explorer
+            </button>
+            <span className="font-mono text-xs text-slate-500">
+              Sincronización cada 200 ms
+            </span>
+          </div>
         </div>
         <h1
           className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl"
@@ -311,10 +326,9 @@ export function VideoLab({
         >
           Video Lab
         </h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400 sm:text-base">
-          Estudia inglés técnico con subtítulos navegables. El reloj sigue el video,
-          cada frase permite saltar al instante exacto y tus notas permanecen en este
-          navegador.
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400 sm:text-base">
+          Estudia inglés técnico con subtítulos navegables. Biblioteca y notas viven
+          en el explorador lateral; aquí sólo el material de estudio.
         </p>
       </header>
 
@@ -339,12 +353,31 @@ export function VideoLab({
             type="url"
             value={url}
           />
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              className="rounded-lg bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+              disabled={isLoading || !url.trim()}
+              type="submit"
+            >
+              {isLoading ? 'Buscando subtítulos…' : 'Cargar transcripción'}
+            </button>
+            <button
+              className="rounded-lg border border-cyan-400/40 px-4 py-2.5 text-sm font-semibold text-cyan-200 transition-colors hover:bg-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+              disabled={!result}
+              onClick={() => setSaveVideoOpen(true)}
+              type="button"
+            >
+              Guardar video
+            </button>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
           <button
-            className="rounded-lg bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
-            disabled={isLoading || !url.trim()}
-            type="submit"
+            className="font-mono text-xs text-slate-400 underline-offset-2 transition-colors hover:text-cyan-200 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+            onClick={() => openFixture()}
+            type="button"
           >
-            {isLoading ? 'Buscando subtítulos…' : 'Cargar transcripción'}
+            Abrir demo técnica
           </button>
         </div>
       </form>
@@ -367,9 +400,12 @@ export function VideoLab({
       ) : null}
 
       {result ? (
-        <div className="mt-6 space-y-5">
+        <div className="mt-6">
           <section className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(20rem,2fr)] lg:items-start">
-            <div ref={videoPanelRef} className="overflow-hidden rounded-xl border border-slate-800 bg-black shadow-xl shadow-black/20">
+            <div
+              className="overflow-hidden rounded-xl border border-slate-800 bg-black shadow-xl shadow-black/20"
+              ref={videoPanelRef}
+            >
               <div className="relative aspect-video w-full overflow-hidden [&>iframe]:absolute [&>iframe]:inset-0 [&>iframe]:h-full [&>iframe]:w-full [&>iframe]:border-0">
                 {result.source === 'fixture' ? (
                   <FixturePlayer
@@ -406,8 +442,12 @@ export function VideoLab({
             </div>
 
             <section
-              className="flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-950/55 min-h-0 max-h-[32rem]"
-              style={videoPanelHeight > 0 ? { maxHeight: `${videoPanelHeight}px` } : undefined}
+              className="flex max-h-[32rem] min-h-0 flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-950/55"
+              style={
+                videoPanelHeight > 0
+                  ? { maxHeight: `${videoPanelHeight}px` }
+                  : undefined
+              }
             >
               <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
                 <div>
@@ -426,7 +466,7 @@ export function VideoLab({
                         ? 'bg-cyan-400 text-slate-950'
                         : 'text-slate-400 hover:text-slate-100'
                     }`}
-                    onClick={() => handleViewMode('paragraph')}
+                    onClick={() => setViewMode('paragraph')}
                     type="button"
                   >
                     Vista párrafo
@@ -438,7 +478,7 @@ export function VideoLab({
                         ? 'bg-cyan-400 text-slate-950'
                         : 'text-slate-400 hover:text-slate-100'
                     }`}
-                    onClick={() => handleViewMode('line')}
+                    onClick={() => setViewMode('line')}
                     type="button"
                   >
                     Vista línea a línea
@@ -447,7 +487,7 @@ export function VideoLab({
               </header>
 
               <div
-                className="h-72 lg:h-0 flex-1 min-h-0 overflow-y-auto px-6 pt-8 pb-24 [scrollbar-color:theme(colors.slate.600)_transparent]"
+                className="h-72 min-h-0 flex-1 overflow-y-auto px-6 pt-8 pb-24 lg:h-0 [scrollbar-color:theme(colors.slate.600)_transparent]"
                 ref={transcriptRef}
                 style={{
                   maskImage:
@@ -466,7 +506,7 @@ export function VideoLab({
                           aria-current={isActive ? 'true' : undefined}
                           className={`cursor-pointer transition-all duration-150 ${
                             isActive
-                              ? 'text-cyan-100 font-bold'
+                              ? 'font-bold text-cyan-100'
                               : 'hover:text-cyan-100 hover:underline'
                           }`}
                           data-segment-index={index}
@@ -485,7 +525,7 @@ export function VideoLab({
                         activeIndex >= 0 && index <= activeIndex + 1;
                       return (
                         <li
-                          className={`grid grid-cols-[3.25rem_1fr] gap-3 rounded-lg border px-3 py-2.5 transition-all duration-150 ${
+                          className={`video-line-row group grid grid-cols-[3.25rem_1fr_auto] gap-2 rounded-lg border px-3 py-2.5 transition-all duration-150 ${
                             isActive
                               ? 'border-cyan-400/30 bg-white/10 font-semibold text-cyan-100'
                               : 'border-transparent hover:border-slate-700 hover:bg-slate-900'
@@ -505,6 +545,39 @@ export function VideoLab({
                           >
                             {segment.text}
                           </button>
+                          <div className="video-line-actions flex items-start gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                            <button
+                              aria-label={`Copiar frase: ${segment.text}`}
+                              className="video-line-icon"
+                              onClick={() =>
+                                void handleCopySegment(segment.text, index)
+                              }
+                              type="button"
+                            >
+                              {copyFlashId === index ? (
+                                <CheckIcon />
+                              ) : (
+                                <CopyIcon />
+                              )}
+                            </button>
+                            <button
+                              aria-label={`Guardar frase como nota: ${segment.text}`}
+                              className="video-line-icon"
+                              onClick={() =>
+                                setNoteDraft({
+                                  title: deriveNoteTitle(
+                                    segment.text,
+                                    segment.start,
+                                  ),
+                                  text: segment.text,
+                                  timestamp: segment.start,
+                                })
+                              }
+                              type="button"
+                            >
+                              <NoteIcon />
+                            </button>
+                          </div>
                         </li>
                       );
                     })}
@@ -513,157 +586,106 @@ export function VideoLab({
               </div>
             </section>
           </section>
-
-          <section className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-slate-800 bg-slate-950/45 p-4 sm:p-5">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-cyan-300">
-                Library / local
-              </p>
-              <label
-                className="mt-3 block text-sm font-semibold text-slate-200"
-                htmlFor="video-library-title"
-              >
-                Nombre en biblioteca
-              </label>
-              <div className="mt-2 flex gap-2">
-                <input
-                  className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus-visible:border-cyan-300 focus-visible:ring-2 focus-visible:ring-cyan-300/30"
-                  id="video-library-title"
-                  maxLength={200}
-                  onChange={(event) => setLibraryTitle(event.currentTarget.value)}
-                  value={libraryTitle}
-                />
-                <button
-                  className="rounded-lg border border-cyan-400/40 px-3 py-2 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/10 disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
-                  disabled={!libraryTitle.trim()}
-                  onClick={handleSaveVideo}
-                  type="button"
-                >
-                  Guardar en biblioteca
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-slate-800 bg-slate-950/45 p-4 sm:p-5">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-violet-300">
-                Notes / {formatTimestamp(playbackTime)}
-              </p>
-              <label
-                className="mt-3 block text-sm font-semibold text-slate-200"
-                htmlFor="video-note"
-              >
-                Nota en {formatTimestamp(playbackTime)}
-              </label>
-              <div className="mt-2 flex gap-2">
-                <textarea
-                  className="min-h-20 min-w-0 flex-1 resize-y rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus-visible:border-violet-300 focus-visible:ring-2 focus-visible:ring-violet-300/30"
-                  id="video-note"
-                  maxLength={2_000}
-                  onChange={(event) => setNoteDraft(event.currentTarget.value)}
-                  placeholder="Anota vocabulario, una idea o una pregunta…"
-                  value={noteDraft}
-                />
-                <button
-                  className="self-end rounded-lg border border-violet-400/40 px-3 py-2 text-sm font-semibold text-violet-200 hover:bg-violet-400/10 disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300"
-                  disabled={!noteDraft.trim()}
-                  onClick={handleSaveNote}
-                  type="button"
-                >
-                  Guardar nota
-                </button>
-              </div>
-            </div>
-          </section>
-
-          {visibleNotes.length > 0 ? (
-            <section aria-labelledby="video-notes-title">
-              <h2 className="text-base font-semibold" id="video-notes-title">
-                Notas de este video
-              </h2>
-              <ul className="mt-3 grid gap-3 md:grid-cols-2">
-                {visibleNotes.map((note) => (
-                  <li
-                    className="rounded-lg border border-slate-800 bg-slate-950/45 p-4"
-                    key={note.id}
-                  >
-                    <button
-                      className="font-mono text-xs text-violet-300 hover:text-violet-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300"
-                      onClick={() => handleSeek(note.timestamp)}
-                      type="button"
-                    >
-                      Ir a {formatTimestamp(note.timestamp)}
-                    </button>
-                    <p className="mt-2 text-sm leading-6 text-slate-300">{note.text}</p>
-                    <button
-                      className="mt-3 text-xs text-slate-500 hover:text-red-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300"
-                      onClick={() =>
-                        setVideoState((current) => ({
-                          ...current,
-                          notes: current.notes.filter((item) => item.id !== note.id),
-                        }))
-                      }
-                      type="button"
-                    >
-                      Eliminar nota
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
         </div>
       ) : null}
 
-      <section aria-labelledby="video-library-title" className="mt-6">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="font-mono text-xs uppercase tracking-[0.16em] text-slate-500">
-              Saved locally
-            </p>
-            <h2 className="mt-1 text-base font-semibold" id="video-library-title">
-              Mi biblioteca
-            </h2>
-          </div>
-          <span className="font-mono text-xs text-slate-500">
-            {videoState.library.length} guardados
-          </span>
-        </div>
-        {videoState.library.length > 0 ? (
-          <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {videoState.library.map((item) => (
-              <li
-                className="rounded-xl border border-slate-800 bg-slate-950/45 p-4"
-                key={item.id}
+      {saveVideoOpen ? (
+        <VsCodeModal
+          confirmDisabled={!libraryTitle.trim()}
+          confirmLabel="Guardar"
+          description="Se almacenará como fichero en videos/ del explorador."
+          onCancel={() => setSaveVideoOpen(false)}
+          onConfirm={handleConfirmSaveVideo}
+          title="Guardar video"
+        >
+          <label className="vsc-field-label" htmlFor="video-library-title">
+            Nombre del video
+          </label>
+          <input
+            className="vsc-field-input"
+            id="video-library-title"
+            maxLength={200}
+            onChange={(event) => setLibraryTitle(event.currentTarget.value)}
+            value={libraryTitle}
+          />
+        </VsCodeModal>
+      ) : null}
+
+      {noteDraft ? (
+        <VsCodeModal
+          confirmDisabled={!noteDraft.title.trim() || !noteDraft.text.trim()}
+          confirmLabel="Guardar nota"
+          description="La nota no depende de ningún video guardado."
+          onCancel={() => setNoteDraft(null)}
+          onConfirm={handleConfirmSaveNote}
+          title="Guardar frase como nota"
+        >
+          <label className="vsc-field-label" htmlFor="video-phrase-title">
+            Nombre
+          </label>
+          <input
+            className="vsc-field-input"
+            id="video-phrase-title"
+            maxLength={200}
+            onChange={(event) =>
+              setNoteDraft((current) =>
+                current
+                  ? { ...current, title: event.currentTarget.value }
+                  : current,
+              )
+            }
+            value={noteDraft.title}
+          />
+          <label className="vsc-field-label" htmlFor="video-phrase-body">
+            Contenido
+          </label>
+          <textarea
+            className="vsc-field-textarea"
+            id="video-phrase-body"
+            maxLength={2_000}
+            onChange={(event) =>
+              setNoteDraft((current) =>
+                current
+                  ? { ...current, text: event.currentTarget.value }
+                  : current,
+              )
+            }
+            rows={4}
+            value={noteDraft.text}
+          />
+        </VsCodeModal>
+      ) : null}
+
+      {explorerOpen ? (
+        <div className="video-explorer-drawer-root">
+          <button
+            aria-label="Cerrar explorador"
+            className="video-explorer-drawer-backdrop"
+            onClick={() => setExplorerOpen(false)}
+            type="button"
+          />
+          <aside
+            aria-label="Explorador de Video Lab"
+            className="video-explorer-drawer"
+          >
+            <div className="video-explorer-drawer-header">
+              <p className="explorer-title">Explorer</p>
+              <button
+                aria-label="Cerrar"
+                className="video-tree-action"
+                onClick={() => setExplorerOpen(false)}
+                type="button"
               >
-                <button
-                  className="w-full text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
-                  onClick={() => handleOpenSavedVideo(item)}
-                  type="button"
-                >
-                  <span className="block text-sm font-semibold text-slate-100">
-                    {item.title}
-                  </span>
-                  <span className="mt-1 block font-mono text-xs text-slate-500">
-                    {item.videoId}
-                  </span>
-                </button>
-                <button
-                  aria-label={`Eliminar ${item.title} de la biblioteca`}
-                  className="mt-3 text-xs text-slate-500 hover:text-red-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300"
-                  onClick={() => handleRemoveSavedVideo(item.id)}
-                  type="button"
-                >
-                  Eliminar
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-3 rounded-xl border border-dashed border-slate-800 px-4 py-5 text-sm text-slate-500">
-            Guarda un video para volver a estudiarlo sin perder tus notas.
-          </p>
-        )}
-      </section>
+                ×
+              </button>
+            </div>
+            <VideoFileTree
+              compact
+              onRequestClose={() => setExplorerOpen(false)}
+            />
+          </aside>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -677,4 +699,45 @@ function createLocalId(prefix: string): string {
     return `${prefix}-${crypto.randomUUID()}`;
   }
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function CopyIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" viewBox="0 0 16 16" width="14" height="14">
+      <rect height="9" rx="1" stroke="currentColor" strokeWidth="1.3" width="9" x="5" y="2" />
+      <path
+        d="M3 5.5h-.5A1 1 0 0 0 1.5 6.5v6A1 1 0 0 0 2.5 13.5h6a1 1 0 0 0 1-1V12"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" viewBox="0 0 16 16" width="14" height="14">
+      <path
+        d="m3.5 8.5 2.8 2.8 6.2-6.6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
+}
+
+function NoteIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" viewBox="0 0 16 16" width="14" height="14">
+      <path
+        d="M3.5 2.75h6.2L12.5 5.6v7.65h-9z"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.3"
+      />
+      <path d="M9.5 2.9v2.8h2.8M5.5 8.5h5M5.5 10.75h3.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.2" />
+    </svg>
+  );
 }

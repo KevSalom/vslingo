@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 
+import { VideoFileTree } from '../features/video/VideoFileTree';
 import { VideoLab } from '../features/video/VideoLab';
+import { VideoLabProvider } from '../features/video/VideoLabContext';
 import { WritingStudio } from '../features/writing/WritingStudio';
 
 const VoiceStudio = lazy(() =>
@@ -82,74 +84,88 @@ export function DemoWorkspace() {
     return () => window.cancelAnimationFrame(animationFrame);
   }, [activeId, hasResolvedInitialModule]);
 
+  const workspace = (
+    <section className="workspace" aria-label="Workspace de VSLingo">
+      <header className="workspace-topbar">
+        <div>
+          <a className="brand" href="/">
+            <span aria-hidden="true" className="brand-mark">V/</span>
+            VSLingo
+          </a>
+          <p className="workspace-subtitle">Developer English workspace</p>
+        </div>
+        <span className="alpha-badge">Public Alpha</span>
+      </header>
+
+      <nav aria-label="Módulos de práctica" className="activity-bar">
+        <div className="activity-list">
+          {MODULES.map((module) => {
+            const isActive = module.id === activeId;
+            return (
+              <button
+                aria-current={isActive ? 'page' : undefined}
+                aria-label={module.label}
+                className="activity-button"
+                key={module.id}
+                onClick={() => setActiveId(module.id)}
+                title={module.label}
+                type="button"
+              >
+                <ModuleGlyph module={module.id} />
+              </button>
+            );
+          })}
+        </div>
+        <a aria-label="Volver a la landing" className="activity-button" href="/" title="Volver a la landing">
+          <HomeGlyph />
+        </a>
+      </nav>
+
+      <aside className="explorer" aria-labelledby="module-context-title">
+        {activeId === 'video' ? (
+          <VideoFileTree />
+        ) : (
+          <>
+            <p className="explorer-title" id="module-context-title">Módulo activo</p>
+            <p className="explorer-name">{activeModule.label}</p>
+            <p className="explorer-description">{activeModule.description}</p>
+            <div className="explorer-rule" />
+            <p className="explorer-title">Enfoque</p>
+            <p className="explorer-note">{activeModule.eyebrow}</p>
+            <p className="explorer-note" style={{ marginTop: '1rem' }}>
+              Las preferencias y borradores recientes se mantienen sólo en este navegador.
+            </p>
+          </>
+        )}
+      </aside>
+
+      <section className="editor" aria-label={`${activeModule.label}: espacio de práctica`}>
+        <div className="editor-tab">{activeModule.fileLabel}</div>
+        <div className="editor-content">
+          {activeId === 'writing' ? <WritingStudio /> : null}
+          {activeId === 'video' ? <VideoLab /> : null}
+          {activeId === 'voice' ? (
+            <Suspense fallback={<VoiceFallback />}>
+              <VoiceStudio />
+            </Suspense>
+          ) : null}
+        </div>
+      </section>
+
+      <footer className="workspace-panel" aria-live="polite">
+        <strong>local</strong>
+        <span>sin registro · estado reciente en este navegador</span>
+      </footer>
+    </section>
+  );
+
   return (
     <main className="workspace-page">
-      <section className="workspace" aria-label="Workspace de VSLingo">
-        <header className="workspace-topbar">
-          <div>
-            <a className="brand" href="/">
-              <span aria-hidden="true" className="brand-mark">V/</span>
-              VSLingo
-            </a>
-            <p className="workspace-subtitle">Developer English workspace</p>
-          </div>
-          <span className="alpha-badge">Public Alpha</span>
-        </header>
-
-        <nav aria-label="Módulos de práctica" className="activity-bar">
-          <div className="activity-list">
-            {MODULES.map((module) => {
-              const isActive = module.id === activeId;
-              return (
-                <button
-                  aria-current={isActive ? 'page' : undefined}
-                  aria-label={module.label}
-                  className="activity-button"
-                  key={module.id}
-                  onClick={() => setActiveId(module.id)}
-                  title={module.label}
-                  type="button"
-                >
-                  <ModuleGlyph module={module.id} />
-                </button>
-              );
-            })}
-          </div>
-          <a aria-label="Volver a la landing" className="activity-button" href="/" title="Volver a la landing">
-            <HomeGlyph />
-          </a>
-        </nav>
-
-        <aside className="explorer" aria-labelledby="module-context-title">
-          <p className="explorer-title" id="module-context-title">Módulo activo</p>
-          <p className="explorer-name">{activeModule.label}</p>
-          <p className="explorer-description">{activeModule.description}</p>
-          <div className="explorer-rule" />
-          <p className="explorer-title">Enfoque</p>
-          <p className="explorer-note">{activeModule.eyebrow}</p>
-          <p className="explorer-note" style={{ marginTop: '1rem' }}>
-            Las preferencias y borradores recientes se mantienen sólo en este navegador.
-          </p>
-        </aside>
-
-        <section className="editor" aria-label={`${activeModule.label}: espacio de práctica`}>
-          <div className="editor-tab">{activeModule.fileLabel}</div>
-          <div className="editor-content">
-            {activeId === 'writing' ? <WritingStudio /> : null}
-            {activeId === 'video' ? <VideoLab /> : null}
-            {activeId === 'voice' ? (
-              <Suspense fallback={<VoiceFallback />}>
-                <VoiceStudio />
-              </Suspense>
-            ) : null}
-          </div>
-        </section>
-
-        <footer className="workspace-panel" aria-live="polite">
-          <strong>local</strong>
-          <span>sin registro · estado reciente en este navegador</span>
-        </footer>
-      </section>
+      {activeId === 'video' ? (
+        <VideoLabProvider>{workspace}</VideoLabProvider>
+      ) : (
+        workspace
+      )}
     </main>
   );
 }

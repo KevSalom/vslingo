@@ -1,10 +1,12 @@
-import { forwardRef, useImperativeHandle } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { forwardRef, useImperativeHandle, type ReactElement } from 'react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TranscriptResponse } from './types';
+import { VideoFileTree } from './VideoFileTree';
 import { VideoLab } from './VideoLab';
+import { VideoLabProvider } from './VideoLabContext';
 import type {
   VideoPlayerHandle,
   YouTubePlayerProps,
@@ -37,6 +39,15 @@ const FakePlayer = forwardRef<VideoPlayerHandle, YouTubePlayerProps>(
   },
 );
 
+function renderVideoLab(ui: ReactElement, options?: { tree?: boolean }) {
+  return render(
+    <VideoLabProvider>
+      {options?.tree === false ? null : <VideoFileTree />}
+      {ui}
+    </VideoLabProvider>,
+  );
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   seekTo.mockClear();
@@ -46,7 +57,7 @@ describe('VideoLab', () => {
   it('loads a URL, follows playback and seeks from both transcript views', async () => {
     const user = userEvent.setup();
     const loadTranscript = vi.fn().mockResolvedValue(RESULT);
-    render(
+    renderVideoLab(
       <VideoLab
         loadTranscript={loadTranscript}
         PlayerComponent={FakePlayer}
@@ -62,7 +73,6 @@ describe('VideoLab', () => {
     expect(await screen.findByText(/Neural networks recognize patterns\./)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Simular 00:05' }));
 
-    // Paragraph view uses <span> elements, not buttons — query by text
     const activeSpan = screen.getByText('Layers transform those patterns.').closest('[data-segment-index]');
     expect(activeSpan).toHaveAttribute('aria-current', 'true');
 
@@ -76,11 +86,10 @@ describe('VideoLab', () => {
   it('opens the built-in technical fixture from a saved library entry', async () => {
     const user = userEvent.setup();
     const loadTranscript = vi.fn().mockRejectedValue(new Error('Network unavailable'));
-    // Pre-seed a fixture-sourced library entry so the user can open it
     window.localStorage.setItem(
       VIDEO_STORAGE_KEY,
       JSON.stringify({
-        version: 1,
+        version: 2,
         state: {
           library: [
             {
@@ -96,23 +105,23 @@ describe('VideoLab', () => {
         },
       }),
     );
-    render(
+    renderVideoLab(
       <VideoLab
         loadTranscript={loadTranscript}
         PlayerComponent={FakePlayer}
       />,
     );
 
-    await user.click(screen.getByText(SAMPLE_VIDEO_TITLE));
+    await user.click(await screen.findByRole('button', { name: SAMPLE_VIDEO_TITLE }));
 
     expect(await screen.findByText(/A neural network receives numbers as input/i)).toBeInTheDocument();
     expect(loadTranscript).not.toHaveBeenCalled();
     expect(screen.getByText('Fixture local')).toBeInTheDocument();
   });
 
-  it('persists a library entry and a timestamped local note', async () => {
+  it('persists a library entry and a titled local note from the explorer', async () => {
     const user = userEvent.setup();
-    render(
+    renderVideoLab(
       <VideoLab
         loadTranscript={vi.fn().mockResolvedValue(RESULT)}
         PlayerComponent={FakePlayer}
@@ -126,38 +135,95 @@ describe('VideoLab', () => {
     await user.click(screen.getByRole('button', { name: 'Cargar transcripción' }));
     await screen.findByText('Neural networks recognize patterns.');
 
-    await user.clear(screen.getByRole('textbox', { name: 'Nombre en biblioteca' }));
-    await user.type(
-      screen.getByRole('textbox', { name: 'Nombre en biblioteca' }),
-      'Neural networks',
-    );
-    await user.click(screen.getByRole('button', { name: 'Guardar en biblioteca' }));
+    await user.click(screen.getByRole('button', { name: 'Guardar video' }));
+    const saveDialog = screen.getByRole('dialog', { name: 'Guardar video' });
+    await user.clear(within(saveDialog).getByLabelText('Nombre del video'));
+    await user.type(within(saveDialog).getByLabelText('Nombre del video'), 'Neural networks');
+    await user.click(within(saveDialog).getByRole('button', { name: 'Guardar' }));
 
-    await user.click(screen.getByRole('button', { name: 'Simular 00:05' }));
-    await user.type(
-      screen.getByRole('textbox', { name: 'Nota en 00:05' }),
-      'Review the layer transformation.',
-    );
-    await user.click(screen.getByRole('button', { name: 'Guardar nota' }));
+    expect(await screen.findByRole('button', { name: 'Neural networks' })).toBeInTheDocument();
 
-    expect(screen.getByText('Review the layer transformation.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Nueva nota' }));
+    const noteDialog = await screen.findByRole('dialog', { name: 'Nueva nota' });
+    fireEvent.change(within(noteDialog).getByLabelText('Nombre'), {
+      target: { value: 'Layer note' },
+    });
+    fireEvent.change(within(noteDialog).getByLabelText('Contenido'), {
+      target: { value: 'Review the layer transformation.' },
+    });
+    await user.click(within(noteDialog).getByRole('button', { name: 'Guardar nota' }));
+
     await waitFor(() => {
       const persisted = JSON.parse(window.localStorage.getItem(VIDEO_STORAGE_KEY) ?? '{}');
+      expect(persisted.version).toBe(2);
       expect(persisted.state.library[0].title).toBe('Neural networks');
       expect(persisted.state.notes[0]).toMatchObject({
-        timestamp: 5.5,
+        title: 'Layer note',
         text: 'Review the layer transformation.',
       });
+      expect(persisted.state.notes[0]).not.toHaveProperty('videoId');
+    });
+    expect(screen.getByTitle('Layer note')).toBeInTheDocument();
+  });
+
+  it('saves a phrase as a note from the line view and keeps notes after removing a video', async () => {
+    const user = userEvent.setup();
+    renderVideoLab(
+      <VideoLab
+        loadTranscript={vi.fn().mockResolvedValue(RESULT)}
+        PlayerComponent={FakePlayer}
+      />,
+    );
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'URL de YouTube' }),
+      'https://youtu.be/aircAruvnKk',
+    );
+    await user.click(screen.getByRole('button', { name: 'Cargar transcripción' }));
+    await screen.findByText('Neural networks recognize patterns.');
+
+    await user.click(screen.getByRole('button', { name: 'Guardar video' }));
+    const saveDialog = screen.getByRole('dialog', { name: 'Guardar video' });
+    await user.clear(within(saveDialog).getByLabelText('Nombre del video'));
+    await user.type(within(saveDialog).getByLabelText('Nombre del video'), 'Study clip');
+    await user.click(within(saveDialog).getByRole('button', { name: 'Guardar' }));
+    expect(await screen.findByRole('button', { name: 'Study clip' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Vista línea a línea' }));
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Guardar frase como nota: Layers transform those patterns.',
+      }),
+    );
+    await user.click(
+      within(screen.getByRole('dialog', { name: 'Guardar frase como nota' })).getByRole(
+        'button',
+        { name: 'Guardar nota' },
+      ),
+    );
+
+    expect(await screen.findByTitle('Layers transform those patterns.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar Study clip' }));
+
+    expect(screen.queryByTitle('Study clip')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Layers transform those patterns.')).toBeInTheDocument();
+
+    await waitFor(() => {
+      const persisted = JSON.parse(window.localStorage.getItem(VIDEO_STORAGE_KEY) ?? '{}');
+      expect(persisted.state.library).toHaveLength(0);
+      expect(persisted.state.notes).toHaveLength(1);
+      expect(persisted.state.notes[0].text).toBe('Layers transform those patterns.');
+      expect(persisted.state.notes[0]).not.toHaveProperty('videoId');
     });
   });
 
   it('uses the network-free player for the built-in fixture', async () => {
     const user = userEvent.setup();
-    // Pre-seed a fixture-sourced library entry
     window.localStorage.setItem(
       VIDEO_STORAGE_KEY,
       JSON.stringify({
-        version: 1,
+        version: 2,
         state: {
           library: [
             {
@@ -173,9 +239,9 @@ describe('VideoLab', () => {
         },
       }),
     );
-    render(<VideoLab loadTranscript={vi.fn()} />);
+    renderVideoLab(<VideoLab loadTranscript={vi.fn()} />);
 
-    await user.click(screen.getByText(SAMPLE_VIDEO_TITLE));
+    await user.click(await screen.findByRole('button', { name: SAMPLE_VIDEO_TITLE }));
 
     expect(
       await screen.findByRole('region', { name: 'Reproductor de demo local' }),
@@ -192,11 +258,10 @@ describe('VideoLab', () => {
     const loadTranscript = vi.fn(
       (_url: string, _options?: { signal?: AbortSignal }) => pendingRequest,
     );
-    // Pre-seed a fixture-sourced library entry
     window.localStorage.setItem(
       VIDEO_STORAGE_KEY,
       JSON.stringify({
-        version: 1,
+        version: 2,
         state: {
           library: [
             {
@@ -212,7 +277,7 @@ describe('VideoLab', () => {
         },
       }),
     );
-    render(
+    renderVideoLab(
       <VideoLab
         loadTranscript={loadTranscript}
         PlayerComponent={FakePlayer}
@@ -224,8 +289,7 @@ describe('VideoLab', () => {
       'https://youtu.be/aircAruvnKk',
     );
     await user.click(screen.getByRole('button', { name: 'Cargar transcripción' }));
-    // Open fixture via saved library entry instead of removed demo button
-    await user.click(screen.getByText(SAMPLE_VIDEO_TITLE));
+    await user.click(await screen.findByRole('button', { name: SAMPLE_VIDEO_TITLE }));
 
     expect(loadTranscript.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
     resolveRequest(RESULT);
@@ -247,23 +311,24 @@ describe('VideoLab', () => {
     }));
     const notes = Array.from({ length: MAX_NOTES }, (_, index) => ({
       id: `note-${index}`,
-      videoId: '00000000000',
-      timestamp: index,
+      title: `Saved note ${index}`,
       text: `Saved note ${index}`,
       createdAt: '2026-07-23T12:00:00.000Z',
+      timestamp: index,
     }));
     window.localStorage.setItem(
       VIDEO_STORAGE_KEY,
       JSON.stringify({
-        version: 1,
+        version: 2,
         state: { library, notes, viewMode: 'paragraph' },
       }),
     );
-    render(
+    renderVideoLab(
       <VideoLab
         loadTranscript={vi.fn().mockResolvedValue(RESULT)}
         PlayerComponent={FakePlayer}
       />,
+      { tree: false },
     );
 
     await user.type(
@@ -272,17 +337,29 @@ describe('VideoLab', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Cargar transcripción' }));
     await screen.findByText('Neural networks recognize patterns.');
-    await user.click(screen.getByRole('button', { name: 'Guardar en biblioteca' }));
+    await user.click(screen.getByRole('button', { name: 'Guardar video' }));
+    await user.click(
+      within(screen.getByRole('dialog', { name: 'Guardar video' })).getByRole('button', {
+        name: 'Guardar',
+      }),
+    );
 
     expect(
       screen.getByText(`La biblioteca admite hasta ${MAX_LIBRARY_ITEMS} videos.`),
     ).toBeInTheDocument();
 
-    await user.type(
-      screen.getByRole('textbox', { name: 'Nota en 00:00' }),
-      'This note exceeds the local limit.',
+    await user.click(screen.getByRole('button', { name: 'Vista línea a línea' }));
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Guardar frase como nota: Neural networks recognize patterns.',
+      }),
     );
-    await user.click(screen.getByRole('button', { name: 'Guardar nota' }));
+    await user.click(
+      within(screen.getByRole('dialog', { name: 'Guardar frase como nota' })).getByRole(
+        'button',
+        { name: 'Guardar nota' },
+      ),
+    );
 
     expect(
       screen.getByText(`Puedes guardar hasta ${MAX_NOTES} notas locales.`),
@@ -300,7 +377,7 @@ describe('VideoLab', () => {
     const loadTranscript = vi.fn(
       (_url: string, _options?: { signal?: AbortSignal }) => pendingRequest,
     );
-    const { unmount } = render(
+    const { unmount } = renderVideoLab(
       <VideoLab
         loadTranscript={loadTranscript}
         PlayerComponent={FakePlayer}
@@ -317,5 +394,16 @@ describe('VideoLab', () => {
     unmount();
 
     expect(signal?.aborted).toBe(true);
+  });
+
+  it('opens the built-in demo without a library entry', async () => {
+    const user = userEvent.setup();
+    renderVideoLab(<VideoLab loadTranscript={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Abrir demo técnica' }));
+
+    expect(
+      await screen.findByText(/A neural network receives numbers as input/i),
+    ).toBeInTheDocument();
   });
 });

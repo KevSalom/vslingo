@@ -9,6 +9,8 @@ import {
   MAX_NOTES,
   VIDEO_STORAGE_KEY,
   loadVideoState,
+  removeVideoFromLibrary,
+  removeVideoNote,
   saveVideoState,
   type VideoState,
 } from './videoStorage';
@@ -29,23 +31,69 @@ describe('videoStorage', () => {
 
     expect(loadVideoState()).toEqual(STATE);
     expect(JSON.parse(window.localStorage.getItem(VIDEO_STORAGE_KEY) ?? '{}')).toMatchObject({
-      version: 1,
+      version: 2,
     });
   });
 
-  it('migrates the approved v0 names to version 1', () => {
+  it('migrates v1 notes without videoId into titled notes', () => {
+    window.localStorage.setItem(
+      VIDEO_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        state: {
+          library: STATE.library,
+          notes: [
+            {
+              id: 'note-legacy',
+              videoId: 'aircAruvnKk',
+              timestamp: 65,
+              text: 'Review the layer transformation carefully.',
+              createdAt: '2026-07-23T10:00:00.000Z',
+            },
+          ],
+          viewMode: 'line',
+        },
+      }),
+    );
+
+    const loaded = loadVideoState();
+    expect(loaded.notes[0]).toMatchObject({
+      id: 'note-legacy',
+      title: 'Review the layer transformation caref…',
+      text: 'Review the layer transformation carefully.',
+      timestamp: 65,
+    });
+    expect(loaded.notes[0]).not.toHaveProperty('videoId');
+    expect(JSON.parse(window.localStorage.getItem(VIDEO_STORAGE_KEY) ?? '{}').version).toBe(2);
+  });
+
+  it('migrates the approved v0 names through to version 2', () => {
     window.localStorage.setItem(
       VIDEO_STORAGE_KEY,
       JSON.stringify({
         version: 0,
         savedVideos: STATE.library,
-        savedNotes: STATE.notes,
+        savedNotes: [
+          {
+            id: 'note-0',
+            videoId: '00000000000',
+            timestamp: 12,
+            text: 'Legacy note body',
+            createdAt: '2026-07-23T10:00:00.000Z',
+          },
+        ],
         transcriptView: 'line',
       }),
     );
 
-    expect(loadVideoState()).toEqual(STATE);
-    expect(JSON.parse(window.localStorage.getItem(VIDEO_STORAGE_KEY) ?? '{}').version).toBe(1);
+    const loaded = loadVideoState();
+    expect(loaded.library).toEqual(STATE.library);
+    expect(loaded.notes[0]).toMatchObject({
+      title: 'Legacy note body',
+      text: 'Legacy note body',
+      timestamp: 12,
+    });
+    expect(JSON.parse(window.localStorage.getItem(VIDEO_STORAGE_KEY) ?? '{}').version).toBe(2);
   });
 
   it('rejects additions at the explicit library and note limits', () => {
@@ -61,11 +109,23 @@ describe('videoStorage', () => {
     expect(addVideoNote(fullState, videoNote(999))).toBeNull();
   });
 
+  it('removes library items without touching notes', () => {
+    const next = removeVideoFromLibrary(STATE, STATE.library[0].id);
+    expect(next.library).toHaveLength(0);
+    expect(next.notes).toEqual(STATE.notes);
+  });
+
+  it('removes notes without touching library', () => {
+    const next = removeVideoNote(STATE, STATE.notes[0].id);
+    expect(next.notes).toHaveLength(0);
+    expect(next.library).toEqual(STATE.library);
+  });
+
   it('keeps the newest valid entries when persisted legacy data exceeds limits', () => {
     window.localStorage.setItem(
       VIDEO_STORAGE_KEY,
       JSON.stringify({
-        version: 1,
+        version: 2,
         state: {
           library: Array.from({ length: MAX_LIBRARY_ITEMS + 1 }, (_, index) =>
             libraryItem(index),
@@ -123,10 +183,10 @@ function libraryItem(index: number): VideoLibraryItem {
 function videoNote(index: number): VideoNote {
   return {
     id: `note-${index}`,
-    videoId: videoId(index),
-    timestamp: index,
+    title: `Review note ${index}`,
     text: `Review note ${index}.`,
     createdAt: '2026-07-23T10:00:00.000Z',
+    timestamp: index,
   };
 }
 

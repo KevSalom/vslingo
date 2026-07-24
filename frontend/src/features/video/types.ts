@@ -41,10 +41,10 @@ export type VideoLibraryItem = {
 
 export type VideoNote = {
   id: string;
-  videoId: string;
-  timestamp: number;
+  title: string;
   text: string;
   createdAt: string;
+  timestamp?: number;
 };
 
 const VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
@@ -82,15 +82,20 @@ export function isVideoLibraryItem(value: unknown): value is VideoLibraryItem {
 }
 
 export function isVideoNote(value: unknown): value is VideoNote {
-  return (
-    isRecord(value) &&
-    isBoundedString(value.id, 100) &&
-    isVideoId(value.videoId) &&
-    isFiniteNonNegative(value.timestamp) &&
-    isBoundedString(value.text, 2_000) &&
-    typeof value.createdAt === 'string' &&
-    Number.isFinite(Date.parse(value.createdAt))
-  );
+  if (
+    !isRecord(value) ||
+    !isBoundedString(value.id, 100) ||
+    !isBoundedString(value.title, 200) ||
+    !isBoundedString(value.text, 2_000) ||
+    typeof value.createdAt !== 'string' ||
+    !Number.isFinite(Date.parse(value.createdAt))
+  ) {
+    return false;
+  }
+  if (value.timestamp === undefined) {
+    return true;
+  }
+  return isFiniteNonNegative(value.timestamp);
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -103,6 +108,20 @@ export function isTranscriptSource(value: unknown): value is TranscriptSource {
 
 export function isVideoId(value: unknown): value is string {
   return typeof value === 'string' && VIDEO_ID_PATTERN.test(value);
+}
+
+export function deriveNoteTitle(text: string, timestamp?: number): string {
+  const trimmed = text.trim().replace(/\s+/g, ' ');
+  if (trimmed.length > 0) {
+    return trimmed.length <= 40 ? trimmed : `${trimmed.slice(0, 37).trimEnd()}…`;
+  }
+  if (timestamp !== undefined && Number.isFinite(timestamp) && timestamp >= 0) {
+    const total = Math.floor(timestamp);
+    const minutes = Math.floor(total / 60);
+    const seconds = total % 60;
+    return `Nota ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+  return 'Nota sin título';
 }
 
 function isTranscriptSegment(value: unknown): value is TranscriptSegment {
