@@ -257,10 +257,13 @@ button:not(:disabled), a[href] { -webkit-tap-highlight-color: transparent; }
 .video-tree-folder:focus-visible, .video-tree-file:focus-visible, .video-tree-action:focus-visible, .video-tree-add:focus-visible {
   outline: 2px solid #22d3ee; outline-offset: 1px;
 }
-.video-tree-folder span:first-of-type { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.video-tree-count {
-  margin-left: auto; color: #607086; font-size: .62rem; letter-spacing: .04em;
+.video-tree-folder-name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.video-tree-count {
+  flex-shrink: 0; margin-left: .15rem; color: #607086; font-size: .62rem; letter-spacing: .04em;
+}
+.video-tree-folder-row .video-tree-add { margin-left: auto; }
 .video-tree-chevron { width: .7rem; height: .7rem; flex-shrink: 0; color: #8b9aaa; transition: transform .12s ease; }
 .video-tree-chevron.open { transform: rotate(90deg); }
 .video-tree-icon { width: .85rem; height: .85rem; flex-shrink: 0; color: #8b9aaa; }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { formatTimestamp } from './sync';
-import type { VideoNote } from './types';
+import { isVideoId, type VideoNote } from './types';
 import { useVideoLab } from './VideoLabContext';
 import { VsCodeModal } from './VsCodeModal';
 
@@ -23,6 +23,7 @@ export function VideoFileTree({
     state,
     openLibraryItem,
     removeLibraryItem,
+    saveLibraryItem,
     saveNote,
     editNote,
     deleteNote,
@@ -32,6 +33,9 @@ export function VideoFileTree({
   const [noteModal, setNoteModal] = useState<NoteModalState>(null);
   const [noteTitle, setNoteTitle] = useState('');
   const [noteText, setNoteText] = useState('');
+  const [videoModalOpen, setVideoModalOpen] = useState(false);
+  const [videoTitle, setVideoTitle] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,6 +51,14 @@ export function VideoFileTree({
     setNoteText('');
   }, [noteModal]);
 
+  useEffect(() => {
+    if (!videoModalOpen) {
+      return;
+    }
+    setVideoTitle('');
+    setVideoUrl('');
+  }, [videoModalOpen]);
+
   const handleOpenVideo = (id: string) => {
     const item = state.library.find((entry) => entry.id === id);
     if (!item) {
@@ -54,6 +66,29 @@ export function VideoFileTree({
     }
     openLibraryItem(item);
     onRequestClose?.();
+  };
+
+  const handleSaveVideoModal = () => {
+    const title = videoTitle.trim();
+    const url = videoUrl.trim();
+    const videoId = parseYouTubeVideoId(url);
+    if (!title || !url || !videoId) {
+      setStatus('Introduce un nombre y una URL de YouTube válida.');
+      return;
+    }
+    const message = saveLibraryItem({
+      id: createLocalId('video'),
+      title,
+      url,
+      videoId,
+      source: 'youtube',
+    });
+    if (message) {
+      setStatus(message);
+      return;
+    }
+    setStatus('Video guardado en este navegador.');
+    setVideoModalOpen(false);
   };
 
   const handleSaveNoteModal = () => {
@@ -81,6 +116,12 @@ export function VideoFileTree({
     setNoteModal(null);
   };
 
+  const parsedVideoId = parseYouTubeVideoId(videoUrl.trim());
+  const canSaveVideo =
+    videoTitle.trim().length > 0 &&
+    videoUrl.trim().length > 0 &&
+    parsedVideoId !== null;
+
   return (
     <div className={compact ? 'video-tree video-tree-compact' : 'video-tree'}>
       {!compact ? (
@@ -106,8 +147,17 @@ export function VideoFileTree({
           >
             <Chevron open={videosOpen} />
             <FolderIcon />
-            <span>videos</span>
+            <span className="video-tree-folder-name">videos</span>
             <span className="video-tree-count">{state.library.length}</span>
+          </button>
+          <button
+            aria-label="Nuevo video"
+            className="video-tree-add"
+            onClick={() => setVideoModalOpen(true)}
+            title="Nuevo video"
+            type="button"
+          >
+            +
           </button>
         </div>
         {videosOpen ? (
@@ -151,7 +201,7 @@ export function VideoFileTree({
           >
             <Chevron open={notesOpen} />
             <FolderIcon />
-            <span>notes</span>
+            <span className="video-tree-folder-name">notes</span>
             <span className="video-tree-count">{state.notes.length}</span>
           </button>
           <button
@@ -211,6 +261,41 @@ export function VideoFileTree({
       <p className="explorer-note" style={{ marginTop: '1.1rem' }}>
         Preferencias y guardados sólo en este navegador.
       </p>
+
+      {videoModalOpen ? (
+        <VsCodeModal
+          confirmDisabled={!canSaveVideo}
+          confirmLabel="Guardar video"
+          description="Se añadirá a videos/ del explorador. Puedes abrirlo después para cargar subtítulos."
+          onCancel={() => setVideoModalOpen(false)}
+          onConfirm={handleSaveVideoModal}
+          title="Nuevo video"
+        >
+          <label className="vsc-field-label" htmlFor="tree-video-title">
+            Nombre
+          </label>
+          <input
+            className="vsc-field-input"
+            id="tree-video-title"
+            maxLength={200}
+            onChange={(event) => setVideoTitle(event.currentTarget.value)}
+            placeholder="Nombre en el explorador"
+            value={videoTitle}
+          />
+          <label className="vsc-field-label" htmlFor="tree-video-url">
+            URL de YouTube
+          </label>
+          <input
+            className="vsc-field-input"
+            id="tree-video-url"
+            maxLength={2_048}
+            onChange={(event) => setVideoUrl(event.currentTarget.value)}
+            placeholder="https://www.youtube.com/watch?v=..."
+            type="url"
+            value={videoUrl}
+          />
+        </VsCodeModal>
+      ) : null}
 
       {noteModal ? (
         <VsCodeModal
@@ -324,4 +409,40 @@ function createLocalId(prefix: string): string {
     return `${prefix}-${crypto.randomUUID()}`;
   }
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function parseYouTubeVideoId(raw: string): string | null {
+  const value = raw.trim();
+  if (!value) {
+    return null;
+  }
+  if (isVideoId(value)) {
+    return value;
+  }
+  try {
+    const withProtocol = /^[a-z]+:\/\//i.test(value) ? value : `https://${value}`;
+    const parsed = new URL(withProtocol);
+    const host = parsed.hostname.replace(/^www\./i, '').toLowerCase();
+    if (host === 'youtu.be') {
+      const id = parsed.pathname.split('/').filter(Boolean)[0] ?? '';
+      return isVideoId(id) ? id : null;
+    }
+    if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'music.youtube.com') {
+      const fromQuery = parsed.searchParams.get('v');
+      if (fromQuery && isVideoId(fromQuery)) {
+        return fromQuery;
+      }
+      const parts = parsed.pathname.split('/').filter(Boolean);
+      if (
+        parts.length >= 2 &&
+        (parts[0] === 'embed' || parts[0] === 'shorts' || parts[0] === 'live') &&
+        isVideoId(parts[1])
+      ) {
+        return parts[1];
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
