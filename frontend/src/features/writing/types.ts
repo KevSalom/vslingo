@@ -23,6 +23,8 @@ export type WritingErrorCode =
   | 'provider_not_configured'
   | 'provider_timeout'
   | 'provider_unavailable'
+  | 'provider_busy'
+  | 'rate_limited'
   | 'invalid_provider_response'
   | 'invalid_request'
   | 'invalid_response'

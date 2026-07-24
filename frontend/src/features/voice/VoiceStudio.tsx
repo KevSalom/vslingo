@@ -30,6 +30,22 @@ export type VoiceState =
   | 'error'
   | 'closed';
 
+type SessionMetrics = {
+  sttLatencyMs: number | null;
+  firstTokenLatencyMs: number | null;
+  firstAudioLatencyMs: number | null;
+  knownCostUsd: number;
+  hasEstimatedCost: boolean;
+};
+
+const INITIAL_SESSION_METRICS: SessionMetrics = {
+  sttLatencyMs: null,
+  firstTokenLatencyMs: null,
+  firstAudioLatencyMs: null,
+  knownCostUsd: 0,
+  hasEstimatedCost: false,
+};
+
 export function VoiceStudio() {
   const [state, setState] = useState<VoiceState>('idle');
   const [inputState, setInputState] = useState<InputSubstate>('idle');
@@ -49,6 +65,7 @@ export function VoiceStudio() {
   const [isFeedbackPending, setIsFeedbackPending] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState<VoiceFeedback | null>(null);
   const [feedbackErrorMsg, setFeedbackErrorMsg] = useState<string | null>(null);
+  const [sessionMetrics, setSessionMetrics] = useState<SessionMetrics>(INITIAL_SESSION_METRICS);
 
   const socketRef = useRef<VoiceSocketClient | null>(null);
   const recorderRef = useRef<AudioRecorder | null>(null);
@@ -59,6 +76,8 @@ export function VoiceStudio() {
   const configRevisionRef = useRef(0);
   const captureOwnerRef = useRef<'vad' | 'ptt' | null>(null);
   const sessionTokenRef = useRef(0);
+  const firstPlaybackSegmentRef = useRef<{ turnId: string; generation: number; segmentId: string } | null>(null);
+  const playbackStartedGenerationRef = useRef<number | null>(null);
 
   const currentTurnIdRef = useRef<string | null>(null);
   const generationRef = useRef(0);
@@ -156,6 +175,8 @@ export function VoiceStudio() {
     currentTurnIdRef.current = turnId;
     nextAudioIndexRef.current = 0;
     pendingAudioRef.current = null;
+    firstPlaybackSegmentRef.current = null;
+    playbackStartedGenerationRef.current = null;
     setGeneration(nextGeneration);
     schedulerRef.current?.cancelBefore(nextGeneration);
     schedulerRef.current?.stopAll();
@@ -202,7 +223,23 @@ export function VoiceStudio() {
     setErrorMessage(null);
     try {
       const scheduler = new AudioScheduler({
-        onPlaybackStart: () => setIsPlayingAudio(true),
+        onPlaybackStart: () => {
+          setIsPlayingAudio(true);
+          const playback = firstPlaybackSegmentRef.current;
+          if (
+            playback &&
+            playback.generation === generationRef.current &&
+            playbackStartedGenerationRef.current !== playback.generation
+          ) {
+            playbackStartedGenerationRef.current = playback.generation;
+            socketRef.current?.sendMessage({
+              type: 'playback.started',
+              turn_id: playback.turnId,
+              generation: playback.generation,
+              segment_id: playback.segmentId,
+            });
+          }
+        },
         onIdle: () => setIsPlayingAudio(false),
         onError: (err) => console.warn('Audio scheduler error:', err),
       });
@@ -342,6 +379,7 @@ export function VoiceStudio() {
             setStreamingAssistant('');
             setActiveFeedback(null);
             setFeedbackErrorMsg(null);
+            setSessionMetrics(INITIAL_SESSION_METRICS);
             break;
 
           case 'transcript.final':
@@ -392,6 +430,13 @@ export function VoiceStudio() {
               cancelCurrentTurn();
               break;
             }
+            if (messageIsCurrent(msg) && msg.segment_index === 0) {
+              firstPlaybackSegmentRef.current = {
+                turnId: msg.turn_id,
+                generation: msg.generation,
+                segmentId: msg.segment_id,
+              };
+            }
             pendingAudioRef.current = { begin: msg, received: false };
             break;
           }
@@ -434,6 +479,19 @@ export function VoiceStudio() {
             setInputState(vadControllerRef.current ? 'listening' : 'fallback_ptt');
             break;
 
+          case 'metrics.stage':
+            if (!messageIsCurrent(msg)) break;
+            setSessionMetrics((previous) => ({
+              sttLatencyMs: msg.stage === 'stt_final' ? msg.latency_ms : previous.sttLatencyMs,
+              firstTokenLatencyMs:
+                msg.stage === 'llm_first_token' ? msg.latency_ms : previous.firstTokenLatencyMs,
+              firstAudioLatencyMs:
+                msg.stage === 'tts_first_byte' ? msg.latency_ms : previous.firstAudioLatencyMs,
+              knownCostUsd: previous.knownCostUsd + (msg.cost_usd ?? 0),
+              hasEstimatedCost: previous.hasEstimatedCost || msg.estimated,
+            }));
+            break;
+
           case 'error':
             if (msg.generation !== undefined && msg.generation !== generationRef.current) break;
             if (msg.code === 'feedback_unavailable') {
@@ -445,6 +503,9 @@ export function VoiceStudio() {
               setErrorMessage('La conversación no está disponible.');
             } else if (msg.code === 'speech_unavailable') {
               setErrorMessage('La respuesta hablada se interrumpió, pero el texto permanece disponible.');
+            } else if (msg.code === 'provider_busy') {
+              setErrorMessage('El proveedor está ocupado. Inténtalo de nuevo en unos instantes.');
+              handleServerError(msg);
             } else {
               setIsAssistantStreaming(false);
               setIsFeedbackPending(false);
@@ -619,127 +680,99 @@ export function VoiceStudio() {
   }, []);
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-4xl mx-auto p-6 bg-slate-900/90 text-slate-100 rounded-2xl border border-slate-800 shadow-2xl backdrop-blur-md">
-      {/* Accessible Live Region */}
+    <section className="voice-studio" aria-labelledby="voice-title">
       <div className="sr-only" aria-live="polite">
         {ACCESSIBLE_INPUT_LABELS[inputState]} {isPlayingAudio ? '— Respondiendo' : ''}
       </div>
 
-      {/* Header */}
-      <div className="flex flex-col items-start gap-4 border-b border-slate-800 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h1
-              className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent"
-              id="voice-title"
-              tabIndex={-1}
-            >
-              Voice Studio — Hands-free & Feedback
-            </h1>
-          </div>
-          <p className="text-sm text-slate-400 mt-1">
-            Detección de voz (VAD) interactiva, síntesis fluida por oraciones e interrupción inmediata.
+      <header className="voice-header">
+        <div>
+          <p className="voice-eyebrow">Voice Studio · conversación técnica</p>
+          <h1 className="voice-title" id="voice-title" tabIndex={-1}>
+            Voice Studio: practica una conversación en inglés
+          </h1>
+          <p className="voice-intro">
+            Elige un contexto, inicia la sesión y habla con naturalidad. VSLingo separa la respuesta de las correcciones para que puedas seguir la conversación y aprender de ella.
           </p>
         </div>
-
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap gap-2">
           {isPlayingAudio && (
-            <button
-              onClick={handleStopPlayback}
-              className="px-3 py-1.5 bg-red-600/80 hover:bg-red-500 text-xs font-semibold rounded-lg text-white transition-all shadow-md"
-            >
+            <button className="voice-session-action is-stop" onClick={handleStopPlayback} type="button">
               Detener respuesta
             </button>
           )}
-
           {state === 'idle' || state === 'closed' ? (
-            <button
-              onClick={handleConnect}
-              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-sm font-semibold rounded-xl text-white transition-all shadow-lg shadow-blue-500/20"
-            >
+            <button className="voice-session-action" onClick={handleConnect} type="button">
               Iniciar Sesión
             </button>
           ) : (
-            <button
-              onClick={handleDisconnect}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm font-semibold rounded-xl text-slate-300 transition-all"
-            >
+            <button className="voice-session-action is-stop" onClick={handleDisconnect} type="button">
               Finalizar Sesión
             </button>
           )}
         </div>
-      </div>
+      </header>
 
-      {/* Scenario Selector & Status Indicator */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-950/60 p-4 rounded-xl border border-slate-800/80">
-        <div className="flex items-center gap-2">
-          <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
-            Escenario:
-          </span>
-          <div className="flex gap-1.5 flex-wrap">
+      <section className="voice-setup" aria-label="Preparar práctica de voz">
+        <div>
+          <p className="voice-setup-label">1 · Elige un escenario</p>
+          <div className="voice-scenarios">
             {(Object.keys(SCENARIO_LABELS) as ScenarioType[]).map((key) => (
               <button
+                aria-pressed={scenario === key}
+                className="voice-scenario"
                 key={key}
                 onClick={() => handleScenarioChange(key)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                  scenario === key
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
-                }`}
+                type="button"
               >
                 {SCENARIO_LABELS[key]}
               </button>
             ))}
           </div>
         </div>
-
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="voice-settings">
           <SpeechProviderControl
             id="voice-speech-provider"
             provider={speechProvider}
             onChange={handleSpeechProviderChange}
             disabled={state === 'connecting'}
           />
-          <div className="flex items-center gap-2">
-            <div
-              className={`w-3 h-3 rounded-full ${
+          <span className="voice-status">
+            <span
+              aria-hidden="true"
+              className={`voice-status-dot ${
                 state === 'ready' || state === 'recording' || state === 'transcribing'
-                  ? 'bg-emerald-400 animate-pulse'
+                  ? 'is-ready'
                   : state === 'connecting'
-                  ? 'bg-amber-400 animate-ping'
-                  : 'bg-slate-600'
+                    ? 'is-working'
+                    : ''
               }`}
             />
-            <span className="text-xs font-medium text-slate-300">
-              {ACCESSIBLE_INPUT_LABELS[inputState]}
-            </span>
-          </div>
+            {ACCESSIBLE_INPUT_LABELS[inputState]}
+          </span>
         </div>
-      </div>
+      </section>
 
-      {/* Hands-Free VAD Active Banner */}
       {(inputState === 'vad_ready' || inputState === 'listening' || inputState === 'speech') && (
-        <div className="p-3 bg-emerald-950/40 border border-emerald-800/60 rounded-xl text-emerald-300 text-xs flex items-center gap-2">
-          <span>✨ <strong>Modo Manos Libres Activo:</strong> Solo habla a tu micrófono. La aplicación detectará automáticamente tu voz y responderá cuando hagas una pausa.</span>
-        </div>
+        <p className="voice-vad-notice">
+          <strong>Escucha automática activa.</strong> Habla cuando estés listo; VSLingo detecta una pausa antes de responder. Puedes usar pulsar para hablar cuando prefieras controlar el inicio.
+        </p>
       )}
 
       <div
+        aria-label={`Señal de audio: ${isPlayingAudio ? 'salida' : 'entrada'}`}
+        className="voice-signal"
         role="img"
-        aria-label={`Nivel de audio ${isPlayingAudio ? 'de salida' : 'de entrada'}`}
-        className="flex h-12 items-center gap-1 rounded-xl border border-slate-800 bg-slate-950/60 px-4"
       >
-        <span className="mr-2 w-12 text-[0.65rem] font-semibold uppercase tracking-wider text-slate-400">
-          {isPlayingAudio ? 'Salida' : 'Entrada'}
-        </span>
-        {Array.from({ length: 18 }, (_, index) => {
+        <span className="voice-signal-label">{isPlayingAudio ? 'respuesta' : 'tu voz'}</span>
+        {Array.from({ length: 22 }, (_, index) => {
           const level = isPlayingAudio ? outputLevel : inputLevel;
-          const centerWeight = 1 - Math.abs(index - 8.5) / 12;
+          const centerWeight = 1 - Math.abs(index - 10.5) / 14;
           const scale = Math.max(0.12, level * centerWeight);
           return (
             <span
               aria-hidden="true"
-              className="h-8 flex-1 origin-center rounded-full bg-cyan-400 motion-safe:transition-transform motion-safe:duration-75"
+              className="voice-signal-bar"
               key={index}
               style={{ transform: `scaleY(${scale})` }}
             />
@@ -747,56 +780,43 @@ export function VoiceStudio() {
         })}
       </div>
 
-      {/* Errors */}
-      {errorMessage && (
-        <div className="p-3 bg-red-950/80 border border-red-800/80 rounded-xl text-red-200 text-sm">
-          {errorMessage}
-        </div>
-      )}
+      {errorMessage && <p className="voice-error" role="alert">{errorMessage}</p>}
 
-      {/* Main Studio Area */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[350px]">
-        {/* Left: Conversation Stream */}
-        <div className="flex flex-col bg-slate-950/40 p-4 rounded-xl border border-slate-800/60">
-          <h3 className="text-sm font-semibold text-slate-300 mb-3 border-b border-slate-800/60 pb-2">
-            Conversación en Vivo
-          </h3>
+      <section className="voice-metrics" aria-label="Métricas de sesión">
+        <p className="voice-panel-label">Observabilidad local · esta sesión</p>
+        <dl className="voice-metrics-grid">
+          <div><dt>STT</dt><dd>{sessionMetrics.sttLatencyMs === null ? '—' : `${sessionMetrics.sttLatencyMs} ms`}</dd></div>
+          <div><dt>Primer token</dt><dd>{sessionMetrics.firstTokenLatencyMs === null ? '—' : `${sessionMetrics.firstTokenLatencyMs} ms`}</dd></div>
+          <div><dt>Primer audio</dt><dd>{sessionMetrics.firstAudioLatencyMs === null ? '—' : `${sessionMetrics.firstAudioLatencyMs} ms`}</dd></div>
+          <div><dt>Coste conocido</dt><dd>USD {sessionMetrics.knownCostUsd.toFixed(5)}{sessionMetrics.hasEstimatedCost ? ' · estimado' : ''}</dd></div>
+        </dl>
+      </section>
 
-          <div className="flex-1 overflow-y-auto space-y-4 max-h-[320px] pr-2">
-            {turnHistory.map((t) => (
-              <div key={t.turnId} className="space-y-2">
-                <div className="bg-slate-800/60 p-3 rounded-lg text-slate-200 text-sm ml-4 border-l-2 border-blue-400">
-                  <span className="font-semibold text-blue-400 block text-xs mb-1">Tú</span>
-                  {t.userText}
-                </div>
-                <div className="bg-indigo-950/40 p-3 rounded-lg text-slate-200 text-sm mr-4 border-l-2 border-indigo-400">
-                  <span className="font-semibold text-indigo-400 block text-xs mb-1">
-                    VSLingo Assistant
-                  </span>
-                  {t.assistantText}
-                </div>
+      <div className="voice-workspace">
+        <section className="voice-panel" aria-labelledby="voice-conversation-title">
+          <header className="voice-panel-header">
+            <div>
+              <p className="voice-panel-label">2 · Conversa</p>
+              <h2 className="voice-panel-title" id="voice-conversation-title">Conversación</h2>
+            </div>
+            <span className="voice-panel-status">{isAssistantStreaming ? 'respondiendo' : 'en espera'}</span>
+          </header>
+          <div className="voice-scroll">
+            {turnHistory.length === 0 && !userTranscript && !isAssistantStreaming && (
+              <p className="voice-empty">Inicia una sesión y cuenta cómo va tu trabajo. La conversación aparecerá aquí, en el orden en que sucede.</p>
+            )}
+            {turnHistory.map((turn) => (
+              <div className="voice-turn" key={turn.turnId}>
+                <div className="voice-message"><strong>Tú</strong>{turn.userText}</div>
+                <div className="voice-message assistant"><strong>VSLingo</strong>{turn.assistantText}</div>
               </div>
             ))}
-
-            {userTranscript && (
-              <div className="bg-slate-800/60 p-3 rounded-lg text-slate-200 text-sm ml-4 border-l-2 border-blue-400">
-                <span className="font-semibold text-blue-400 block text-xs mb-1">Tú (último)</span>
-                {userTranscript}
-              </div>
-            )}
-
+            {userTranscript && <div className="voice-message"><strong>Tú · último turno</strong>{userTranscript}</div>}
             {isAssistantStreaming && (
-              <div className="bg-indigo-950/40 p-3 rounded-lg text-slate-200 text-sm mr-4 border-l-2 border-indigo-400 animate-pulse">
-                <span className="font-semibold text-indigo-400 block text-xs mb-1">
-                  Respondiendo...
-                </span>
-                {streamingAssistant || '...'}
-              </div>
+              <div className="voice-message assistant"><strong>VSLingo · respondiendo</strong>{streamingAssistant || 'Preparando una respuesta…'}</div>
             )}
           </div>
-
-          {/* PTT / Manual Control Button */}
-          <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between">
+          <div className="voice-ptt-wrap">
             <button
               type="button"
               onPointerDown={(event) => {
@@ -824,87 +844,64 @@ export function VoiceStudio() {
                 }
               }}
               disabled={state !== 'ready' && state !== 'recording'}
-              className={`w-full py-3 rounded-xl font-semibold text-sm transition-all shadow-lg flex items-center justify-center gap-2 ${
-                state === 'recording'
-                  ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-500/20 animate-pulse'
-                  : state === 'ready'
-                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20'
-                  : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+              className={`voice-ptt ${
+                state === 'recording' ? 'is-recording' : state === 'ready' ? 'is-ready' : ''
               }`}
             >
               {state === 'recording'
-                ? '🔴 Grabando… Suelta para enviar'
-                : '🎙️ Mantén pulsado para hablar (PTT)'}
+                ? 'Grabando… suelta para enviar'
+                : 'Mantén pulsado para hablar (PTT)'}
             </button>
           </div>
-        </div>
+        </section>
 
-
-        {/* Right: Parallel Feedback Cards */}
-        <div className="flex flex-col bg-slate-950/40 p-4 rounded-xl border border-slate-800/60">
-          <h3 className="text-sm font-semibold text-slate-300 mb-3 border-b border-slate-800/60 pb-2 flex items-center justify-between">
-            <span>Feedback en Paralelo</span>
-            {isFeedbackPending && (
-              <span className="text-xs text-amber-400 animate-pulse font-normal">
-                Generando feedback...
-              </span>
-            )}
-          </h3>
-
-          {feedbackErrorMsg && (
-            <div className="p-3 bg-amber-950/60 border border-amber-800/60 rounded-lg text-amber-200 text-xs mb-3">
-              {feedbackErrorMsg}
+        <section className="voice-panel" aria-labelledby="voice-feedback-title">
+          <header className="voice-panel-header">
+            <div>
+              <p className="voice-panel-label">3 · Revisa</p>
+              <h2 className="voice-panel-title" id="voice-feedback-title">Feedback</h2>
             </div>
-          )}
-
-          <div className="flex-1 overflow-y-auto max-h-[320px] pr-2 space-y-4">
+            {isFeedbackPending && <span className="voice-panel-status">preparando feedback</span>}
+          </header>
+          <div className="voice-scroll">
+            {feedbackErrorMsg && <p className="voice-error" role="alert">{feedbackErrorMsg}</p>}
             {activeFeedback ? (
               <>
-                <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                    Resumen
-                  </h4>
-                  <p className="text-sm text-slate-200">{activeFeedback.summary_es}</p>
+                <div className="voice-feedback-block">
+                  <h3 className="voice-feedback-heading">Resumen</h3>
+                  <p className="voice-feedback-summary">{activeFeedback.summary_es}</p>
                 </div>
-
                 {activeFeedback.corrections.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                      Correcciones ({activeFeedback.corrections.length})
-                    </h4>
-                    {activeFeedback.corrections.map((c, i) => (
-                      <div key={i} className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 text-xs space-y-1">
-                        <div className="text-red-400 line-through">{c.original}</div>
-                        <div className="text-emerald-400 font-semibold">{c.corrected}</div>
-                        <div className="text-slate-400 italic">{c.explanation_es}</div>
+                  <div className="voice-feedback-block">
+                    <h3 className="voice-feedback-heading">Correcciones · {activeFeedback.corrections.length}</h3>
+                    {activeFeedback.corrections.map((correction, index) => (
+                      <div className="voice-feedback-item" key={index}>
+                        <del>{correction.original}</del>
+                        <ins>{correction.corrected}</ins>
+                        <em>{correction.explanation_es}</em>
                       </div>
                     ))}
                   </div>
                 )}
-
                 {activeFeedback.vocabulary.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                      Vocabulario Sólido ({activeFeedback.vocabulary.length})
-                    </h4>
-                    {activeFeedback.vocabulary.map((v, i) => (
-                      <div key={i} className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 text-xs space-y-1">
-                        <div className="text-indigo-300 font-semibold">{v.term}</div>
-                        <div className="text-slate-300">{v.meaning_es}</div>
-                        <div className="text-slate-400 italic">"{v.example_en}"</div>
+                  <div className="voice-feedback-block">
+                    <h3 className="voice-feedback-heading">Vocabulario sólido · {activeFeedback.vocabulary.length}</h3>
+                    {activeFeedback.vocabulary.map((vocabulary, index) => (
+                      <div className="voice-feedback-summary" key={index}>
+                        <strong>{vocabulary.term}</strong><br />
+                        {vocabulary.meaning_es}<br />
+                        <em>{vocabulary.example_en}</em>
                       </div>
                     ))}
                   </div>
                 )}
               </>
             ) : (
-              <div className="text-center py-12 text-slate-500 text-sm">
-                Habla para recibir correcciones y vocabulario en tiempo real.
-              </div>
+              <p className="voice-empty">Después de hablar verás un resumen, correcciones y vocabulario útil. La conversación puede continuar aunque el feedback tarde un poco más.</p>
             )}
           </div>
-        </div>
+        </section>
       </div>
-    </div>
+    </section>
   );
 }

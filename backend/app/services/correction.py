@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
+from app.core.protection import ProviderGate
 from app.domain.errors import IntegrationError, IntegrationErrorCode
 from app.domain.ports import CorrectionProviderPort
 from app.domain.writing import (
@@ -23,6 +24,7 @@ class CorrectionService:
     """Validate one text and delegate its structured correction."""
 
     provider: CorrectionProviderPort
+    gate: ProviderGate | None = None
 
     async def correct(self, text: str) -> CorrectionResult:
         """Return a consistent correction or a typed input/provider error."""
@@ -36,7 +38,11 @@ class CorrectionService:
 
         for attempt in range(1, MAX_CORRECTION_ATTEMPTS + 1):
             try:
-                result = await self.provider.correct(canonical_text)
+                if self.gate is None:
+                    result = await self.provider.correct(canonical_text)
+                else:
+                    async with self.gate.slot():
+                        result = await self.provider.correct(canonical_text)
             except IntegrationError as error:
                 if error.code != IntegrationErrorCode.INVALID_RESPONSE:
                     raise

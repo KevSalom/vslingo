@@ -50,6 +50,7 @@ const waveform = [22, 38, 58, 34, 78, 46, 70, 32, 62, 89, 49, 30, 66, 44, 81, 51
           VSLingo
         </a>
         <nav class="header-nav" aria-label="Navegación principal">
+          <a class="text-link" href="#modulos">Módulos</a>
           <a class="text-link" href="#como-funciona">Cómo funciona</a>
           <a class="cta" href="/demo">Probar demo</a>
         </nav>
@@ -59,13 +60,13 @@ const waveform = [22, 38, 58, 34, 78, 46, 70, 32, 62, 89, 49, 30, 66, 44, 81, 51
         <section class="site-container hero" aria-labelledby="hero-title">
           <div>
             <p class="eyebrow">Public Alpha</p>
-            <h1 class="landing-title" id="hero-title">Explica tu trabajo en inglés con la misma claridad con la que lo construyes.</h1>
-            <p class="hero-copy">VSLingo es un workspace para desarrolladores hispanohablantes que practican conversaciones, mensajes y contenido técnico en inglés B1-B2.</p>
+            <h1 class="landing-title" id="hero-title">Practica el inglés que usas para desarrollar.</h1>
+            <p class="hero-copy">Habla en un standup, revisa un mensaje o estudia un vídeo técnico. Elige un módulo y empieza, sin registro ni mecánicas que te distraigan.</p>
             <div class="hero-actions">
               <a class="cta" href="/demo">Probar demo</a>
-              <a class="cta cta-secondary" href="#como-funciona">Ver el recorrido</a>
+              <a class="cta cta-secondary" href="#modulos">Explorar módulos</a>
             </div>
-            <p class="note">Sin registro. Empieza con una práctica corta desde el navegador.</p>
+            <p class="note">Sin rachas ni puntos. Sólo práctica profesional en inglés B1-B2.</p>
           </div>
           <div class="signature-frame" aria-label="Una señal de audio se transforma en cambios de texto">
             <p class="signature-label">voice.signal → language.diff</p>
@@ -85,31 +86,46 @@ const waveform = [22, 38, 58, 34, 78, 46, 70, 32, 62, 89, 49, 30, 66, 44, 81, 51
                 <p class="diff-line diff-remove"><span class="diff-symbol">−</span><del>Yesterday I deploy the API and the tests was passing.</del></p>
                 <p class="diff-line diff-add"><span class="diff-symbol">+</span><ins>Yesterday I deployed the API, and all tests passed.</ins></p>
               </article>
-              <p class="section-copy">La práctica no añade puntos ni rachas. Te ayuda a expresar progreso, decisiones y bloqueos con frases que reconocerías en un standup real.</p>
+              <p class="section-copy">No es una lección ni un marcador. Es una forma de detectar el cambio que haría tu mensaje más claro antes de la próxima reunión, comentario o pull request.</p>
             </div>
           </div>
         </section>
 
-        <section class="landing-section" aria-labelledby="modules-title">
+        <section class="landing-section" id="modulos" aria-labelledby="modules-title">
           <div class="site-container">
-            <p class="section-kicker">Tres formas de practicar</p>
-            <h2 class="section-title" id="modules-title">Elige el contexto que necesitas hoy.</h2>
-            <div class="module-grid">
-              <article class="module-card featured">
-                <p class="module-label">01 · prioridad</p>
+            <p class="section-kicker">Un workspace, tres entradas</p>
+            <h2 class="section-title" id="modules-title">Elige una práctica, no una racha.</h2>
+            <p class="section-copy">Pasa el cursor, enfoca o toca un módulo para ver su recorrido. Cada uno abre la herramienta adecuada, no una versión reducida del mismo ejercicio.</p>
+            <div class="module-grid module-explorer">
+              <a class="module-card module-link featured" href="/demo#voice">
+                <span class="module-label">Conversación</span>
+                <div class="module-preview voice-preview" aria-hidden="true">
+                  <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                  <em>tu voz → respuesta → feedback</em>
+                </div>
                 <h3>Voice Studio</h3>
-                <p>Practica Daily Standup, System Design, Salary Negotiation o una conversación libre. Usa manos libres o mantén pulsado para hablar.</p>
-              </article>
-              <article class="module-card">
-                <p class="module-label">02 · precisión</p>
+                <p>Elige un escenario, habla con manos libres o usa pulsar para hablar. Recibe conversación y feedback por separado para entender qué mejorar.</p>
+                <span class="module-link-cta">Practicar conversación <b aria-hidden="true">→</b></span>
+              </a>
+              <a class="module-card module-link" href="/demo#writing">
+                <span class="module-label">Escritura</span>
+                <div class="module-preview diff-preview" aria-hidden="true">
+                  <span>− I deploy the fix</span>
+                  <span>+ I deployed the fix</span>
+                </div>
                 <h3>Writing Studio</h3>
-                <p>Revisa un mensaje técnico, compara el diff y escucha la versión corregida con el proveedor de voz que elijas.</p>
-              </article>
-              <article class="module-card">
-                <p class="module-label">03 · contexto</p>
+                <p>Pega un mensaje técnico, compara el diff y revisa por qué cambia. Copia o escucha la versión que usarías en tu equipo.</p>
+                <span class="module-link-cta">Revisar un mensaje <b aria-hidden="true">→</b></span>
+              </a>
+              <a class="module-card module-link" href="/demo#video">
+                <span class="module-label">Comprensión</span>
+                <div class="module-preview video-preview" aria-hidden="true">
+                  <span class="video-play">▶</span><span class="video-track"></span><span class="video-caption"></span><span class="video-caption short"></span>
+                </div>
                 <h3>Video Lab</h3>
-                <p>Navega subtítulos técnicos, salta al momento exacto y conserva notas locales para volver a estudiar.</p>
-              </article>
+                <p>Abre un vídeo técnico, sigue la transcripción y guarda una nota local. Vuelve al segundo exacto cuando una idea necesita contexto.</p>
+                <span class="module-link-cta">Estudiar con vídeo <b aria-hidden="true">→</b></span>
+              </a>
             </div>
           </div>
         </section>
@@ -117,14 +133,14 @@ const waveform = [22, 38, 58, 34, 78, 46, 70, 32, 62, 89, 49, 30, 66, 44, 81, 51
         <section class="landing-section" id="como-funciona" aria-labelledby="pipeline-title">
           <div class="site-container">
             <p class="section-kicker">Cómo funciona</p>
-            <h2 class="section-title" id="pipeline-title">Una ruta corta desde tu voz hasta una respuesta útil.</h2>
+            <h2 class="section-title" id="pipeline-title">Una ruta corta para practicar comunicación técnica.</h2>
             <div class="pipeline-grid">
-              <div class="pipeline-step"><strong>01 · navegador</strong><span>VAD local detecta el final de tu intervención.</span></div>
-              <div class="pipeline-step"><strong>02 · STT</strong><span>OpenRouter Whisper transcribe el segmento de voz.</span></div>
-              <div class="pipeline-step"><strong>03 · práctica</strong><span>La conversación y el feedback se generan en paralelo.</span></div>
-              <div class="pipeline-step"><strong>04 · TTS</strong><span>La respuesta se reproduce por oraciones, en orden.</span></div>
+              <div class="pipeline-step"><strong>01 · elige</strong><span>Parte de una conversación, un texto o un vídeo que se parezca a tu trabajo.</span></div>
+              <div class="pipeline-step"><strong>02 · practica</strong><span>Habla, escribe o sigue una transcripción sin salir del workspace.</span></div>
+              <div class="pipeline-step"><strong>03 · entiende</strong><span>Usa feedback, diffs y contexto para reconocer la mejora en lugar de memorizar reglas.</span></div>
+              <div class="pipeline-step"><strong>04 · continúa</strong><span>Vuelve cuando lo necesites: tu estado reciente permanece en este navegador.</span></div>
             </div>
-            <p class="note">OpenRouter, AWS y Microsoft Edge intervienen cuando eliges funciones que necesitan sus servicios.</p>
+            <p class="note">En Voice, el navegador detecta tu intervención, transcribe, genera conversación y feedback, y reproduce la respuesta por oraciones. OpenRouter, AWS y Microsoft Edge intervienen sólo en las funciones que los necesitan.</p>
           </div>
         </section>
 
@@ -145,8 +161,8 @@ const waveform = [22, 38, 58, 34, 78, 46, 70, 32, 62, 89, 49, 30, 66, 44, 81, 51
 
         <section class="site-container final-cta" aria-labelledby="final-title">
           <div>
-            <p class="section-kicker">Listo para probar</p>
-            <h2 class="section-title" id="final-title">Ensaya la próxima conversación antes de tenerla.</h2>
+            <p class="section-kicker">Listo para practicar</p>
+            <h2 class="section-title" id="final-title">Entra al módulo que necesitas y empieza.</h2>
           </div>
           <a class="cta" href="/demo">Probar demo</a>
         </section>

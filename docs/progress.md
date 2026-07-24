@@ -8,13 +8,13 @@ Este es el único documento para el estado mutable de implementación. Debe actu
 
 ## Estado actual
 
-- **Roadmap actual:** `T08` completado.
-- **Próximo incremento:** `T09` — Seguridad, costes y observabilidad.
-- **Completado:** `T01.1`–`T01.4`, `T02`, `T03`, `T04`, `T05`, `T06`, `T07` y `T08`; base reproducible, Writing Studio, Video Lab básico/resiliente, TTS compartido, Protocolo Voice con PTT → STT, Conversación B1-B2 con Feedback Paralelo, VAD local manos libres con Audio Streaming e Interrupción (*barge-in*), y sistema visual con landing estática.
-- **Pendiente:** iniciar `T09` sin alterar los flujos ya validados de Voice.
+- **Roadmap actual:** `T09` completado.
+- **Próximo incremento:** `T10` — Integración y despliegue.
+- **Completado:** `T01.1`–`T01.4`, `T02`, `T03`, `T04`, `T05`, `T06`, `T07`, `T08` y `T09`; base reproducible, Writing Studio, Video Lab básico/resiliente, TTS compartido, Protocolo Voice con PTT → STT, Conversación B1-B2 con Feedback Paralelo, VAD local manos libres con Audio Streaming e Interrupción (*barge-in*), sistema visual con landing estática, y seguridad, costes y observabilidad.
+- **Pendiente:** iniciar `T10` para integración y despliegue final.
 - **Bloqueos:** ninguno.
 
-`T08` añadió tokens CSS-first, tipografías locales Sora/IBM Plex Sans/JetBrains Mono y una identidad visual centrada en la transición waveform → diff. La landing de Astro es estática, accesible y SEO-completa; el workspace ofrece navegación por módulos con estado y foco accesibles, y Voice Studio se conserva como carga diferida sin modificar sus flujos VAD/PTT/WebSocket/TTS.
+`T09` aplicó protecciones operativas, límites de rate limit e IP, semáforos de proveedores, restricciones de CORS y origen WebSocket 403 antes de accept, headers de seguridad HTTP, control de sesión/turnos de Voice, observabilidad limpia sin canarios ni contenido sensible, y la integración de métricas de sesión (latencias STT/tokens/audio y coste acumulado/estimado) en la interfaz del cliente, respaldado por el runbook de presupuesto en `deploy/aws-polly.md`.
 
 ## Evidencia disponible
 
@@ -23,13 +23,9 @@ Este es el único documento para el estado mutable de implementación. Debe actu
 - Backend Speech (TTS): servicio `SpeechService` con selección explícita entre `aws_polly` y `edge_tts` sin fallback automático. Límite de 3000 caracteres Unicode sobre texto bruto antes del trim, validación de voz y respuesta binaria `audio/mpeg`.
 - Backend Voice (WebSocket, STT, Chat Streaming, Feedback & TTS Streaming): `speech.started` cancela sólo la generación previa; `turn_id` y generación se validan juntos; escenario/proveedor se snapshottean por turno; cancelaciones obsoletas no interrumpen turnos nuevos; la conversación produce dos oraciones cortas y encola la primera para TTS mientras la segunda continúa en streaming; `TTSConsumer` acotado cancela síntesis activa, descarta resultados tardíos y entrega cada tríada de audio como una unidad al writer único.
 - Frontend Voice: VAD se inicia tras `session.ready` sin pulsar PTT; misfires y fallos cancelan su generación; PTT usa “Mantén pulsado para hablar”, pausa VAD y restaura la escucha; el selector compartido persiste Polly/Edge; cambios rápidos de escenario se confirman por revisión; y begin/binario/end valida generación, longitud, IDs e índice antes de decodificar.
-- Backend revalidado con Ruff global sin errores, `mypy app` estricto en verde (40 archivos) y 132 tests en `pytest` pasando; la batería T07 incluye una prueba determinista que confirma que la primera oración llega a TTS antes de finalizar el stream LLM.
-- Frontend revalidado con `pnpm run quality`: Astro check con 0 errores (5 hints existentes por `ScriptProcessorNode` deprecado), 80 tests Vitest y build correcto de `/` y `/demo`; los seis assets VAD/ORT requeridos están en `dist/vad/`, el paquete VAD quedó en chunk dinámico y la landing raíz no carga JavaScript de cliente.
-- T08: `pnpm install --frozen-lockfile` pasó; los contratos dirigidos de landing y workspace pasaron 4/4; `pnpm run quality` pasó con 80/80 tests; y `pnpm run audit:lighthouse` pasó sobre el build final con Performance 98, Accessibility 100 y SEO 100 (umbrales ≥90).
-- Inspección del build T08: `/index.html` no contiene scripts de módulo ni referencias a Voice/VAD; `VoiceStudio` se emitió como chunk dinámico. La landing incluye `lang="es"`, canonical, Open Graph/Twitter, JSON-LD `SoftwareApplication` y favicon local.
-- Revisión visual T08 con Playwright sobre servidor estático local: landing en 320, 768, 1280 y 1440 px, y workspace en 320 y 768 px sin overflow horizontal; `prefers-reduced-motion` confirmó `scroll-behavior: auto`. La cabecera Voice conserva el foco inicial en `body` y apila su acción en móvil.
-- Línea roja del re-audit: VoiceStudio falló 4 de 5 pruebas dirigidas (PTT por clic, selector ausente y cancelación incompleta) y backend rechazó TTS de la generación recién aceptada; las mismas pruebas quedaron verdes tras el ajuste.
-- `git diff --check` pasó limpiamente sin advertencias de formato.
+- Revalidación completa T09 Backend: Ruff sin errores (`ruff check app tests`), `mypy app` estricto en verde (43 archivos) y 138 tests pasados en `pytest` (incluyendo la suite completa de protecciones T09).
+- Revalidación completa T09 Frontend: `pnpm run quality` completado con 0 errores de Astro check, 84 tests de Vitest pasados y build estático de `/` y `/demo` limpio.
+- `git diff --check` pasado sin advertencias de formato.
 - No se realizó prueba manual de micrófono en Chrome/Edge desde este entorno CLI; sigue pendiente como validación manual y no fue sustituida por los tests.
 - No se ejecutaron llamadas live a OpenRouter Chat/Feedback o TTS proveedores reales: la suite utiliza `FakeLanguageModel`, `FakeVoiceFeedback` y fakes/mocks deterministas.
 - Los smokes live de STT, chat streaming, feedback, Polly y Edge continúan sin ejecutarse.

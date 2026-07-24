@@ -19,6 +19,7 @@ def _settings() -> Settings:
         openrouter_llm_model="test/structured-model",
         openrouter_base_url="https://openrouter.test/api/v1",
         provider_timeout_seconds=0.25,
+        provider_acquire_timeout_seconds=0.01,
     )
 
 

@@ -9,6 +9,9 @@ export type ErrorCodeType =
   | 'audio_too_large'
   | 'turn_timeout'
   | 'queue_full'
+  | 'provider_busy'
+  | 'turn_limit_reached'
+  | 'session_limit_reached'
   | 'provider_not_configured'
   | 'provider_unavailable'
   | 'invalid_provider_response'
@@ -72,6 +75,13 @@ export type ResponseCancelMessage = {
   generation: number;
 };
 
+export type PlaybackStartedMessage = {
+  type: 'playback.started';
+  turn_id: string;
+  generation: number;
+  segment_id: string;
+};
+
 export type SessionEndMessage = {
   type: 'session.end';
 };
@@ -82,6 +92,7 @@ export type ClientVoiceMessage =
   | SpeechStartedMessage
   | UtteranceBeginMessage
   | ResponseCancelMessage
+  | PlaybackStartedMessage
   | SessionEndMessage;
 
 // Server Messages
@@ -152,6 +163,31 @@ export type AudioEndMessage = {
   segment_index: number;
 };
 
+export type MetricStageType =
+  | 'speech_end'
+  | 'stt_final'
+  | 'llm_first_token'
+  | 'llm_done'
+  | 'feedback_done'
+  | 'tts_first_byte'
+  | 'playback_started'
+  | 'turn_cancelled';
+
+export type MetricProviderType = 'openrouter' | 'aws_polly' | 'edge_tts' | null;
+
+export type MetricsStageMessage = {
+  type: 'metrics.stage';
+  turn_id: string;
+  generation: number;
+  stage: MetricStageType;
+  latency_ms: number;
+  provider: MetricProviderType;
+  usage_seconds: number | null;
+  usage_tokens: number | null;
+  cost_usd: number | null;
+  estimated: boolean;
+};
+
 export type ErrorMessage = {
   type: 'error';
   code: ErrorCodeType;
@@ -172,6 +208,7 @@ export type ServerVoiceMessage =
   | ResponseCancelledMessage
   | AudioBeginMessage
   | AudioEndMessage
+  | MetricsStageMessage
   | ErrorMessage;
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -193,6 +230,9 @@ const ERROR_CODES: ReadonlySet<ErrorCodeType> = new Set([
   'audio_too_large',
   'turn_timeout',
   'queue_full',
+  'provider_busy',
+  'turn_limit_reached',
+  'session_limit_reached',
   'provider_not_configured',
   'provider_unavailable',
   'invalid_provider_response',
@@ -201,6 +241,30 @@ const ERROR_CODES: ReadonlySet<ErrorCodeType> = new Set([
   'conversation_unavailable',
   'speech_unavailable',
 ]);
+
+const METRIC_STAGES: ReadonlySet<MetricStageType> = new Set([
+  'speech_end',
+  'stt_final',
+  'llm_first_token',
+  'llm_done',
+  'feedback_done',
+  'tts_first_byte',
+  'playback_started',
+  'turn_cancelled',
+]);
+const METRIC_PROVIDERS: ReadonlySet<Exclude<MetricProviderType, null>> = new Set([
+  'openrouter',
+  'aws_polly',
+  'edge_tts',
+]);
+
+function isFiniteNonNegative(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(value).every((key) => keys.includes(key));
+}
 
 function isIntegerInRange(value: unknown, minimum: number, maximum = Number.MAX_SAFE_INTEGER) {
   return Number.isInteger(value) && Number.isSafeInteger(value) && Number(value) >= minimum && Number(value) <= maximum;
@@ -311,6 +375,24 @@ export function parseServerMessage(data: string): ServerVoiceMessage | null {
           isIntegerInRange(raw.segment_index, 0)
         ) {
           return raw as AudioEndMessage;
+        }
+        return null;
+
+      case 'metrics.stage':
+        if (
+          hasOnlyKeys(raw, ['type', 'turn_id', 'generation', 'stage', 'latency_ms', 'provider', 'usage_seconds', 'usage_tokens', 'cost_usd', 'estimated']) &&
+          isNonEmptyId(raw.turn_id) &&
+          isIntegerInRange(raw.generation, 1) &&
+          METRIC_STAGES.has(raw.stage as MetricStageType) &&
+          isIntegerInRange(raw.latency_ms, 0, 3_600_000) &&
+          (raw.provider === null || METRIC_PROVIDERS.has(raw.provider as Exclude<MetricProviderType, null>)) &&
+          (raw.usage_seconds === null || isFiniteNonNegative(raw.usage_seconds)) &&
+          (raw.usage_tokens === null || isIntegerInRange(raw.usage_tokens, 0)) &&
+          (raw.cost_usd === null || isFiniteNonNegative(raw.cost_usd)) &&
+          typeof raw.estimated === 'boolean' &&
+          (!raw.estimated || raw.cost_usd !== null)
+        ) {
+          return raw as MetricsStageMessage;
         }
         return null;
 

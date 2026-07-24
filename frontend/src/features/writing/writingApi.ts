@@ -108,6 +108,8 @@ function isWritingErrorCode(value: unknown): value is WritingErrorCode {
       'provider_not_configured',
       'provider_timeout',
       'provider_unavailable',
+      'provider_busy',
+      'rate_limited',
       'invalid_provider_response',
       'invalid_request',
     ].includes(value)

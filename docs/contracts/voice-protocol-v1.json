@@ -28,6 +28,12 @@
       "turn_id": "123e4567-e89b-12d3-a456-426614174000",
       "generation": 1
     },
+    "playback_started": {
+      "type": "playback.started",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "segment_id": "223e4567-e89b-12d3-a456-426614174000"
+    },
     "session_end": {
       "type": "session.end"
     }
@@ -103,6 +109,18 @@
       "generation": 1,
       "segment_id": "223e4567-e89b-12d3-a456-426614174000",
       "segment_index": 0
+    },
+    "metrics_stage": {
+      "type": "metrics.stage",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "stage": "stt_final",
+      "latency_ms": 842,
+      "provider": "openrouter",
+      "usage_seconds": 3.2,
+      "usage_tokens": null,
+      "cost_usd": 0.00004,
+      "estimated": false
     },
     "response_cancelled": {
       "type": "response.cancelled",

@@ -9,6 +9,8 @@ from app.domain.models import Transcription
 from app.main import create_app
 from app.providers.fakes import FakeLanguageModel, FakeSpeechToText, FakeVoiceFeedback
 
+VOICE_ORIGIN_HEADERS = {"origin": "http://localhost:4321"}
+
 
 def make_valid_wav_pcm_16k_mono(duration_ms: int = 1000) -> bytes:
     """Generate a minimal valid 16-bit 16kHz mono PCM WAV byte buffer."""
@@ -66,7 +68,7 @@ def client(
 
 
 def test_voice_ws_handshake_and_config(client: TestClient) -> None:
-    with client.websocket_connect("/api/voice/ws") as ws:
+    with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
         # Start session
         ws.send_json({"type": "session.start", "protocol_version": 1})
         ready = ws.receive_json()
@@ -91,7 +93,7 @@ def test_voice_ws_full_ptt_turn_with_stream_and_feedback(client: TestClient) -> 
     wav_bytes = make_valid_wav_pcm_16k_mono(1000)
     turn_id = "123e4567-e89b-12d3-a456-426614174000"
 
-    with client.websocket_connect("/api/voice/ws") as ws:
+    with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
         ws.send_json({"type": "session.start", "protocol_version": 1})
         _ = ws.receive_json()
 
@@ -117,7 +119,7 @@ def test_voice_ws_full_ptt_turn_with_stream_and_feedback(client: TestClient) -> 
 
         # Collect events until done and feedback ready
         events = []
-        for _ in range(5):  # transcript.final, 2x delta, assistant.done, feedback.ready
+        for _ in range(11):  # metrics, transcript, deltas, done, and feedback
             events.append(ws.receive_json())
 
         event_types = [e["type"] for e in events]
@@ -146,7 +148,7 @@ def test_voice_ws_feedback_error_does_not_cancel_conversation(
     wav_bytes = make_valid_wav_pcm_16k_mono(1000)
     turn_id = "123e4567-e89b-12d3-a456-426614174000"
 
-    with client.websocket_connect("/api/voice/ws") as ws:
+    with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
         ws.send_json({"type": "session.start", "protocol_version": 1})
         _ = ws.receive_json()
 
@@ -162,7 +164,7 @@ def test_voice_ws_feedback_error_does_not_cancel_conversation(
         ws.send_bytes(wav_bytes)
 
         events = []
-        for _ in range(5):
+        for _ in range(10):
             events.append(ws.receive_json())
 
         event_types = [e["type"] for e in events]
@@ -174,7 +176,7 @@ def test_voice_ws_feedback_error_does_not_cancel_conversation(
 
 
 def test_voice_ws_invalid_generation_rejection(client: TestClient) -> None:
-    with client.websocket_connect("/api/voice/ws") as ws:
+    with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
         ws.send_json({"type": "session.start", "protocol_version": 1})
         _ = ws.receive_json()
 
@@ -193,7 +195,7 @@ def test_voice_ws_invalid_generation_rejection(client: TestClient) -> None:
 def test_voice_ws_invalid_wav_rejection(client: TestClient) -> None:
     bad_bytes = b"NOT_A_WAV_HEADER_AT_ALL_MOCK_DATA"
 
-    with client.websocket_connect("/api/voice/ws") as ws:
+    with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
         ws.send_json({"type": "session.start", "protocol_version": 1})
         _ = ws.receive_json()
 
@@ -220,7 +222,7 @@ def test_voice_ws_invalid_wav_rejection(client: TestClient) -> None:
 
 
 def test_voice_ws_cancel_turn(client: TestClient) -> None:
-    with client.websocket_connect("/api/voice/ws") as ws:
+    with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
         ws.send_json({"type": "session.start", "protocol_version": 1})
         _ = ws.receive_json()
 

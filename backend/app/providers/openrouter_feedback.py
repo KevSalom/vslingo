@@ -1,11 +1,15 @@
 """OpenRouter adapter for structured voice feedback (T06)."""
 
+from contextvars import ContextVar
+from math import isfinite
+
 import httpx
 from pydantic import ValidationError
 
 from app.core.config import Settings
 from app.domain.errors import IntegrationError, IntegrationErrorCode
 from app.domain.feedback import VoiceFeedback
+from app.domain.models import ProviderUsage
 
 
 class OpenRouterVoiceFeedbackProvider:
@@ -13,6 +17,16 @@ class OpenRouterVoiceFeedbackProvider:
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
+        self._usage: ContextVar[ProviderUsage | None] = ContextVar(
+            "openrouter_feedback_usage", default=None
+        )
+
+    def consume_usage(self) -> ProviderUsage | None:
+        """Return this feedback task's provider usage without exposing payload content."""
+
+        usage = self._usage.get()
+        self._usage.set(None)
+        return usage
 
     def _api_key(self) -> str:
         if not self._settings.openrouter_api_key:
@@ -32,6 +46,7 @@ class OpenRouterVoiceFeedbackProvider:
 
     async def generate(self, transcript: str, scenario: str) -> VoiceFeedback:
         """Return validated VoiceFeedback or raise IntegrationError."""
+        self._usage.set(None)
         api_key = self._api_key()
         model = self._settings.openrouter_llm_model.strip()
         if not model:
@@ -111,6 +126,7 @@ class OpenRouterVoiceFeedbackProvider:
             ) from exc
 
         try:
+            self._usage.set(_parse_usage(payload))
             raw_content = payload["choices"][0]["message"]["content"]
             return VoiceFeedback.model_validate_json(raw_content)
         except (KeyError, IndexError, TypeError, ValidationError, ValueError) as exc:
@@ -119,3 +135,25 @@ class OpenRouterVoiceFeedbackProvider:
                 IntegrationErrorCode.INVALID_RESPONSE,
                 f"OpenRouter returned an invalid feedback structure: {exc}",
             ) from exc
+
+
+
+
+def _parse_usage(payload: object) -> ProviderUsage | None:
+    """Keep only finite OpenRouter usage values from the provider envelope."""
+
+    if not isinstance(payload, dict) or not isinstance(payload.get("usage"), dict):
+        return None
+    raw = payload["usage"]
+    assert isinstance(raw, dict)
+    tokens = raw.get("total_tokens")
+    cost = raw.get("cost")
+    safe_tokens = tokens if isinstance(tokens, int) and tokens >= 0 else None
+    safe_cost = (
+        float(cost)
+        if isinstance(cost, (int, float)) and isfinite(cost) and cost >= 0
+        else None
+    )
+    if safe_tokens is None and safe_cost is None:
+        return None
+    return ProviderUsage(tokens=safe_tokens, cost_usd=safe_cost)

@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.protection import ProviderBusyError
 from app.domain.video import (
     MAX_VIDEO_URL_LENGTH,
     TranscriptResult,
@@ -32,6 +33,7 @@ class VideoPublicErrorCode(StrEnum):
     PROVIDER_BLOCKED = "provider_blocked"
     PROVIDER_TIMEOUT = "provider_timeout"
     PROVIDER_UNAVAILABLE = "provider_unavailable"
+    PROVIDER_BUSY = "provider_busy"
     INVALID_PROVIDER_RESPONSE = "invalid_provider_response"
     INVALID_REQUEST = "invalid_request"
 
@@ -116,6 +118,18 @@ def build_video_router(service: VideoService) -> APIRouter:
                     code=VideoPublicErrorCode.INVALID_URL,
                     message="Introduce una URL válida de YouTube.",
                     retryable=False,
+                ),
+            )
+        except ProviderBusyError:
+            return video_error_response(
+                503,
+                VideoErrorDetail(
+                    code=VideoPublicErrorCode.PROVIDER_BUSY,
+                    message=(
+                        "El proveedor de transcripciones está ocupado. "
+                        "Inténtalo de nuevo pronto."
+                    ),
+                    retryable=True,
                 ),
             )
         except VideoProviderError as exc:

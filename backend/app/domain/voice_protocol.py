@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from app.domain.feedback import VoiceFeedback
 
@@ -48,6 +48,13 @@ class ResponseCancelMessage(BaseVoiceMessage):
     generation: int = Field(ge=1)
 
 
+class PlaybackStartedMessage(BaseVoiceMessage):
+    type: Literal["playback.started"] = "playback.started"
+    turn_id: str
+    generation: int = Field(ge=1)
+    segment_id: str
+
+
 class SessionEndMessage(BaseVoiceMessage):
     type: Literal["session.end"] = "session.end"
 
@@ -58,6 +65,7 @@ ClientVoiceMessage = Annotated[
     | SpeechStartedMessage
     | UtteranceBeginMessage
     | ResponseCancelMessage
+    | PlaybackStartedMessage
     | SessionEndMessage,
     Field(discriminator="type"),
 ]
@@ -131,6 +139,40 @@ class AudioEndMessage(BaseVoiceMessage):
     segment_index: int = Field(ge=0)
 
 
+MetricStage = Literal[
+    "speech_end",
+    "stt_final",
+    "llm_first_token",
+    "llm_done",
+    "feedback_done",
+    "tts_first_byte",
+    "playback_started",
+    "turn_cancelled",
+]
+MetricProvider = Literal["openrouter", "aws_polly", "edge_tts"]
+
+
+class MetricsStageMessage(BaseVoiceMessage):
+    type: Literal["metrics.stage"] = "metrics.stage"
+    turn_id: str
+    generation: int = Field(ge=1)
+    stage: MetricStage
+    latency_ms: int = Field(ge=0, le=3_600_000)
+    provider: MetricProvider | None = None
+    usage_seconds: float | None = Field(default=None, ge=0.0, allow_inf_nan=False)
+    usage_tokens: int | None = Field(default=None, ge=0)
+    cost_usd: float | None = Field(default=None, ge=0.0, allow_inf_nan=False)
+    estimated: bool = False
+
+    @model_validator(mode="after")
+    def validate_estimated_cost(self) -> "MetricsStageMessage":
+        """Reserve estimated cost for Polly's explicit character-price calculation."""
+
+        if self.estimated and (self.provider != "aws_polly" or self.cost_usd is None):
+            raise ValueError("Estimated cost is only valid for a known Polly estimate.")
+        return self
+
+
 ErrorCodeType = Literal[
     "invalid_event",
     "invalid_generation",
@@ -139,6 +181,9 @@ ErrorCodeType = Literal[
     "audio_too_large",
     "turn_timeout",
     "queue_full",
+    "provider_busy",
+    "turn_limit_reached",
+    "session_limit_reached",
     "provider_not_configured",
     "provider_unavailable",
     "invalid_provider_response",
@@ -169,6 +214,7 @@ ServerVoiceMessage = Annotated[
     | ResponseCancelledMessage
     | AudioBeginMessage
     | AudioEndMessage
+    | MetricsStageMessage
     | ErrorMessage,
     Field(discriminator="type"),
 ]

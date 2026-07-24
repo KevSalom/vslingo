@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import Mapping
 
+from app.core.protection import ProviderBusyError, ProviderGate
 from app.domain.errors import IntegrationError, IntegrationErrorCode
 from app.domain.models import SynthesizedSpeech
 from app.domain.ports import SpeechSynthesizerPort
@@ -12,8 +13,14 @@ from app.domain.speech import SpeechProvider, SpeechRequest, SpeechServiceError
 class SpeechService:
     """Service handling text synthesis with explicit provider selection."""
 
-    def __init__(self, providers: Mapping[SpeechProvider, SpeechSynthesizerPort]) -> None:
+    def __init__(
+        self,
+        providers: Mapping[SpeechProvider, SpeechSynthesizerPort],
+        *,
+        gate: ProviderGate | None = None,
+    ) -> None:
         self._providers = dict(providers)
+        self._gate = gate
 
     async def synthesize(self, request: SpeechRequest) -> SynthesizedSpeech:
         """Validate input and synthesize speech via selected provider without fallback."""
@@ -30,9 +37,20 @@ class SpeechService:
             )
 
         try:
-            result = await provider_port.synthesize(request.clean_text, voice=request.voice)
+            if self._gate is None:
+                result = await provider_port.synthesize(request.clean_text, voice=request.voice)
+            else:
+                async with self._gate.slot():
+                    result = await provider_port.synthesize(request.clean_text, voice=request.voice)
         except asyncio.CancelledError:
             raise
+        except ProviderBusyError as err:
+            raise SpeechServiceError(
+                code="provider_busy",
+                message="El proveedor de voz está ocupado. Inténtalo de nuevo pronto.",
+                status_code=503,
+                retryable=True,
+            ) from err
         except IntegrationError as err:
             raise self._map_integration_error(err) from err
         except SpeechServiceError:

@@ -120,6 +120,8 @@ function isVideoErrorCode(value: unknown): value is VideoErrorCode {
       'provider_blocked',
       'provider_timeout',
       'provider_unavailable',
+      'provider_busy',
+      'rate_limited',
       'invalid_provider_response',
       'invalid_request',
     ].includes(value)

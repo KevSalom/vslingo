@@ -124,10 +124,13 @@ describe('VoiceStudio T07 flow', () => {
   it('renders initial state and keeps manual PTT disabled before connecting', () => {
     render(<VoiceStudio />);
 
-    expect(screen.getByText('Voice Studio — Hands-free & Feedback')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: /practica una conversación en inglés/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Elige un escenario/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Iniciar Sesión' })).toBeInTheDocument();
     expect(screen.getAllByText('Inactivo').length).toBeGreaterThan(0);
-    expect(screen.getByRole('img', { name: 'Nivel de audio de entrada' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Señal de audio: entrada' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Mantén pulsado para hablar/i })).toBeDisabled();
   });
 
@@ -226,7 +229,10 @@ describe('VoiceStudio T07 flow', () => {
       }),
     );
 
-    expect(screen.getByRole('button', { name: 'Salary Negotiation' })).toHaveClass('bg-blue-600');
+    expect(screen.getByRole('button', { name: 'Salary Negotiation' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 
   it('cleans the manual recorder if configuration changes while PTT is held', async () => {
@@ -240,4 +246,44 @@ describe('VoiceStudio T07 flow', () => {
     expect(mocks.recorderCleanup).toHaveBeenCalled();
     expect(mocks.vadStart).toHaveBeenCalledTimes(2);
   });
+
+  it('renders session metrics from safe protocol events without persisting them', async () => {
+    await connectVoice();
+    act(() => mocks.vadOptions?.onSpeechStart());
+
+    act(() =>
+      mocks.socket?.emitMessage({
+        type: 'metrics.stage',
+        turn_id: '00000000-0000-4000-8000-000000000001',
+        generation: 1,
+        stage: 'stt_final',
+        latency_ms: 842,
+        provider: 'openrouter',
+        usage_seconds: 0.2,
+        usage_tokens: null,
+        cost_usd: 0.00004,
+        estimated: false,
+      }),
+    );
+    act(() =>
+      mocks.socket?.emitMessage({
+        type: 'metrics.stage',
+        turn_id: '00000000-0000-4000-8000-000000000001',
+        generation: 1,
+        stage: 'tts_first_byte',
+        latency_ms: 1200,
+        provider: 'aws_polly',
+        usage_seconds: null,
+        usage_tokens: null,
+        cost_usd: 0.00016,
+        estimated: true,
+      }),
+    );
+
+    expect(screen.getByLabelText('Métricas de sesión')).toHaveTextContent('842 ms');
+    expect(screen.getByLabelText('Métricas de sesión')).toHaveTextContent('1200 ms');
+    expect(screen.getByLabelText('Métricas de sesión')).toHaveTextContent('USD 0.00020 · estimado');
+    expect(localStorage.getItem('vslingo:voice:metrics')).toBeNull();
+  });
+
 });

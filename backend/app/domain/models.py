@@ -14,6 +14,15 @@ class Transcription:
 
 
 @dataclass(frozen=True, slots=True)
+class ProviderUsage:
+    """Optional authoritative usage reported by an external provider."""
+
+    seconds: float | None = None
+    tokens: int | None = None
+    cost_usd: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ChatMessage:
     """Provider-neutral chat message."""
 

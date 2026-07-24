@@ -15,6 +15,23 @@ describe('DemoWorkspace', () => {
     expect(await screen.findByRole('heading', { name: /Voice Studio/i })).toBeInTheDocument();
   });
 
+  it('selects the module in a direct hash link after hydration', async () => {
+    const initialHash = window.location.hash;
+    window.history.replaceState(null, '', '#writing');
+
+    try {
+      render(<DemoWorkspace />);
+
+      expect(await screen.findByRole('heading', { name: 'Writing Studio' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Writing Studio' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+    } finally {
+      window.history.replaceState(null, '', initialHash || '/');
+    }
+  });
+
   it('switches modules with accessible state and moves focus to their heading', async () => {
     const user = userEvent.setup();
     render(<DemoWorkspace />);

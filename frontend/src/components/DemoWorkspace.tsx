@@ -49,13 +49,29 @@ const FOCUS_TARGETS: Record<ModuleId, string> = {
   video: 'video-lab-title',
 };
 
+function initialModuleFromHash(): ModuleId {
+  if (typeof window === 'undefined') return 'voice';
+  const moduleId = window.location.hash.slice(1);
+  return moduleId === 'writing' || moduleId === 'video' || moduleId === 'voice'
+    ? moduleId
+    : 'voice';
+}
+
 export function DemoWorkspace() {
+  // Keep the server and initial client render identical. The URL hash is applied
+  // after hydration so direct links do not cause a React hydration mismatch.
   const [activeId, setActiveId] = useState<ModuleId>('voice');
+  const [hasResolvedInitialModule, setHasResolvedInitialModule] = useState(false);
   const isInitialModule = useRef(true);
   const activeModule = MODULES.find((module) => module.id === activeId) ?? MODULES[0];
 
   useEffect(() => {
-    if (isInitialModule.current) {
+    setActiveId(initialModuleFromHash());
+    setHasResolvedInitialModule(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasResolvedInitialModule || isInitialModule.current) {
       isInitialModule.current = false;
       return;
     }
@@ -64,7 +80,7 @@ export function DemoWorkspace() {
       document.getElementById(FOCUS_TARGETS[activeId])?.focus();
     });
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [activeId]);
+  }, [activeId, hasResolvedInitialModule]);
 
   return (
     <main className="workspace-page">

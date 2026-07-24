@@ -59,3 +59,25 @@ describe('Voice Protocol v1 parsing', () => {
       ),
     ).toBeNull();
   });
+
+
+
+describe('T09 metrics contract', () => {
+  it('accepts the fixture and rejects extra, stale numeric, or estimated-unknown data', () => {
+    const fixture = contractFixture.server_events.metrics_stage;
+    expect(parseServerMessage(JSON.stringify(fixture))).toMatchObject({
+      type: 'metrics.stage',
+      stage: 'stt_final',
+    });
+
+    expect(
+      parseServerMessage(JSON.stringify({ ...fixture, transcript: 'must-not-cross-the-wire' })),
+    ).toBeNull();
+    expect(
+      parseServerMessage(JSON.stringify({ ...fixture, latency_ms: 3_600_001 })),
+    ).toBeNull();
+    expect(
+      parseServerMessage(JSON.stringify({ ...fixture, cost_usd: null, estimated: true })),
+    ).toBeNull();
+  });
+});

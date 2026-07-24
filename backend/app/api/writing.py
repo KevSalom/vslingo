@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.protection import ProviderBusyError
 from app.domain.errors import IntegrationError, IntegrationErrorCode
 from app.domain.writing import (
     MAX_CORRECTION_TEXT_LENGTH,
@@ -32,6 +33,7 @@ class WritingPublicErrorCode(StrEnum):
     PROVIDER_NOT_CONFIGURED = "provider_not_configured"
     PROVIDER_TIMEOUT = "provider_timeout"
     PROVIDER_UNAVAILABLE = "provider_unavailable"
+    PROVIDER_BUSY = "provider_busy"
     INVALID_PROVIDER_RESPONSE = "invalid_provider_response"
     INVALID_REQUEST = "invalid_request"
 
@@ -111,6 +113,15 @@ def build_writing_router(service: CorrectionService) -> APIRouter:
             return await service.correct(request.text)
         except WritingInputError as exc:
             return _input_error_response(exc.code)
+        except ProviderBusyError:
+            return _error_response(
+                503,
+                ErrorDetail(
+                    code=WritingPublicErrorCode.PROVIDER_BUSY,
+                    message="El proveedor de corrección está ocupado. Inténtalo de nuevo pronto.",
+                    retryable=True,
+                ),
+            )
         except IntegrationError as exc:
             return _integration_error_response(exc.code)
 

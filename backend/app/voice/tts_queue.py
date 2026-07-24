@@ -37,10 +37,12 @@ class TTSConsumer:
         outbound_writer: Callable[[str | bytes], Awaitable[None]],
         max_queue_size: int = 8,
         outbound_audio_writer: Callable[[str, bytes, str], Awaitable[None]] | None = None,
+        on_audio_ready: Callable[[TTSSegmentItem], Awaitable[None]] | None = None,
     ) -> None:
         self._speech_service = speech_service
         self._outbound_writer = outbound_writer
         self._outbound_audio_writer = outbound_audio_writer
+        self._on_audio_ready = on_audio_ready
         self._queue: asyncio.Queue[TTSSegmentItem] = asyncio.Queue(maxsize=max_queue_size)
         self._consumer_task: asyncio.Task[None] | None = None
         self._active_synthesis_task: asyncio.Task[Any] | None = None
@@ -95,7 +97,19 @@ class TTSConsumer:
     async def enqueue(self, item: TTSSegmentItem, active_generation: int) -> bool:
         if item.generation in self._cancelled_generations or item.generation != active_generation:
             return False
-        await self._queue.put(item)
+        try:
+            self._queue.put_nowait(item)
+        except asyncio.QueueFull:
+            error = ErrorMessage(
+                code="queue_full",
+                message="La cola de síntesis está temporalmente llena.",
+                retryable=True,
+                fatal=False,
+                turn_id=item.turn_id,
+                generation=item.generation,
+            )
+            await self._outbound_writer(error.model_dump_json())
+            return False
         return item.generation not in self._cancelled_generations
 
     async def _write_audio_frame(
@@ -112,11 +126,12 @@ class TTSConsumer:
         self,
         item: TTSSegmentItem,
         *,
+        code: str = "speech_unavailable",
         retryable: bool,
         message: str,
     ) -> None:
         error = ErrorMessage(
-            code="speech_unavailable",
+            code=code,  # type: ignore[arg-type]
             message=message,
             retryable=retryable,
             fatal=False,
@@ -154,11 +169,19 @@ class TTSConsumer:
                     raise
                 except SpeechServiceError as exc:
                     failed_generations.add(item.generation)
-                    await self._write_failure(
-                        item,
-                        retryable=exc.retryable,
-                        message="La síntesis de voz no está disponible para esta respuesta.",
-                    )
+                    if exc.code == "provider_busy":
+                        await self._write_failure(
+                            item,
+                            code="provider_busy",
+                            retryable=True,
+                            message="El proveedor de voz está ocupado. Inténtalo de nuevo pronto.",
+                        )
+                    else:
+                        await self._write_failure(
+                            item,
+                            retryable=exc.retryable,
+                            message="La síntesis de voz no está disponible para esta respuesta.",
+                        )
                     continue
                 except Exception:
                     failed_generations.add(item.generation)
@@ -183,6 +206,8 @@ class TTSConsumer:
                     )
                     continue
 
+                if self._on_audio_ready is not None:
+                    await self._on_audio_ready(item)
                 begin = AudioBeginMessage(
                     turn_id=item.turn_id,
                     generation=item.generation,

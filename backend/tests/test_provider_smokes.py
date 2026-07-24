@@ -169,6 +169,7 @@ async def test_polly_uses_transport_timeouts_and_closes_after_call(
         aws_access_key_id=SecretStr("test-key"),
         aws_secret_access_key=SecretStr("test-secret"),
         provider_timeout_seconds=0.25,
+        provider_acquire_timeout_seconds=0.01,
     )
 
     if should_timeout:

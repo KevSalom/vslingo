@@ -17,6 +17,11 @@ describe('landing', () => {
     expect(page).toContain('AWS Polly Neural');
     expect(page).toContain('Procesamiento efímero');
     expect(page).toContain('waveform-diff');
+    expect(page).toContain('Elige una práctica, no una racha');
+    expect(page).toContain('Sin rachas ni puntos');
+    expect(page).toContain('/demo#voice');
+    expect(page).toContain('/demo#writing');
+    expect(page).toContain('/demo#video');
   });
 
   it('declares the approved SEO and structured-data metadata', () => {

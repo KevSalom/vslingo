@@ -4,16 +4,22 @@ import asyncio
 import json
 import logging
 import struct
+from collections.abc import AsyncIterator, Callable
+from time import monotonic
 from uuid import uuid4
 
 from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
+from app.core.config import Settings
+from app.core.observability import log_operational_event, safe_error_code
+from app.core.protection import ProviderBusyError, ProviderGates
 from app.domain.errors import IntegrationError, IntegrationErrorCode
 from app.domain.history import ConversationHistory
-from app.domain.models import ChatMessage
+from app.domain.models import ChatMessage, ProviderUsage
 from app.domain.ports import LanguageModelPort, SpeechToTextPort, VoiceFeedbackPort
 from app.domain.voice_protocol import (
+    MetricsStageMessage,
     ScenarioType,
     SpeechProviderType,
     UtteranceBeginMessage,
@@ -83,12 +89,19 @@ class VoiceSession:
         llm_provider: LanguageModelPort | None = None,
         feedback_provider: VoiceFeedbackPort | None = None,
         speech_service: object | None = None,
+        *,
+        settings: Settings | None = None,
+        gates: ProviderGates | None = None,
+        clock: Callable[[], float] = monotonic,
     ) -> None:
         self.websocket = websocket
         self.stt_provider = stt_provider
         self.llm_provider = llm_provider
         self.feedback_provider = feedback_provider
         self.speech_service = speech_service
+        self.settings = settings or Settings()
+        self.gates = gates
+        self._clock = clock
 
         self.session_id = str(uuid4())
         self.current_generation = 0
@@ -107,6 +120,14 @@ class VoiceSession:
         self.begin_timeout_task: asyncio.Task[None] | None = None
         self.active_stt_task: asyncio.Task[None] | None = None
         self.active_generation_tasks: list[asyncio.Task[None]] = []
+        self.session_limit_task: asyncio.Task[None] | None = None
+        self.turn_count = 0
+        self._turn_t0: dict[tuple[str, int], float] = {}
+        self._first_audio_segments: dict[tuple[str, int], str] = {}
+        self._playback_confirmed: set[tuple[str, int]] = set()
+        self._tts_metrics_emitted: set[tuple[str, int]] = set()
+        self.session_cost_usd = 0.0
+        self.session_cost_estimated = False
 
         self.outbound_queue: asyncio.Queue[
             str | bytes | tuple[str, bytes, str]
@@ -118,6 +139,7 @@ class VoiceSession:
                 speech_service=self.speech_service,
                 outbound_writer=self._enqueue_raw_message,
                 outbound_audio_writer=self._enqueue_audio_frame,
+                on_audio_ready=self._on_tts_ready,
             )
             self.tts_consumer.start()
 
@@ -143,7 +165,7 @@ class VoiceSession:
         except WebSocketDisconnect:
             pass
         except Exception as exc:
-            logger.error("Unhandled error in VoiceSession: %s", exc)
+            logger.error("voice_session_failed error_code=%s", safe_error_code(exc))
             await self._send_error(
                 code="internal_error",
                 message="An internal server error occurred.",
@@ -190,6 +212,7 @@ class VoiceSession:
         if not self.started:
             if parsed_msg.type == "session.start":
                 self.started = True
+                self.session_limit_task = asyncio.create_task(self._enforce_session_limit())
                 await self._enqueue_message({
                     "type": "session.ready",
                     "protocol_version": 1,
@@ -288,7 +311,29 @@ class VoiceSession:
                     generation=parsed_msg.generation,
                 )
                 return
+            if (
+                parsed_msg.byte_length > self.settings.max_audio_bytes
+                or parsed_msg.duration_ms > self.settings.max_audio_seconds * 1000
+            ):
+                await self._send_error(
+                    code="audio_too_large",
+                    message="El audio supera el límite permitido para este turno.",
+                    retryable=False,
+                    fatal=False,
+                    turn_id=parsed_msg.turn_id,
+                    generation=parsed_msg.generation,
+                )
+                return
+            if self.turn_count >= self.settings.max_voice_turns:
+                await self._close_for_limit(
+                    code="turn_limit_reached",
+                    message="La sesión alcanzó el máximo de turnos permitido.",
+                    turn_id=parsed_msg.turn_id,
+                    generation=parsed_msg.generation,
+                )
+                return
 
+            self.turn_count += 1
             self.pending_begin = parsed_msg
             if self.begin_timeout_task and not self.begin_timeout_task.done():
                 self.begin_timeout_task.cancel()
@@ -321,8 +366,34 @@ class VoiceSession:
                     "generation": parsed_msg.generation,
                 })
 
+        elif parsed_msg.type == "playback.started":
+            key = (parsed_msg.turn_id, parsed_msg.generation)
+            if (
+                parsed_msg.generation != self.current_generation
+                or parsed_msg.turn_id != self.active_turn_id
+                or self._first_audio_segments.get(key) != parsed_msg.segment_id
+                or key in self._playback_confirmed
+            ):
+                await self._send_error(
+                    code="invalid_event",
+                    message="La confirmación de reproducción no corresponde al audio activo.",
+                    retryable=False,
+                    fatal=False,
+                    turn_id=parsed_msg.turn_id,
+                    generation=parsed_msg.generation,
+                )
+                return
+            self._playback_confirmed.add(key)
+            await self._emit_metric(
+                turn_id=parsed_msg.turn_id,
+                generation=parsed_msg.generation,
+                stage="playback_started",
+                provider=None,
+            )
+
         elif parsed_msg.type == "session.end":
             self.ended = True
+            await self.websocket.close(code=1000)
 
     async def _handle_bytes(self, audio_bytes: bytes) -> None:
         if not self.pending_begin:
@@ -368,6 +439,13 @@ class VoiceSession:
         if self.active_stt_task and not self.active_stt_task.done():
             self.active_stt_task.cancel()
 
+        self._turn_t0[(begin.turn_id, begin.generation)] = self._clock()
+        await self._emit_metric(
+            turn_id=begin.turn_id,
+            generation=begin.generation,
+            stage="speech_end",
+            provider=None,
+        )
         self.active_stt_task = asyncio.create_task(
             self._process_stt(begin.turn_id, begin.generation, audio_bytes, begin.duration_ms)
         )
@@ -376,9 +454,23 @@ class VoiceSession:
         self, turn_id: str, generation: int, audio_bytes: bytes, duration_ms: int
     ) -> None:
         try:
-            result = await self.stt_provider.transcribe(audio_bytes, media_type="audio/wav")
+            if self.gates is None:
+                result = await self.stt_provider.transcribe(audio_bytes, media_type="audio/wav")
+            else:
+                async with self.gates.stt.slot():
+                    result = await self.stt_provider.transcribe(audio_bytes, media_type="audio/wav")
             if generation != self.current_generation:
                 return
+
+            await self._emit_metric(
+                turn_id=turn_id,
+                generation=generation,
+                stage="stt_final",
+                provider="openrouter",
+                usage_seconds=result.duration_seconds,
+                cost_usd=result.cost_usd,
+                estimated=False,
+            )
 
             await self._enqueue_message({
                 "type": "transcript.final",
@@ -411,6 +503,17 @@ class VoiceSession:
 
         except asyncio.CancelledError:
             pass
+        except ProviderBusyError:
+            if generation != self.current_generation:
+                return
+            await self._send_error(
+                code="provider_busy",
+                message="El proveedor de transcripción está ocupado. Inténtalo de nuevo pronto.",
+                retryable=True,
+                fatal=False,
+                turn_id=turn_id,
+                generation=generation,
+            )
         except IntegrationError as exc:
             if generation != self.current_generation:
                 return
@@ -428,7 +531,7 @@ class VoiceSession:
             )
             await self._send_error(
                 code=mapped_code,
-                message=str(exc),
+                message="La transcripción no está disponible para este turno.",
                 retryable=retryable,
                 fatal=False,
                 turn_id=turn_id,
@@ -465,14 +568,24 @@ class VoiceSession:
         ]
         accumulator = SentenceAccumulator()
         segment_index = 0
+        tts_character_count = 0
         active_speech_provider = speech_provider
 
         try:
-            async for delta in self.llm_provider.stream_chat(messages):
+            first_delta_sent = False
+            async for delta in self._stream_llm(messages):
                 if generation != self.current_generation:
                     return
                 if not delta:
                     continue
+                if not first_delta_sent:
+                    first_delta_sent = True
+                    await self._emit_metric(
+                        turn_id=turn_id,
+                        generation=generation,
+                        stage="llm_first_token",
+                        provider="openrouter",
+                    )
                 full_assistant_text += delta
                 await self._enqueue_message({
                     "type": "assistant.delta",
@@ -484,6 +597,7 @@ class VoiceSession:
                 chunks = accumulator.feed(delta)
                 for chunk in chunks:
                     if self.tts_consumer:
+                        tts_character_count += len(chunk)
                         item = TTSSegmentItem(
                             turn_id=turn_id,
                             generation=generation,
@@ -503,6 +617,7 @@ class VoiceSession:
                 flushed_chunks = accumulator.flush()
                 for chunk in flushed_chunks:
                     if self.tts_consumer:
+                        tts_character_count += len(chunk)
                         item = TTSSegmentItem(
                             turn_id=turn_id,
                             generation=generation,
@@ -521,6 +636,29 @@ class VoiceSession:
                     "generation": generation,
                     "text": full_assistant_text,
                 })
+                llm_usage = self._consume_provider_usage(self.llm_provider)
+                await self._emit_metric(
+                    turn_id=turn_id,
+                    generation=generation,
+                    stage="llm_done",
+                    provider="openrouter",
+                    usage_seconds=llm_usage.seconds if llm_usage else None,
+                    usage_tokens=llm_usage.tokens if llm_usage else None,
+                    cost_usd=llm_usage.cost_usd if llm_usage else None,
+                )
+                if self.tts_consumer and active_speech_provider == "aws_polly":
+                    await self._emit_metric(
+                        turn_id=turn_id,
+                        generation=generation,
+                        stage="llm_done",
+                        provider="aws_polly",
+                        cost_usd=(
+                            tts_character_count
+                            * self.settings.polly_usd_per_million_chars
+                            / 1_000_000
+                        ),
+                        estimated=True,
+                    )
                 self.history.add_completed_turn(user_text, full_assistant_text)
 
             else:
@@ -534,11 +672,21 @@ class VoiceSession:
                 )
         except asyncio.CancelledError:
             pass
-
+        except ProviderBusyError:
+            if generation != self.current_generation:
+                return
+            await self._send_error(
+                code="provider_busy",
+                message="El proveedor de conversación está ocupado. Inténtalo de nuevo pronto.",
+                retryable=True,
+                fatal=False,
+                turn_id=turn_id,
+                generation=generation,
+            )
         except Exception as exc:
             if generation != self.current_generation:
                 return
-            logger.error("Error in conversation stream: %s", exc)
+            logger.warning("conversation_failed error_code=%s", safe_error_code(exc))
             await self._send_error(
                 code="conversation_unavailable",
                 message="La conversación no está disponible.",
@@ -554,7 +702,11 @@ class VoiceSession:
         if not self.feedback_provider:
             return
         try:
-            feedback = await self.feedback_provider.generate(user_text, scenario)
+            if self.gates is None:
+                feedback = await self.feedback_provider.generate(user_text, scenario)
+            else:
+                async with self.gates.llm.slot():
+                    feedback = await self.feedback_provider.generate(user_text, scenario)
             if generation != self.current_generation:
                 return
             await self._enqueue_message({
@@ -563,12 +715,33 @@ class VoiceSession:
                 "generation": generation,
                 "feedback": feedback.model_dump(),
             })
+            feedback_usage = self._consume_provider_usage(self.feedback_provider)
+            await self._emit_metric(
+                turn_id=turn_id,
+                generation=generation,
+                stage="feedback_done",
+                provider="openrouter",
+                usage_seconds=feedback_usage.seconds if feedback_usage else None,
+                usage_tokens=feedback_usage.tokens if feedback_usage else None,
+                cost_usd=feedback_usage.cost_usd if feedback_usage else None,
+            )
         except asyncio.CancelledError:
             pass
+        except ProviderBusyError:
+            if generation != self.current_generation:
+                return
+            await self._send_error(
+                code="provider_busy",
+                message="El proveedor de feedback está ocupado. Inténtalo de nuevo pronto.",
+                retryable=True,
+                fatal=False,
+                turn_id=turn_id,
+                generation=generation,
+            )
         except Exception as exc:
             if generation != self.current_generation:
                 return
-            logger.error("Error in feedback generation: %s", exc)
+            logger.warning("feedback_failed error_code=%s", safe_error_code(exc))
             await self._send_error(
                 code="feedback_unavailable",
                 message="El feedback no está disponible.",
@@ -577,6 +750,127 @@ class VoiceSession:
                 turn_id=turn_id,
                 generation=generation,
             )
+
+    @staticmethod
+    def _consume_provider_usage(provider: object) -> ProviderUsage | None:
+        """Read optional provider usage without requiring it from fakes or generic ports."""
+
+        getter = getattr(provider, "consume_usage", None)
+        usage = getter() if callable(getter) else None
+        return usage if isinstance(usage, ProviderUsage) else None
+
+    async def _stream_llm(self, messages: list[ChatMessage]) -> AsyncIterator[str]:
+        """Iterate chat output while holding one shared LLM slot for the stream lifetime."""
+
+        if self.llm_provider is None:
+            return
+        if self.gates is None:
+            async for delta in self.llm_provider.stream_chat(messages):
+                yield delta
+            return
+        async with self.gates.llm.slot():
+            async for delta in self.llm_provider.stream_chat(messages):
+                yield delta
+
+    async def _emit_metric(
+        self,
+        *,
+        turn_id: str,
+        generation: int,
+        stage: str,
+        provider: str | None,
+        usage_seconds: float | None = None,
+        usage_tokens: int | None = None,
+        cost_usd: float | None = None,
+        estimated: bool = False,
+    ) -> None:
+        """Emit a content-free cumulative latency event and retain only a session total."""
+
+        t0 = self._turn_t0.get((turn_id, generation))
+        if t0 is None:
+            return
+        latency_ms = min(3_600_000, max(0, round((self._clock() - t0) * 1000)))
+        if cost_usd is not None:
+            self.session_cost_usd += cost_usd
+            self.session_cost_estimated = self.session_cost_estimated or estimated
+        metric = MetricsStageMessage(
+            turn_id=turn_id,
+            generation=generation,
+            stage=stage,  # type: ignore[arg-type]
+            latency_ms=latency_ms,
+            provider=provider,  # type: ignore[arg-type]
+            usage_seconds=usage_seconds,
+            usage_tokens=usage_tokens,
+            cost_usd=cost_usd,
+            estimated=estimated,
+        )
+        await self._enqueue_message(metric.model_dump(mode="json"))
+        log_operational_event(
+            event="voice_stage_completed",
+            session_id=self.session_id,
+            turn_id=turn_id,
+            generation=generation,
+            stage=stage,
+            latency_ms=latency_ms,
+            provider=provider,
+            usage_seconds=usage_seconds,
+            usage_tokens=usage_tokens,
+            cost_usd=cost_usd,
+            estimated=estimated,
+        )
+
+    async def _on_tts_ready(self, item: TTSSegmentItem) -> None:
+        """Record only the first valid MP3; Polly's full estimate is known at LLM completion."""
+
+        key = (item.turn_id, item.generation)
+        self._first_audio_segments.setdefault(key, item.segment_id)
+        if key in self._tts_metrics_emitted:
+            return
+        self._tts_metrics_emitted.add(key)
+        await self._emit_metric(
+            turn_id=item.turn_id,
+            generation=item.generation,
+            stage="tts_first_byte",
+            provider=item.provider,
+        )
+
+    async def _enforce_session_limit(self) -> None:
+        """Close an idle or active session at the configured monotonic lifetime boundary."""
+
+        try:
+            await asyncio.sleep(self.settings.max_voice_session_seconds)
+            if self.started and not self.ended:
+                await self._close_for_limit(
+                    code="session_limit_reached",
+                    message="La sesión alcanzó el tiempo máximo permitido.",
+                    turn_id=self.active_turn_id,
+                    generation=self.current_generation if self.current_generation else None,
+                )
+        except asyncio.CancelledError:
+            return
+
+    async def _close_for_limit(
+        self,
+        *,
+        code: str,
+        message: str,
+        turn_id: str | None,
+        generation: int | None,
+    ) -> None:
+        """Cancel work, issue a fatal typed event, and reserve 1008 for policy limits."""
+
+        self.ended = True
+        if self.active_stt_task and not self.active_stt_task.done():
+            self.active_stt_task.cancel()
+        self._cancel_generation(self.current_generation)
+        await self._send_error(
+            code=code,
+            message=message,
+            retryable=False,
+            fatal=True,
+            turn_id=turn_id,
+            generation=generation,
+        )
 
     async def _handle_begin_timeout(self, turn_id: str, generation: int) -> None:
         await asyncio.sleep(5.0)
@@ -615,6 +909,7 @@ class VoiceSession:
 
         await self._enqueue_message(err_payload)
         if fatal:
+            self.ended = True
             await self.websocket.close(code=1008)
 
     async def _enqueue_message(self, msg: dict[str, object]) -> None:
@@ -645,13 +940,15 @@ class VoiceSession:
         except (asyncio.CancelledError, WebSocketDisconnect):
             pass
         except Exception as exc:
-            logger.error("Outbound writer error: %s", exc)
+            logger.warning("outbound_writer_failed error_code=%s", safe_error_code(exc))
 
     async def _cleanup(self) -> None:
         if self.tts_consumer:
             await self.tts_consumer.stop()
         if self.begin_timeout_task and not self.begin_timeout_task.done():
             self.begin_timeout_task.cancel()
+        if self.session_limit_task and not self.session_limit_task.done():
+            self.session_limit_task.cancel()
         if self.active_stt_task and not self.active_stt_task.done():
             self.active_stt_task.cancel()
         self._cancel_generation(self.current_generation)
