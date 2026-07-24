@@ -334,7 +334,7 @@ export function VideoLab({
 
       <form
         aria-busy={isLoading}
-        className="rounded-xl border border-slate-800 bg-slate-950/45 p-4 sm:p-5"
+        className="rounded-md border border-[#2a3746] bg-[#0f1620] p-4 sm:p-5"
         onSubmit={handleSubmit}
       >
         <label className="text-sm font-semibold text-slate-200" htmlFor="video-url">
@@ -342,7 +342,7 @@ export function VideoLab({
         </label>
         <div className="mt-2 flex flex-col gap-2 lg:flex-row">
           <input
-            className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 font-mono text-sm text-slate-100 outline-none placeholder:text-slate-600 focus-visible:border-cyan-300 focus-visible:ring-2 focus-visible:ring-cyan-300/30"
+            className="min-w-0 flex-1 rounded-md border border-[#2a3746] bg-[#0d141c] px-3 py-2 font-mono text-sm text-slate-100 outline-none placeholder:text-slate-600 focus-visible:border-cyan-400 focus-visible:ring-1 focus-visible:ring-cyan-400/30"
             disabled={isLoading}
             id="video-url"
             onChange={(event) => {
@@ -353,21 +353,23 @@ export function VideoLab({
             type="url"
             value={url}
           />
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex items-center gap-2">
             <button
-              className="rounded-lg bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+              className="rounded-md bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
               disabled={isLoading || !url.trim()}
               type="submit"
             >
               {isLoading ? 'Buscando subtítulos…' : 'Cargar transcripción'}
             </button>
             <button
-              className="rounded-lg border border-cyan-400/40 px-4 py-2.5 text-sm font-semibold text-cyan-200 transition-colors hover:bg-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+              aria-label="Guardar video"
+              className="inline-flex h-[2.375rem] w-[2.375rem] items-center justify-center rounded-md border border-[#2a3746] bg-[#18212c] text-slate-300 transition-colors hover:border-[#67e8f9] hover:bg-[#1a2430] hover:text-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
               disabled={!result}
               onClick={() => setSaveVideoOpen(true)}
+              title="Guardar video"
               type="button"
             >
-              Guardar video
+              <BookmarkIcon />
             </button>
           </div>
         </div>
@@ -384,7 +386,7 @@ export function VideoLab({
 
       {error ? (
         <div
-          className="mt-4 rounded-lg border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-100"
+          className="mt-4 rounded-md border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-100"
           role="alert"
         >
           {error}
@@ -393,7 +395,7 @@ export function VideoLab({
       {status ? (
         <p
           aria-live="polite"
-          className="mt-4 rounded-lg border border-emerald-400/25 bg-emerald-400/[0.06] px-4 py-3 text-sm text-emerald-200"
+          className="mt-4 rounded-md border border-emerald-400/25 bg-emerald-400/[0.06] px-4 py-3 text-sm text-emerald-200"
         >
           {status}
         </p>
@@ -403,7 +405,7 @@ export function VideoLab({
         <div className="mt-6">
           <section className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(20rem,2fr)] lg:items-start">
             <div
-              className="overflow-hidden rounded-xl border border-slate-800 bg-black shadow-xl shadow-black/20"
+              className="overflow-hidden rounded-md border border-slate-800 bg-black shadow-xl shadow-black/20"
               ref={videoPanelRef}
             >
               <div className="relative aspect-video w-full overflow-hidden [&>iframe]:absolute [&>iframe]:inset-0 [&>iframe]:h-full [&>iframe]:w-full [&>iframe]:border-0">
@@ -430,10 +432,10 @@ export function VideoLab({
                   playhead {formatTimestamp(playbackTime)}
                 </span>
                 <span
-                  className={`rounded-full border px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-[0.12em] ${
+                  className={`rounded border px-2 py-0.5 font-mono text-[0.6875rem] font-medium uppercase tracking-wider ${
                     result.source === 'fixture'
                       ? 'border-violet-400/30 bg-violet-400/10 text-violet-200'
-                      : 'border-cyan-400/30 bg-cyan-400/10 text-cyan-200'
+                      : 'border-slate-700/80 bg-slate-900 text-cyan-300'
                   }`}
                 >
                   {result.source === 'fixture' ? 'Fixture local' : 'YouTube'}
@@ -442,7 +444,7 @@ export function VideoLab({
             </div>
 
             <section
-              className="flex max-h-[32rem] min-h-0 flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-950/55"
+              className="flex max-h-[32rem] min-h-0 flex-col overflow-hidden rounded-md border border-slate-800 bg-slate-950/55"
               style={
                 videoPanelHeight > 0
                   ? { maxHeight: `${videoPanelHeight}px` }
@@ -458,10 +460,10 @@ export function VideoLab({
                     {result.segments.length} segmentos
                   </h2>
                 </div>
-                <div className="flex rounded-lg border border-slate-700 bg-slate-900 p-1">
+                <div className="flex rounded-md border border-slate-800 bg-slate-900/90 p-0.5">
                   <button
                     aria-pressed={videoState.viewMode === 'paragraph'}
-                    className={`rounded-md px-2.5 py-1.5 text-xs font-semibold ${
+                    className={`rounded px-2.5 py-1 text-xs font-semibold ${
                       videoState.viewMode === 'paragraph'
                         ? 'bg-cyan-400 text-slate-950'
                         : 'text-slate-400 hover:text-slate-100'
@@ -473,7 +475,7 @@ export function VideoLab({
                   </button>
                   <button
                     aria-pressed={videoState.viewMode === 'line'}
-                    className={`rounded-md px-2.5 py-1.5 text-xs font-semibold ${
+                    className={`rounded px-2.5 py-1 text-xs font-semibold ${
                       videoState.viewMode === 'line'
                         ? 'bg-cyan-400 text-slate-950'
                         : 'text-slate-400 hover:text-slate-100'
@@ -738,6 +740,19 @@ function NoteIcon() {
         strokeWidth="1.3"
       />
       <path d="M9.5 2.9v2.8h2.8M5.5 8.5h5M5.5 10.75h3.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function BookmarkIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" viewBox="0 0 16 16" width="14" height="14">
+      <path
+        d="M3.75 3A1.25 1.25 0 0 1 5 1.75h6A1.25 1.25 0 0 1 12.25 3v11.25l-4.25-2.5-4.25 2.5V3z"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.3"
+      />
     </svg>
   );
 }

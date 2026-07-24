@@ -188,7 +188,7 @@ button:not(:disabled), a[href] { -webkit-tap-highlight-color: transparent; }
 .voice-scenario:hover { border-color: #67e8f9; color: #fff; }
 .voice-scenario[aria-pressed="true"] { border-color: #22d3ee; background: #102a34; color: #d8f9ff; }
 .voice-settings { display: grid; align-content: start; gap: .8rem; min-width: min(100%, 14rem); }
-.voice-studio #voice-speech-provider { border-color: #3b4d60; border-radius: .25rem; background: #18212c; color: #f1f5f9; }
+#speech-provider-select, #voice-speech-provider { border-color: #3b4d60; border-radius: .25rem; background: #18212c; color: #f1f5f9; }
 .voice-status { display: inline-flex; align-items: center; gap: .45rem; color: var(--muted-strong); font-size: .8rem; }
 .voice-status-dot { width: .5rem; height: .5rem; border-radius: 50%; background: #607086; }
 .voice-status-dot.is-ready { background: #4ade80; }
@@ -441,9 +441,9 @@ button:not(:disabled), a[href] { -webkit-tap-highlight-color: transparent; }
 }
 .writing-btn:focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; }
 .writing-btn:disabled { opacity: .4; cursor: not-allowed; }
-.writing-btn-sm { min-height: 1.9rem; font-size: .75rem; padding-inline: .7rem; }
-.writing-btn-ghost { border-color: #2a3746; background: transparent; color: #cbd5e1; }
-.writing-btn-ghost:hover:not(:disabled) { border-color: #3d4f63; background: #18212c; color: #f8fafc; }
+.writing-btn-sm { min-height: 2.15rem; font-size: .82rem; padding-inline: .85rem; border-radius: .25rem; }
+.writing-btn-ghost { border-color: #3b4d60; background: #18212c; color: #cbd5e1; }
+.writing-btn-ghost:hover:not(:disabled) { border-color: #52677d; background: #202b3a; color: #f8fafc; }
 .writing-btn-primary { background: #22d3ee; color: #082f3a; }
 .writing-btn-primary:hover:not(:disabled) { background: #67e8f9; }
 .writing-btn-primary:disabled { background: #334155; color: #94a3b8; }
@@ -465,6 +465,13 @@ button:not(:disabled), a[href] { -webkit-tap-highlight-color: transparent; }
 }
 .writing-result-title { margin: .25rem 0 0; color: #f1f5f9; font-size: .95rem; font-weight: 600; }
 .writing-result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
+.writing-result-actions select,
+.writing-result-actions .writing-btn {
+  height: 2.15rem;
+  border-radius: .25rem;
+  font-size: .82rem;
+  box-sizing: border-box;
+}
 .writing-result-body {
   margin: 0; color: #e2e8f0; font-size: .95rem; line-height: 1.7; padding: .95rem .85rem; white-space: pre-wrap;
 }

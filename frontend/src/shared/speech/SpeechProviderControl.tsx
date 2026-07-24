@@ -14,7 +14,7 @@ export function SpeechProviderControl({
   id = 'speech-provider-select',
 }: SpeechProviderControlProps) {
   return (
-    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+    <div className="flex items-center gap-2">
       <label htmlFor={id} className="text-xs font-semibold text-slate-300">
         Proveedor de voz
       </label>
@@ -23,10 +23,14 @@ export function SpeechProviderControl({
         value={provider}
         onChange={(e) => onChange(e.target.value as SpeechProvider)}
         disabled={disabled}
-        className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 outline-none transition-colors hover:border-slate-500 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-[2.15rem] rounded border border-[#3b4d60] bg-[#18212c] px-3 text-[0.82rem] font-medium text-[#f1f5f9] outline-none transition-colors hover:border-slate-500 focus:border-[#22d3ee] focus:ring-1 focus:ring-[#22d3ee] disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <option value="aws_polly">AWS Polly Neural</option>
-        <option value="edge_tts">Microsoft Edge Neural</option>
+        <option value="aws_polly" className="bg-[#18212c] text-[#f1f5f9]">
+          AWS Polly Neural
+        </option>
+        <option value="edge_tts" className="bg-[#18212c] text-[#f1f5f9]">
+          Microsoft Edge Neural
+        </option>
       </select>
     </div>
   );
