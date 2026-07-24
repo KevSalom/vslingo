@@ -5,10 +5,11 @@ import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
 
-/** @returns {import('vite').Plugin} */
+/** @returns {any} */
 function serveVadStaticPlugin() {
   return {
     name: 'serve-vad-static',
+    /** @param {any} server */
     configureServer(server) {
       server.middlewares.use(
         /**

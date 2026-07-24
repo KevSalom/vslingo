@@ -1,11 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
+const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicVadDir = path.resolve(__dirname, '../public/vad');
-const vadDist = path.resolve(__dirname, '../node_modules/@ricky0123/vad-web/dist');
-const onnxDist = path.resolve(__dirname, '../node_modules/onnxruntime-web/dist');
+
+const vadDist = path.dirname(require.resolve('@ricky0123/vad-web'));
+const onnxDist = path.dirname(require.resolve('onnxruntime-web'));
 
 const requiredAssets = [
   [vadDist, 'silero_vad_v5.onnx'],
