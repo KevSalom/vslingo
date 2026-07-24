@@ -42,6 +42,8 @@ function serveVadStaticPlugin() {
 
 export default defineConfig({
   output: 'static',
+  // En producción SITE_URL es obligatorio para emitir canonical y OG correctos.
+  site: process.env.SITE_URL ?? 'http://localhost:4321',
   integrations: [react()],
   vite: {
     plugins: [serveVadStaticPlugin(), tailwindcss()],

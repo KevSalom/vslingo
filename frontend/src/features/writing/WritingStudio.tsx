@@ -166,7 +166,7 @@ export function WritingStudio({
           </p>
           <span className="font-mono text-xs text-slate-500">Ctrl + Enter para revisar</span>
         </div>
-        <h1 id="writing-title" className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+        <h1 id="writing-title" tabIndex={-1} className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
           Writing Studio
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">

@@ -41,3 +41,7 @@ keeps paragraph and line transcript views synchronized, and stores its library,
 notes, and view preference in versioned `localStorage`. Its bundled technical
 fixture keeps the complete demo path available without a transcript API call.
 Voice Studio remains a placeholder until its roadmap increments.
+
+## URL de sitio para producción
+
+Antes de un build de despliegue, definir `SITE_URL` con la URL pública HTTPS final (por ejemplo, en la configuración de Render). Astro usa esta variable para construir los enlaces canonical y Open Graph. En desarrollo local se usa `http://localhost:4321` sólo como origen local.

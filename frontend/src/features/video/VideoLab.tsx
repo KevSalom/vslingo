@@ -264,6 +264,7 @@ export function VideoLab({
         <h1
           className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl"
           id="video-lab-title"
+          tabIndex={-1}
         >
           Video Lab
         </h1>

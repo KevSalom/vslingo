@@ -1,5 +1,23 @@
 ---
 import '../styles/global.css';
+
+const title = 'VSLingo | Inglés profesional para developers';
+const description =
+  'Practica cómo hablar, escribir y comprender inglés profesional para desarrollo de software, sin registro.';
+const site = Astro.site ?? new URL('http://localhost:4321');
+const canonical = new URL('/', site);
+const image = new URL('/og-vslingo.svg', site);
+const structuredData = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'VSLingo',
+  applicationCategory: 'EducationalApplication',
+  operatingSystem: 'Web',
+  description,
+  url: canonical.href,
+  inLanguage: 'es',
+});
+const waveform = [22, 38, 58, 34, 78, 46, 70, 32, 62, 89, 49, 30, 66, 44, 81, 51, 28, 72, 45, 88, 59, 35, 75, 47, 63, 29, 54, 40];
 ---
 
 <!doctype html>
@@ -8,30 +26,136 @@ import '../styles/global.css';
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
     <meta name="generator" content={Astro.generator} />
-    <meta
-      name="description"
-      content="Practica inglés profesional para desarrollo de software con VSLingo."
-    />
-    <title>VSLingo</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={image} />
+    <meta property="og:image:alt" content="VSLingo: practica inglés profesional para desarrollo" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={image} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script is:inline type="application/ld+json" set:html={structuredData}></script>
+    <title>{title}</title>
   </head>
-  <body class="bg-slate-950 text-slate-100">
-    <main class="mx-auto flex min-h-screen max-w-4xl items-center px-6 py-16">
-      <div>
-        <p class="font-mono text-sm font-semibold uppercase tracking-[0.2em] text-cyan-300">
-          Public Alpha
-        </p>
-        <h1 class="mt-4 text-5xl font-semibold tracking-tight sm:text-7xl">VSLingo</h1>
-        <p class="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
-          El workspace para practicar el inglés que usas al diseñar, explicar y entregar
-          software.
-        </p>
-        <a
-          class="mt-8 inline-flex rounded-xl bg-cyan-400 px-5 py-3 font-semibold text-slate-950 transition-colors hover:bg-cyan-300 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-300"
-          href="/demo"
-        >
-          Probar demo
+  <body>
+    <div class="site-shell">
+      <header class="site-container site-header">
+        <a class="brand" href="#inicio" aria-label="VSLingo, inicio">
+          <span aria-hidden="true" class="brand-mark">V/</span>
+          VSLingo
         </a>
-      </div>
-    </main>
+        <nav class="header-nav" aria-label="Navegación principal">
+          <a class="text-link" href="#como-funciona">Cómo funciona</a>
+          <a class="cta" href="/demo">Probar demo</a>
+        </nav>
+      </header>
+
+      <main id="inicio">
+        <section class="site-container hero" aria-labelledby="hero-title">
+          <div>
+            <p class="eyebrow">Public Alpha</p>
+            <h1 class="landing-title" id="hero-title">Explica tu trabajo en inglés con la misma claridad con la que lo construyes.</h1>
+            <p class="hero-copy">VSLingo es un workspace para desarrolladores hispanohablantes que practican conversaciones, mensajes y contenido técnico en inglés B1-B2.</p>
+            <div class="hero-actions">
+              <a class="cta" href="/demo">Probar demo</a>
+              <a class="cta cta-secondary" href="#como-funciona">Ver el recorrido</a>
+            </div>
+            <p class="note">Sin registro. Empieza con una práctica corta desde el navegador.</p>
+          </div>
+          <div class="signature-frame" aria-label="Una señal de audio se transforma en cambios de texto">
+            <p class="signature-label">voice.signal → language.diff</p>
+            <div class="waveform-diff" aria-hidden="true">
+              {waveform.map((height, index) => <span style={`--i: ${index}; height: ${height}%`}></span>)}
+            </div>
+          </div>
+        </section>
+
+        <section class="landing-section" aria-labelledby="proof-title">
+          <div class="site-container">
+            <p class="section-kicker">Una práctica concreta</p>
+            <h2 class="section-title" id="proof-title">Convierte una actualización diaria en una explicación natural.</h2>
+            <div class="proof-grid">
+              <article class="proof-card" aria-label="Ejemplo de diff de Daily Standup">
+                <header class="proof-header"><span>daily-standup.en</span><span>feedback</span></header>
+                <p class="diff-line diff-remove"><span class="diff-symbol">−</span><del>Yesterday I deploy the API and the tests was passing.</del></p>
+                <p class="diff-line diff-add"><span class="diff-symbol">+</span><ins>Yesterday I deployed the API, and all tests passed.</ins></p>
+              </article>
+              <p class="section-copy">La práctica no añade puntos ni rachas. Te ayuda a expresar progreso, decisiones y bloqueos con frases que reconocerías en un standup real.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="landing-section" aria-labelledby="modules-title">
+          <div class="site-container">
+            <p class="section-kicker">Tres formas de practicar</p>
+            <h2 class="section-title" id="modules-title">Elige el contexto que necesitas hoy.</h2>
+            <div class="module-grid">
+              <article class="module-card featured">
+                <p class="module-label">01 · prioridad</p>
+                <h3>Voice Studio</h3>
+                <p>Practica Daily Standup, System Design, Salary Negotiation o una conversación libre. Usa manos libres o mantén pulsado para hablar.</p>
+              </article>
+              <article class="module-card">
+                <p class="module-label">02 · precisión</p>
+                <h3>Writing Studio</h3>
+                <p>Revisa un mensaje técnico, compara el diff y escucha la versión corregida con el proveedor de voz que elijas.</p>
+              </article>
+              <article class="module-card">
+                <p class="module-label">03 · contexto</p>
+                <h3>Video Lab</h3>
+                <p>Navega subtítulos técnicos, salta al momento exacto y conserva notas locales para volver a estudiar.</p>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="landing-section" id="como-funciona" aria-labelledby="pipeline-title">
+          <div class="site-container">
+            <p class="section-kicker">Cómo funciona</p>
+            <h2 class="section-title" id="pipeline-title">Una ruta corta desde tu voz hasta una respuesta útil.</h2>
+            <div class="pipeline-grid">
+              <div class="pipeline-step"><strong>01 · navegador</strong><span>VAD local detecta el final de tu intervención.</span></div>
+              <div class="pipeline-step"><strong>02 · STT</strong><span>OpenRouter Whisper transcribe el segmento de voz.</span></div>
+              <div class="pipeline-step"><strong>03 · práctica</strong><span>La conversación y el feedback se generan en paralelo.</span></div>
+              <div class="pipeline-step"><strong>04 · TTS</strong><span>La respuesta se reproduce por oraciones, en orden.</span></div>
+            </div>
+            <p class="note">OpenRouter, AWS y Microsoft Edge intervienen cuando eliges funciones que necesitan sus servicios.</p>
+          </div>
+        </section>
+
+        <section class="landing-section" aria-labelledby="aws-title">
+          <div class="site-container assurance-grid">
+            <article class="assurance-card aws-note">
+              <p class="section-kicker">Integración AWS</p>
+              <h2 id="aws-title">AWS Polly Neural para respuestas que puedes escuchar.</h2>
+              <p>Polly es la integración oficial de síntesis. También puedes seleccionar Microsoft Edge Neural como alternativa explícita; no hay cambios silenciosos entre proveedores.</p>
+            </article>
+            <article class="assurance-card">
+              <p class="section-kicker">Procesamiento efímero</p>
+              <h2>Practica sin convertir tu sesión en un historial público.</h2>
+              <p>El estado reciente queda en este navegador. El audio y el texto se procesan por proveedores externos cuando usas esas funciones, y VSLingo no escribe audio en disco.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="site-container final-cta" aria-labelledby="final-title">
+          <div>
+            <p class="section-kicker">Listo para probar</p>
+            <h2 class="section-title" id="final-title">Ensaya la próxima conversación antes de tenerla.</h2>
+          </div>
+          <a class="cta" href="/demo">Probar demo</a>
+        </section>
+      </main>
+
+      <footer class="site-container site-footer">
+        <span>VSLingo · Public Alpha</span>
+        <span><a href="/demo">Abrir workspace</a> · <a href="https://github.com/">Documentación del proyecto</a></span>
+      </footer>
+    </div>
   </body>
 </html>

@@ -626,12 +626,16 @@ export function VoiceStudio() {
       </div>
 
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-        <div>
+      <div className="flex flex-col items-start gap-4 border-b border-slate-800 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
+            <h1
+              className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent"
+              id="voice-title"
+              tabIndex={-1}
+            >
               Voice Studio — Hands-free & Feedback
-            </h2>
+            </h1>
           </div>
           <p className="text-sm text-slate-400 mt-1">
             Detección de voz (VAD) interactiva, síntesis fluida por oraciones e interrupción inmediata.
