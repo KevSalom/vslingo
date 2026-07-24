@@ -49,7 +49,7 @@ class OpenRouterChatLanguageModel:
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "stream": True,
             "temperature": 0.7,
-            "max_tokens": 300,
+            "max_tokens": 160,
         }
 
         accumulated_len = 0

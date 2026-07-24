@@ -28,3 +28,11 @@ def test_free_scenario_does_not_mention_software_development() -> None:
 def test_invalid_scenario_raises_value_error() -> None:
     with pytest.raises(ValueError, match="Unknown scenario"):
         get_voice_system_prompt("invalid_scenario")  # type: ignore[arg-type]
+
+
+
+def test_voice_prompts_require_a_short_first_sentence_for_early_tts() -> None:
+    prompt = get_voice_system_prompt("daily_standup")
+    assert "first sentence" in prompt.lower()
+    assert "12 words" in prompt
+    assert "exactly 2 short sentences" in prompt

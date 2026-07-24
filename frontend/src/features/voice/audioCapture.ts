@@ -79,29 +79,34 @@ export class AudioRecorder {
 
   async start(): Promise<void> {
     this.pcmChunks = [];
-    this.mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
-        sampleRate: { ideal: 16000 },
-      },
-    });
+    try {
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: { ideal: 16000 },
+        },
+      });
 
-    const AudioContextClass =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
 
-    this.audioContext = new AudioContextClass();
-    this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
-    this.processorNode = this.audioContext.createScriptProcessor(4096, 1, 1);
+      this.audioContext = new AudioContextClass();
+      this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
+      this.processorNode = this.audioContext.createScriptProcessor(4096, 1, 1);
 
-    this.processorNode.onaudioprocess = (e) => {
-      const inputBuffer = e.inputBuffer.getChannelData(0);
-      this.pcmChunks.push(new Float32Array(inputBuffer));
-    };
+      this.processorNode.onaudioprocess = (e) => {
+        const inputBuffer = e.inputBuffer.getChannelData(0);
+        this.pcmChunks.push(new Float32Array(inputBuffer));
+      };
 
-    this.sourceNode.connect(this.processorNode);
-    this.processorNode.connect(this.audioContext.destination);
-    this.recordingStartTime = Date.now();
+      this.sourceNode.connect(this.processorNode);
+      this.processorNode.connect(this.audioContext.destination);
+      this.recordingStartTime = Date.now();
+    } catch (cause) {
+      this.cleanup();
+      throw cause;
+    }
   }
 
   stop(): RecordedAudio {

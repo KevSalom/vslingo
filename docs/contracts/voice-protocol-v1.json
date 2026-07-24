@@ -88,6 +88,22 @@
         ]
       }
     },
+    "audio_begin": {
+      "type": "audio.begin",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "segment_id": "223e4567-e89b-12d3-a456-426614174000",
+      "segment_index": 0,
+      "media_type": "audio/mpeg",
+      "byte_length": 1234
+    },
+    "audio_end": {
+      "type": "audio.end",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "segment_id": "223e4567-e89b-12d3-a456-426614174000",
+      "segment_index": 0
+    },
     "response_cancelled": {
       "type": "response.cancelled",
       "turn_id": "123e4567-e89b-12d3-a456-426614174000",

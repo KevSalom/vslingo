@@ -113,6 +113,24 @@ class ResponseCancelledMessage(BaseVoiceMessage):
     generation: int = Field(ge=1)
 
 
+class AudioBeginMessage(BaseVoiceMessage):
+    type: Literal["audio.begin"] = "audio.begin"
+    turn_id: str
+    generation: int = Field(ge=1)
+    segment_id: str
+    segment_index: int = Field(ge=0)
+    media_type: Literal["audio/mpeg"] = "audio/mpeg"
+    byte_length: int = Field(ge=1, le=2_000_000)
+
+
+class AudioEndMessage(BaseVoiceMessage):
+    type: Literal["audio.end"] = "audio.end"
+    turn_id: str
+    generation: int = Field(ge=1)
+    segment_id: str
+    segment_index: int = Field(ge=0)
+
+
 ErrorCodeType = Literal[
     "invalid_event",
     "invalid_generation",
@@ -127,6 +145,7 @@ ErrorCodeType = Literal[
     "internal_error",
     "feedback_unavailable",
     "conversation_unavailable",
+    "speech_unavailable",
 ]
 
 
@@ -148,6 +167,8 @@ ServerVoiceMessage = Annotated[
     | AssistantDoneMessage
     | FeedbackReadyMessage
     | ResponseCancelledMessage
+    | AudioBeginMessage
+    | AudioEndMessage
     | ErrorMessage,
     Field(discriminator="type"),
 ]

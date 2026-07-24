@@ -31,3 +31,31 @@ describe('Voice Protocol v1 parsing', () => {
     expect(parseServerMessage(malformed)).toBeNull();
   });
 });
+
+
+  it('rejects invalid audio framing ranges and unknown configuration enums', () => {
+    expect(
+      parseServerMessage(
+        JSON.stringify({
+          type: 'audio.begin',
+          turn_id: 'turn-1',
+          generation: 1,
+          segment_id: 'segment-1',
+          segment_index: -1,
+          media_type: 'audio/mpeg',
+          byte_length: 2_000_001,
+        }),
+      ),
+    ).toBeNull();
+
+    expect(
+      parseServerMessage(
+        JSON.stringify({
+          type: 'session.configured',
+          scenario: 'unknown',
+          speech_provider: 'silent_fallback',
+          config_revision: 1,
+        }),
+      ),
+    ).toBeNull();
+  });

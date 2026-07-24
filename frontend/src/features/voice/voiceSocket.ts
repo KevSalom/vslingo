@@ -5,12 +5,15 @@ import {
 } from './protocol';
 
 export type VoiceSocketListener = (message: ServerVoiceMessage) => void;
+export type VoiceSocketBinaryListener = (data: ArrayBuffer) => void;
 export type VoiceSocketStatusListener = (connected: boolean) => void;
 
 export class VoiceSocketClient {
   private socket: WebSocket | null = null;
   private listeners: Set<VoiceSocketListener> = new Set();
+  private binaryListeners: Set<VoiceSocketBinaryListener> = new Set();
   private statusListeners: Set<VoiceSocketStatusListener> = new Set();
+
 
   constructor(private url: string = 'ws://localhost:8000/api/voice/ws') {}
 
@@ -21,6 +24,8 @@ export class VoiceSocketClient {
           ? this.url.replace(/^http/, 'ws')
           : this.url;
         this.socket = new WebSocket(wsUrl);
+
+        this.socket.binaryType = 'arraybuffer';
 
         this.socket.onopen = () => {
           this.notifyStatus(true);
@@ -35,8 +40,11 @@ export class VoiceSocketClient {
             if (parsed) {
               this.notifyListeners(parsed);
             }
+          } else if (event.data instanceof ArrayBuffer) {
+            this.notifyBinaryListeners(event.data);
           }
         };
+
 
         this.socket.onerror = (error) => {
           if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
@@ -62,13 +70,22 @@ export class VoiceSocketClient {
 
   sendBinary(data: Uint8Array): void {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(data.buffer as ArrayBuffer);
+      const exactBytes = data.buffer.slice(
+        data.byteOffset,
+        data.byteOffset + data.byteLength,
+      ) as ArrayBuffer;
+      this.socket.send(exactBytes);
     }
   }
 
   onMessage(listener: VoiceSocketListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  onBinary(listener: VoiceSocketBinaryListener): () => void {
+    this.binaryListeners.add(listener);
+    return () => this.binaryListeners.delete(listener);
   }
 
   onStatusChange(listener: VoiceSocketStatusListener): () => void {
@@ -96,6 +113,13 @@ export class VoiceSocketClient {
       listener(message);
     }
   }
+
+  private notifyBinaryListeners(data: ArrayBuffer): void {
+    for (const listener of this.binaryListeners) {
+      listener(data);
+    }
+  }
+
 
   private notifyStatus(connected: boolean): void {
     for (const listener of this.statusListeners) {

@@ -20,6 +20,8 @@ from app.domain.voice_protocol import (
     client_adapter,
 )
 from app.prompts.voice import get_voice_system_prompt
+from app.voice.accumulator import SentenceAccumulator
+from app.voice.tts_queue import TTSConsumer, TTSSegmentItem
 
 logger = logging.getLogger(__name__)
 
@@ -80,27 +82,45 @@ class VoiceSession:
         stt_provider: SpeechToTextPort,
         llm_provider: LanguageModelPort | None = None,
         feedback_provider: VoiceFeedbackPort | None = None,
+        speech_service: object | None = None,
     ) -> None:
         self.websocket = websocket
         self.stt_provider = stt_provider
         self.llm_provider = llm_provider
         self.feedback_provider = feedback_provider
+        self.speech_service = speech_service
 
         self.session_id = str(uuid4())
         self.current_generation = 0
         self.config_revision = 0
         self.scenario: ScenarioType = "daily_standup"
         self.speech_provider: SpeechProviderType = "aws_polly"
+        self.active_turn_id: str | None = None
+        self.active_scenario: ScenarioType = self.scenario
+        self.active_speech_provider: SpeechProviderType = self.speech_provider
+        self.cancelled_turns: set[tuple[str, int]] = set()
 
         self.history = ConversationHistory()
         self.started = False
+        self.ended = False
         self.pending_begin: UtteranceBeginMessage | None = None
         self.begin_timeout_task: asyncio.Task[None] | None = None
         self.active_stt_task: asyncio.Task[None] | None = None
         self.active_generation_tasks: list[asyncio.Task[None]] = []
 
-        self.outbound_queue: asyncio.Queue[dict[str, object]] = asyncio.Queue(maxsize=32)
+        self.outbound_queue: asyncio.Queue[
+            str | bytes | tuple[str, bytes, str]
+        ] = asyncio.Queue(maxsize=32)
         self.writer_task: asyncio.Task[None] | None = None
+        self.tts_consumer: TTSConsumer | None = None
+        if self.speech_service is not None:
+            self.tts_consumer = TTSConsumer(
+                speech_service=self.speech_service,
+                outbound_writer=self._enqueue_raw_message,
+                outbound_audio_writer=self._enqueue_audio_frame,
+            )
+            self.tts_consumer.start()
+
 
     async def run(self) -> None:
         """Main loop managing reader and writer actor tasks."""
@@ -115,6 +135,8 @@ class VoiceSession:
 
                 if "text" in message and message["text"] is not None:
                     await self._handle_text(message["text"])
+                    if self.ended:
+                        break
                 elif "bytes" in message and message["bytes"] is not None:
                     await self._handle_bytes(message["bytes"])
 
@@ -131,11 +153,16 @@ class VoiceSession:
         finally:
             await self._cleanup()
 
-    def _cancel_active_generation_tasks(self) -> None:
+    def _cancel_generation(self, generation: int) -> None:
+        if generation <= 0:
+            return
+        if self.tts_consumer:
+            self.tts_consumer.mark_generation_cancelled(generation)
         for task in self.active_generation_tasks:
             if not task.done():
                 task.cancel()
         self.active_generation_tasks.clear()
+
 
     async def _handle_text(self, text_data: str) -> None:
         try:
@@ -186,16 +213,22 @@ class VoiceSession:
                 fatal=False,
             )
         elif parsed_msg.type == "session.config":
-            stt_active = self.active_stt_task and not self.active_stt_task.done()
-            gen_active = any(not t.done() for t in self.active_generation_tasks)
-            if self.pending_begin is not None or stt_active or gen_active:
-                await self._send_error(
-                    code="invalid_event",
-                    message="No se puede cambiar la configuración durante un turno activo.",
-                    retryable=False,
-                    fatal=False,
-                )
-                return
+            if self.active_turn_id is not None:
+                cancelled_turn = (self.active_turn_id, self.current_generation)
+                if self.active_stt_task and not self.active_stt_task.done():
+                    self.active_stt_task.cancel()
+                self._cancel_generation(self.current_generation)
+                if self.begin_timeout_task and not self.begin_timeout_task.done():
+                    self.begin_timeout_task.cancel()
+                if cancelled_turn not in self.cancelled_turns:
+                    self.cancelled_turns.add(cancelled_turn)
+                    await self._enqueue_message({
+                        "type": "response.cancelled",
+                        "turn_id": cancelled_turn[0],
+                        "generation": cancelled_turn[1],
+                    })
+                self.pending_begin = None
+                self.active_turn_id = None
 
             if parsed_msg.scenario != self.scenario:
                 self.history.clear()
@@ -226,17 +259,26 @@ class VoiceSession:
                 )
                 return
 
+            previous_generation = self.current_generation
+            if previous_generation > 0:
+                self._cancel_generation(previous_generation)
+
             self.current_generation = parsed_msg.generation
+            self.active_turn_id = parsed_msg.turn_id
+            self.active_scenario = self.scenario
+            self.active_speech_provider = self.speech_provider
             if self.active_stt_task and not self.active_stt_task.done():
                 self.active_stt_task.cancel()
-            self._cancel_active_generation_tasks()
 
             if self.begin_timeout_task and not self.begin_timeout_task.done():
                 self.begin_timeout_task.cancel()
             self.pending_begin = None
 
         elif parsed_msg.type == "utterance.begin":
-            if parsed_msg.generation != self.current_generation or parsed_msg.turn_id is None:
+            if (
+                parsed_msg.generation != self.current_generation
+                or parsed_msg.turn_id != self.active_turn_id
+            ):
                 await self._send_error(
                     code="invalid_generation",
                     message="Generación obsoleta o inconsistente en utterance.begin.",
@@ -255,23 +297,32 @@ class VoiceSession:
             )
 
         elif parsed_msg.type == "response.cancel":
-            if self.pending_begin and self.pending_begin.turn_id == parsed_msg.turn_id:
-                if self.begin_timeout_task and not self.begin_timeout_task.done():
-                    self.begin_timeout_task.cancel()
-                self.pending_begin = None
+            cancelled_turn = (parsed_msg.turn_id, parsed_msg.generation)
+            is_active = (
+                parsed_msg.generation == self.current_generation
+                and parsed_msg.turn_id == self.active_turn_id
+            )
+            if is_active:
+                if self.pending_begin and self.pending_begin.turn_id == parsed_msg.turn_id:
+                    if self.begin_timeout_task and not self.begin_timeout_task.done():
+                        self.begin_timeout_task.cancel()
+                    self.pending_begin = None
 
-            if self.active_stt_task and not self.active_stt_task.done():
-                self.active_stt_task.cancel()
-            self._cancel_active_generation_tasks()
+                if self.active_stt_task and not self.active_stt_task.done():
+                    self.active_stt_task.cancel()
+                self._cancel_generation(parsed_msg.generation)
+                self.active_turn_id = None
 
-            await self._enqueue_message({
-                "type": "response.cancelled",
-                "turn_id": parsed_msg.turn_id,
-                "generation": parsed_msg.generation,
-            })
+            if cancelled_turn not in self.cancelled_turns:
+                self.cancelled_turns.add(cancelled_turn)
+                await self._enqueue_message({
+                    "type": "response.cancelled",
+                    "turn_id": parsed_msg.turn_id,
+                    "generation": parsed_msg.generation,
+                })
 
         elif parsed_msg.type == "session.end":
-            await self._cleanup()
+            self.ended = True
 
     async def _handle_bytes(self, audio_bytes: bytes) -> None:
         if not self.pending_begin:
@@ -340,13 +391,21 @@ class VoiceSession:
             # Launch parallel conversation and feedback tasks if configured
             if self.llm_provider is not None:
                 conv_task = asyncio.create_task(
-                    self._process_conversation(turn_id, generation, result.text)
+                    self._process_conversation(
+                        turn_id,
+                        generation,
+                        result.text,
+                        self.active_scenario,
+                        self.active_speech_provider,
+                    )
                 )
                 self.active_generation_tasks.append(conv_task)
 
             if self.feedback_provider is not None:
                 fb_task = asyncio.create_task(
-                    self._process_feedback(turn_id, generation, result.text)
+                    self._process_feedback(
+                        turn_id, generation, result.text, self.active_scenario
+                    )
                 )
                 self.active_generation_tasks.append(fb_task)
 
@@ -388,17 +447,25 @@ class VoiceSession:
             )
 
     async def _process_conversation(
-        self, turn_id: str, generation: int, user_text: str
+        self,
+        turn_id: str,
+        generation: int,
+        user_text: str,
+        scenario: ScenarioType,
+        speech_provider: SpeechProviderType,
     ) -> None:
         if not self.llm_provider:
             return
         full_assistant_text = ""
-        sys_prompt = get_voice_system_prompt(self.scenario)
+        sys_prompt = get_voice_system_prompt(scenario)
         messages = [
             ChatMessage(role="system", content=sys_prompt),
             *self.history.get_messages(),
             ChatMessage(role="user", content=user_text),
         ]
+        accumulator = SentenceAccumulator()
+        segment_index = 0
+        active_speech_provider = speech_provider
 
         try:
             async for delta in self.llm_provider.stream_chat(messages):
@@ -414,10 +481,40 @@ class VoiceSession:
                     "delta": delta,
                 })
 
+                chunks = accumulator.feed(delta)
+                for chunk in chunks:
+                    if self.tts_consumer:
+                        item = TTSSegmentItem(
+                            turn_id=turn_id,
+                            generation=generation,
+                            segment_index=segment_index,
+                            text=chunk,
+                            provider=active_speech_provider,
+                        )
+                        await self.tts_consumer.enqueue(
+                            item, active_generation=self.current_generation
+                        )
+                        segment_index += 1
+
             if generation != self.current_generation:
                 return
 
             if full_assistant_text:
+                flushed_chunks = accumulator.flush()
+                for chunk in flushed_chunks:
+                    if self.tts_consumer:
+                        item = TTSSegmentItem(
+                            turn_id=turn_id,
+                            generation=generation,
+                            segment_index=segment_index,
+                            text=chunk,
+                            provider=active_speech_provider,
+                        )
+                        await self.tts_consumer.enqueue(
+                            item, active_generation=self.current_generation
+                        )
+                        segment_index += 1
+
                 await self._enqueue_message({
                     "type": "assistant.done",
                     "turn_id": turn_id,
@@ -425,6 +522,7 @@ class VoiceSession:
                     "text": full_assistant_text,
                 })
                 self.history.add_completed_turn(user_text, full_assistant_text)
+
             else:
                 await self._send_error(
                     code="conversation_unavailable",
@@ -436,6 +534,7 @@ class VoiceSession:
                 )
         except asyncio.CancelledError:
             pass
+
         except Exception as exc:
             if generation != self.current_generation:
                 return
@@ -450,12 +549,12 @@ class VoiceSession:
             )
 
     async def _process_feedback(
-        self, turn_id: str, generation: int, user_text: str
+        self, turn_id: str, generation: int, user_text: str, scenario: ScenarioType
     ) -> None:
         if not self.feedback_provider:
             return
         try:
-            feedback = await self.feedback_provider.generate(user_text, self.scenario)
+            feedback = await self.feedback_provider.generate(user_text, scenario)
             if generation != self.current_generation:
                 return
             await self._enqueue_message({
@@ -519,16 +618,29 @@ class VoiceSession:
             await self.websocket.close(code=1008)
 
     async def _enqueue_message(self, msg: dict[str, object]) -> None:
-        try:
-            self.outbound_queue.put_nowait(msg)
-        except asyncio.QueueFull:
-            logger.error("Outbound queue full for session %s", self.session_id)
+        await self._enqueue_raw_message(json.dumps(msg))
+
+    async def _enqueue_raw_message(self, data: str | bytes) -> None:
+        await self.outbound_queue.put(data)
+
+    async def _enqueue_audio_frame(
+        self, begin: str, audio: bytes, end: str
+    ) -> None:
+        await self.outbound_queue.put((begin, audio, end))
 
     async def _outbound_writer(self) -> None:
         try:
             while True:
                 msg = await self.outbound_queue.get()
-                await self.websocket.send_text(json.dumps(msg))
+                if isinstance(msg, tuple):
+                    begin, audio, end = msg
+                    await self.websocket.send_text(begin)
+                    await self.websocket.send_bytes(audio)
+                    await self.websocket.send_text(end)
+                elif isinstance(msg, bytes):
+                    await self.websocket.send_bytes(msg)
+                else:
+                    await self.websocket.send_text(msg)
                 self.outbound_queue.task_done()
         except (asyncio.CancelledError, WebSocketDisconnect):
             pass
@@ -536,10 +648,13 @@ class VoiceSession:
             logger.error("Outbound writer error: %s", exc)
 
     async def _cleanup(self) -> None:
+        if self.tts_consumer:
+            await self.tts_consumer.stop()
         if self.begin_timeout_task and not self.begin_timeout_task.done():
             self.begin_timeout_task.cancel()
         if self.active_stt_task and not self.active_stt_task.done():
             self.active_stt_task.cancel()
-        self._cancel_active_generation_tasks()
+        self._cancel_generation(self.current_generation)
+        self.active_turn_id = None
         if self.writer_task and not self.writer_task.done():
             self.writer_task.cancel()

@@ -126,6 +126,7 @@ def create_app(
             runtime_stt_provider,
             llm_provider=runtime_llm_provider,
             feedback_provider=runtime_feedback_provider,
+            speech_service=runtime_speech_service,
         )
     )
 

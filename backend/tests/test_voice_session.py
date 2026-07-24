@@ -239,3 +239,135 @@ def test_voice_ws_cancel_turn(client: TestClient) -> None:
         cancelled = ws.receive_json()
         assert cancelled["type"] == "response.cancelled"
         assert cancelled["turn_id"] == "123e4567-e89b-12d3-a456-426614174000"
+
+
+
+@pytest.mark.asyncio
+async def test_speech_started_cancels_previous_generation_not_the_new_one(
+    fake_stt: FakeSpeechToText,
+    fake_llm: FakeLanguageModel,
+) -> None:
+    """A newly accepted generation must remain eligible for TTS enqueueing."""
+    from app.voice.session import VoiceSession
+    from app.voice.tts_queue import TTSSegmentItem
+
+    class StubWebSocket:
+        async def close(self, code: int = 1000) -> None:
+            del code
+
+    class StubSpeechService:
+        async def synthesize(self, request: object) -> object:
+            del request
+            raise AssertionError("The consumer is not exercised by this state test")
+
+    session = VoiceSession(
+        StubWebSocket(),  # type: ignore[arg-type]
+        fake_stt,
+        llm_provider=fake_llm,
+        speech_service=StubSpeechService(),
+    )
+    try:
+        await session._handle_text('{"type":"session.start","protocol_version":1}')
+        await session._handle_text(
+            '{"type":"speech.started","turn_id":"turn-1","generation":1}'
+        )
+
+        assert session.tts_consumer is not None
+        accepted = await session.tts_consumer.enqueue(
+            TTSSegmentItem(
+                turn_id="turn-1",
+                generation=1,
+                segment_index=0,
+                text="Hello.",
+                provider="aws_polly",
+            ),
+            active_generation=session.current_generation,
+        )
+        assert accepted is True
+    finally:
+        await session._cleanup()
+
+
+
+@pytest.mark.asyncio
+async def test_stale_response_cancel_does_not_cancel_current_generation(
+    fake_stt: FakeSpeechToText,
+) -> None:
+    from app.voice.session import VoiceSession
+    from app.voice.tts_queue import TTSSegmentItem
+
+    class StubWebSocket:
+        async def close(self, code: int = 1000) -> None:
+            del code
+
+    class StubSpeechService:
+        async def synthesize(self, request: object) -> object:
+            del request
+            raise AssertionError("Not exercised")
+
+    session = VoiceSession(
+        StubWebSocket(),  # type: ignore[arg-type]
+        fake_stt,
+        speech_service=StubSpeechService(),
+    )
+    try:
+        await session._handle_text('{"type":"session.start","protocol_version":1}')
+        await session._handle_text(
+            '{"type":"speech.started","turn_id":"turn-1","generation":1}'
+        )
+        await session._handle_text(
+            '{"type":"speech.started","turn_id":"turn-2","generation":2}'
+        )
+        await session._handle_text(
+            '{"type":"response.cancel","turn_id":"turn-1","generation":1}'
+        )
+
+        assert session.tts_consumer is not None
+        accepted = await session.tts_consumer.enqueue(
+            TTSSegmentItem("turn-2", 2, 0, "Current.", "aws_polly"),
+            active_generation=2,
+        )
+        assert accepted is True
+        assert session.active_turn_id == "turn-2"
+    finally:
+        await session._cleanup()
+
+
+
+@pytest.mark.asyncio
+async def test_active_turn_configuration_is_cancelled_then_applied(
+    fake_stt: FakeSpeechToText,
+) -> None:
+    import json
+
+    from app.voice.session import VoiceSession
+
+    class StubWebSocket:
+        async def close(self, code: int = 1000) -> None:
+            del code
+
+    session = VoiceSession(StubWebSocket(), fake_stt)  # type: ignore[arg-type]
+    await session._handle_text('{"type":"session.start","protocol_version":1}')
+    await session.outbound_queue.get()
+    session.outbound_queue.task_done()
+    await session._handle_text(
+        '{"type":"speech.started","turn_id":"turn-1","generation":1}'
+    )
+    await session._handle_text(
+        '{"type":"session.config","scenario":"free","speech_provider":"edge_tts"}'
+    )
+
+    cancelled = json.loads(await session.outbound_queue.get())
+    session.outbound_queue.task_done()
+    configured = json.loads(await session.outbound_queue.get())
+    session.outbound_queue.task_done()
+
+    assert cancelled == {
+        "type": "response.cancelled",
+        "turn_id": "turn-1",
+        "generation": 1,
+    }
+    assert configured["type"] == "session.configured"
+    assert configured["scenario"] == "free"
+    assert configured["speech_provider"] == "edge_tts"
+    assert session.active_turn_id is None

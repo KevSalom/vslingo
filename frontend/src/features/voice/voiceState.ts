@@ -1,3 +1,4 @@
+import { loadSpeechProvider } from '../../shared/speech/storage';
 import type { ScenarioType, SpeechProviderType, VoiceFeedback } from './protocol';
 
 export const VOICE_STORAGE_KEY = 'vslingo:voice';
@@ -33,13 +34,41 @@ export interface ActiveTurnState {
   feedbackErrorMsg?: string;
 }
 
+export type InputSubstate =
+  | 'idle'
+  | 'initializing_vad'
+  | 'vad_ready'
+  | 'listening'
+  | 'speech'
+  | 'encoding'
+  | 'fallback_ptt'
+  | 'permission_denied'
+  | 'input_error'
+  | 'interrupted';
+
+export const ACCESSIBLE_INPUT_LABELS: Record<InputSubstate, string> = {
+  idle: 'Inactivo',
+  initializing_vad: 'Inicializando micrófono...',
+  vad_ready: 'Listo',
+  listening: 'Escuchando',
+  speech: 'Te escucho',
+  encoding: 'Procesando',
+  fallback_ptt: 'Modo manual (PTT)',
+  permission_denied: 'Permiso de micrófono denegado',
+  input_error: 'Error de entrada de audio',
+  interrupted: 'Interrumpido',
+};
+
 export interface VoiceState {
   scenario: ScenarioType;
   speechProvider: SpeechProviderType;
   turnHistory: TurnRecord[];
   activeTurn: ActiveTurnState | null;
   status: 'disconnected' | 'connecting' | 'connected' | 'recording';
+  inputState: InputSubstate;
+  audioState: 'idle' | 'playing' | 'interrupted';
 }
+
 
 export function loadVoicePreferences(): ScenarioType {
   try {
@@ -70,9 +99,11 @@ export function saveVoicePreferences(scenario: ScenarioType): void {
 export function createInitialVoiceState(): VoiceState {
   return {
     scenario: loadVoicePreferences(),
-    speechProvider: 'aws_polly',
+    speechProvider: loadSpeechProvider(),
     turnHistory: [],
     activeTurn: null,
     status: 'disconnected',
+    inputState: 'idle',
+    audioState: 'idle',
   };
 }

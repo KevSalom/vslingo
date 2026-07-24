@@ -14,7 +14,8 @@ export type ErrorCodeType =
   | 'invalid_provider_response'
   | 'internal_error'
   | 'feedback_unavailable'
-  | 'conversation_unavailable';
+  | 'conversation_unavailable'
+  | 'speech_unavailable';
 
 export type CorrectionCategoryType = 'grammar' | 'vocabulary' | 'clarity' | 'tone';
 
@@ -133,6 +134,24 @@ export type ResponseCancelledMessage = {
   generation: number;
 };
 
+export type AudioBeginMessage = {
+  type: 'audio.begin';
+  turn_id: string;
+  generation: number;
+  segment_id: string;
+  segment_index: number;
+  media_type: 'audio/mpeg';
+  byte_length: number;
+};
+
+export type AudioEndMessage = {
+  type: 'audio.end';
+  turn_id: string;
+  generation: number;
+  segment_id: string;
+  segment_index: number;
+};
+
 export type ErrorMessage = {
   type: 'error';
   code: ErrorCodeType;
@@ -151,11 +170,46 @@ export type ServerVoiceMessage =
   | AssistantDoneMessage
   | FeedbackReadyMessage
   | ResponseCancelledMessage
+  | AudioBeginMessage
+  | AudioEndMessage
   | ErrorMessage;
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
+const SCENARIOS: ReadonlySet<ScenarioType> = new Set([
+  'daily_standup',
+  'system_design',
+  'salary_negotiation',
+  'free',
+]);
+const SPEECH_PROVIDERS: ReadonlySet<SpeechProviderType> = new Set(['aws_polly', 'edge_tts']);
+const ERROR_CODES: ReadonlySet<ErrorCodeType> = new Set([
+  'invalid_event',
+  'invalid_generation',
+  'unsupported_protocol',
+  'invalid_audio',
+  'audio_too_large',
+  'turn_timeout',
+  'queue_full',
+  'provider_not_configured',
+  'provider_unavailable',
+  'invalid_provider_response',
+  'internal_error',
+  'feedback_unavailable',
+  'conversation_unavailable',
+  'speech_unavailable',
+]);
+
+function isIntegerInRange(value: unknown, minimum: number, maximum = Number.MAX_SAFE_INTEGER) {
+  return Number.isInteger(value) && Number.isSafeInteger(value) && Number(value) >= minimum && Number(value) <= maximum;
+}
+
+function isNonEmptyId(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
 
 export function parseServerMessage(data: string): ServerVoiceMessage | null {
   try {
@@ -168,8 +222,8 @@ export function parseServerMessage(data: string): ServerVoiceMessage | null {
       case 'session.ready':
         if (
           raw.protocol_version === 1 &&
-          typeof raw.session_id === 'string' &&
-          typeof raw.generation === 'number'
+          isNonEmptyId(raw.session_id) &&
+          isIntegerInRange(raw.generation, 0)
         ) {
           return raw as SessionReadyMessage;
         }
@@ -177,9 +231,9 @@ export function parseServerMessage(data: string): ServerVoiceMessage | null {
 
       case 'session.configured':
         if (
-          typeof raw.scenario === 'string' &&
-          typeof raw.speech_provider === 'string' &&
-          typeof raw.config_revision === 'number'
+          SCENARIOS.has(raw.scenario as ScenarioType) &&
+          SPEECH_PROVIDERS.has(raw.speech_provider as SpeechProviderType) &&
+          isIntegerInRange(raw.config_revision, 1)
         ) {
           return raw as SessionConfiguredMessage;
         }
@@ -236,9 +290,33 @@ export function parseServerMessage(data: string): ServerVoiceMessage | null {
         }
         return null;
 
+      case 'audio.begin':
+        if (
+          isNonEmptyId(raw.turn_id) &&
+          isIntegerInRange(raw.generation, 1) &&
+          isNonEmptyId(raw.segment_id) &&
+          isIntegerInRange(raw.segment_index, 0) &&
+          raw.media_type === 'audio/mpeg' &&
+          isIntegerInRange(raw.byte_length, 1, 2_000_000)
+        ) {
+          return raw as AudioBeginMessage;
+        }
+        return null;
+
+      case 'audio.end':
+        if (
+          isNonEmptyId(raw.turn_id) &&
+          isIntegerInRange(raw.generation, 1) &&
+          isNonEmptyId(raw.segment_id) &&
+          isIntegerInRange(raw.segment_index, 0)
+        ) {
+          return raw as AudioEndMessage;
+        }
+        return null;
+
       case 'error':
         if (
-          typeof raw.code === 'string' &&
+          ERROR_CODES.has(raw.code as ErrorCodeType) &&
           typeof raw.message === 'string' &&
           typeof raw.retryable === 'boolean' &&
           typeof raw.fatal === 'boolean'
