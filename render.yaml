@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: vslingo-frontend
+    env: static
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: NODE_VERSION
+        value: 22.12.0
+      - key: PNPM_VERSION
+        value: 10.32.0
+      - key: PUBLIC_API_URL
+        value: https://api.vslingo.app
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer

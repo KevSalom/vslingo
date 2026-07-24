@@ -8,13 +8,13 @@ Este es el único documento para el estado mutable de implementación. Debe actu
 
 ## Estado actual
 
-- **Roadmap actual:** `T09` completado.
-- **Próximo incremento:** `T10` — Integración y despliegue.
-- **Completado:** `T01.1`–`T01.4`, `T02`, `T03`, `T04`, `T05`, `T06`, `T07`, `T08` y `T09`; base reproducible, Writing Studio, Video Lab básico/resiliente, TTS compartido, Protocolo Voice con PTT → STT, Conversación B1-B2 con Feedback Paralelo, VAD local manos libres con Audio Streaming e Interrupción (*barge-in*), sistema visual con landing estática, y seguridad, costes y observabilidad.
-- **Pendiente:** iniciar `T10` para integración y despliegue final.
+- **Roadmap actual:** `T10` completado (Alpha 1.0 lista).
+- **Próximo incremento:** Despliegue en producción autorizado (Dokploy en VPS para backend y Render/Vercel/Pages para frontend).
+- **Completado:** `T01`–`T10` completos; base reproducible, Writing Studio, Video Lab básico/resiliente, TTS compartido, Protocolo Voice con PTT → STT, Conversación B1-B2 con Feedback Paralelo, VAD local manos libres con Audio Streaming e Interrupción (*barge-in*), sistema visual con landing estática, seguridad, costes y observabilidad, e integración con pruebas E2E deterministas y guías de despliegue en Dokploy con Nixpacks.
+- **Pendiente:** despliegue real en producción VPS/PaaS.
 - **Bloqueos:** ninguno.
 
-`T09` aplicó protecciones operativas, límites de rate limit e IP, semáforos de proveedores, restricciones de CORS y origen WebSocket 403 antes de accept, headers de seguridad HTTP, control de sesión/turnos de Voice, observabilidad limpia sin canarios ni contenido sensible, y la integración de métricas de sesión (latencias STT/tokens/audio y coste acumulado/estimado) en la interfaz del cliente, respaldado por el runbook de presupuesto en `deploy/aws-polly.md`.
+`T10` introdujo la suite E2E determinista con Playwright (`@playwright/test` 1.50.1) cubriendo Landing, Writing Studio, Video Lab y Voice Studio; los archivos de despliegue `render.yaml` (Render Static Site), `deploy/Caddyfile.example`, `deploy/vslingo-api.service.example`, `backend/nixpacks.toml` y la guía paso a paso [`deploy/dokploy-nixpacks.md`](../deploy/dokploy-nixpacks.md) para Dokploy en VPS; y el script raíz unificado de calidad [`scripts/check-quality.ps1`](../scripts/check-quality.ps1).
 
 ## Evidencia disponible
 
@@ -24,8 +24,8 @@ Este es el único documento para el estado mutable de implementación. Debe actu
 - Backend Voice (WebSocket, STT, Chat Streaming, Feedback & TTS Streaming): `speech.started` cancela sólo la generación previa; `turn_id` y generación se validan juntos; escenario/proveedor se snapshottean por turno; cancelaciones obsoletas no interrumpen turnos nuevos; la conversación produce dos oraciones cortas y encola la primera para TTS mientras la segunda continúa en streaming; `TTSConsumer` acotado cancela síntesis activa, descarta resultados tardíos y entrega cada tríada de audio como una unidad al writer único.
 - Frontend Voice: VAD se inicia tras `session.ready` sin pulsar PTT; misfires y fallos cancelan su generación; PTT usa “Mantén pulsado para hablar”, pausa VAD y restaura la escucha; el selector compartido persiste Polly/Edge; cambios rápidos de escenario se confirman por revisión; y begin/binario/end valida generación, longitud, IDs e índice antes de decodificar.
 - Revalidación completa T09 Backend: Ruff sin errores (`ruff check app tests`), `mypy app` estricto en verde (43 archivos) y 138 tests pasados en `pytest` (incluyendo la suite completa de protecciones T09).
-- Revalidación completa T09 Frontend: `pnpm run quality` completado con 0 errores de Astro check, 84 tests de Vitest pasados y build estático de `/` y `/demo` limpio.
-- `git diff --check` pasado sin advertencias de formato.
+- Revalidación completa T10 Frontend & E2E: `pnpm run quality` completado con 0 errores de Astro check, 84 tests de Vitest pasados, build estático limpio y 7/7 tests E2E de Playwright pasados en verde sobre servidor estático local.
+- Guías de despliegue listas: Dokploy en VPS con Nixpacks ([`deploy/dokploy-nixpacks.md`](../deploy/dokploy-nixpacks.md)), Caddy/systemd ([`deploy/Caddyfile.example`](../deploy/Caddyfile.example)) y Render ([`render.yaml`](../render.yaml)).
 - No se realizó prueba manual de micrófono en Chrome/Edge desde este entorno CLI; sigue pendiente como validación manual y no fue sustituida por los tests.
 - No se ejecutaron llamadas live a OpenRouter Chat/Feedback o TTS proveedores reales: la suite utiliza `FakeLanguageModel`, `FakeVoiceFeedback` y fakes/mocks deterministas.
 - Los smokes live de STT, chat streaming, feedback, Polly y Edge continúan sin ejecutarse.

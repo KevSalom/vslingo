@@ -17,6 +17,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "quality": "pnpm run check && pnpm run test && pnpm run build",
+    "test:e2e": "playwright test",
+    "test:e2e:chrome": "playwright test --project=chrome",
+    "test:e2e:edge": "playwright test --project=edge",
     "audit:lighthouse": "pnpm run build && lhci autorun",
     "astro": "astro"
   },
@@ -35,6 +38,7 @@
     "@fontsource/ibm-plex-sans": "5.2.8",
     "@fontsource/jetbrains-mono": "5.2.8",
     "@lhci/cli": "0.15.1",
+    "@playwright/test": "1.50.1",
     "@testing-library/dom": "10.4.1",
     "@testing-library/jest-dom": "7.0.0",
     "@testing-library/react": "16.3.2",

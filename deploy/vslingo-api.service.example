@@ -1,0 +1,17 @@
+[Unit]
+Description=VSLingo FastAPI Backend
+After=network.target
+
+[Service]
+Type=simple
+User=vslingo
+Group=vslingo
+WorkingDirectory=/opt/vslingo/backend
+EnvironmentFile=/etc/vslingo/vslingo.env
+ExecStart=/opt/vslingo/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers
+Restart=always
+RestartSec=5
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
