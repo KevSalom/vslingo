@@ -14,6 +14,18 @@ import '../styles/global.css';
       content="Workspace de práctica de inglés profesional para desarrolladores."
     />
     <title>Demo | VSLingo</title>
+    <script is:inline>
+      // Anti-FOUC: apply saved theme before first paint.
+      (function () {
+        var VALID = ['deepwater', 'ember', 'aurora', 'obsidian'];
+        try {
+          var t = localStorage.getItem('vslingo:theme');
+          if (t && VALID.indexOf(t) !== -1) {
+            document.documentElement.setAttribute('data-theme', t);
+          }
+        } catch (_) {}
+      })();
+    </script>
   </head>
   <body class="demo-page">
     <DemoWorkspace client:load />

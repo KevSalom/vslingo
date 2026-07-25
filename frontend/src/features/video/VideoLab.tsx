@@ -301,9 +301,9 @@ export function VideoLab({
 
   return (
     <section aria-labelledby="video-lab-title" className="mx-auto w-full max-w-6xl">
-      <header className="mb-5 border-b border-slate-800 pb-4">
+      <header className="video-lab-header">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="font-mono text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
+          <p className="video-lab-kicker">
             Video / playback.clock
           </p>
           <div className="flex items-center gap-2">
@@ -314,19 +314,19 @@ export function VideoLab({
             >
               Explorer
             </button>
-            <span className="font-mono text-xs text-slate-500">
+            <span className="video-lab-meta">
               Sincronización cada 200 ms
             </span>
           </div>
         </div>
         <h1
-          className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl"
+          className="video-lab-title-heading"
           id="video-lab-title"
           tabIndex={-1}
         >
           Video Lab
         </h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400 sm:text-base">
+        <p className="video-lab-description">
           Estudia inglés técnico con subtítulos navegables. Biblioteca y notas viven
           en el explorador lateral; aquí sólo el material de estudio.
         </p>
@@ -334,15 +334,15 @@ export function VideoLab({
 
       <form
         aria-busy={isLoading}
-        className="rounded-md border border-[#2a3746] bg-[#0f1620] p-4 sm:p-5"
+        className="video-url-form"
         onSubmit={handleSubmit}
       >
-        <label className="text-sm font-semibold text-slate-200" htmlFor="video-url">
+        <label className="video-url-label" htmlFor="video-url">
           URL de YouTube
         </label>
         <div className="mt-2 flex flex-col gap-2 lg:flex-row">
           <input
-            className="min-w-0 flex-1 rounded-md border border-[#2a3746] bg-[#0d141c] px-3 py-2 font-mono text-sm text-slate-100 outline-none placeholder:text-slate-600 focus-visible:border-cyan-400 focus-visible:ring-1 focus-visible:ring-cyan-400/30"
+            className="video-url-input"
             disabled={isLoading}
             id="video-url"
             onChange={(event) => {
@@ -355,7 +355,7 @@ export function VideoLab({
           />
           <div className="flex items-center gap-2">
             <button
-              className="rounded-md bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+              className="video-url-submit"
               disabled={isLoading || !url.trim()}
               type="submit"
             >
@@ -363,7 +363,7 @@ export function VideoLab({
             </button>
             <button
               aria-label="Guardar video"
-              className="inline-flex h-[2.375rem] w-[2.375rem] items-center justify-center rounded-md border border-[#2a3746] bg-[#18212c] text-slate-300 transition-colors hover:border-[#67e8f9] hover:bg-[#1a2430] hover:text-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+              className="video-url-bookmark"
               disabled={!result}
               onClick={() => setSaveVideoOpen(true)}
               title="Guardar video"
@@ -375,7 +375,7 @@ export function VideoLab({
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button
-            className="font-mono text-xs text-slate-400 underline-offset-2 transition-colors hover:text-cyan-200 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+            className="video-url-fixture"
             onClick={() => openFixture()}
             type="button"
           >
@@ -386,7 +386,7 @@ export function VideoLab({
 
       {error ? (
         <div
-          className="mt-4 rounded-md border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-100"
+          className="video-url-error"
           role="alert"
         >
           {error}
@@ -395,7 +395,7 @@ export function VideoLab({
       {status ? (
         <p
           aria-live="polite"
-          className="mt-4 rounded-md border border-emerald-400/25 bg-emerald-400/[0.06] px-4 py-3 text-sm text-emerald-200"
+          className="video-url-status"
         >
           {status}
         </p>
@@ -405,7 +405,7 @@ export function VideoLab({
         <div className="mt-6">
           <section className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(20rem,2fr)] lg:items-start">
             <div
-              className="overflow-hidden rounded-md border border-slate-800 bg-black shadow-xl shadow-black/20"
+              className="video-player-frame"
               ref={videoPanelRef}
             >
               <div className="relative aspect-video w-full overflow-hidden [&>iframe]:absolute [&>iframe]:inset-0 [&>iframe]:h-full [&>iframe]:w-full [&>iframe]:border-0">
@@ -427,15 +427,15 @@ export function VideoLab({
                   />
                 )}
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 bg-slate-950 px-4 py-3">
-                <span className="font-mono text-xs text-slate-400">
+              <div className="video-player-bar">
+                <span className="video-player-playhead">
                   playhead {formatTimestamp(playbackTime)}
                 </span>
                 <span
-                  className={`rounded border px-2 py-0.5 font-mono text-[0.6875rem] font-medium uppercase tracking-wider ${
+                  className={`video-player-source-badge ${
                     result.source === 'fixture'
-                      ? 'border-violet-400/30 bg-violet-400/10 text-violet-200'
-                      : 'border-slate-700/80 bg-slate-900 text-cyan-300'
+                      ? 'video-player-source-badge--fixture'
+                      : 'video-player-source-badge--youtube'
                   }`}
                 >
                   {result.source === 'fixture' ? 'Fixture local' : 'YouTube'}
@@ -444,30 +444,26 @@ export function VideoLab({
             </div>
 
             <section
-              className="flex max-h-[32rem] min-h-0 flex-col overflow-hidden rounded-md border border-slate-800 bg-slate-950/55"
+              className="video-transcript-panel"
               style={
                 videoPanelHeight > 0
                   ? { maxHeight: `${videoPanelHeight}px` }
                   : undefined
               }
             >
-              <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
+              <header className="video-transcript-header">
                 <div>
-                  <p className="font-mono text-xs uppercase tracking-[0.16em] text-cyan-300">
+                  <p className="video-transcript-kicker">
                     Transcript
                   </p>
-                  <h2 className="mt-1 text-sm font-semibold text-slate-100">
+                  <h2 className="video-transcript-count">
                     {result.segments.length} segmentos
                   </h2>
                 </div>
-                <div className="flex rounded-md border border-slate-800 bg-slate-900/90 p-0.5">
+                <div className="video-view-toggle">
                   <button
                     aria-pressed={videoState.viewMode === 'paragraph'}
-                    className={`rounded px-2.5 py-1 text-xs font-semibold ${
-                      videoState.viewMode === 'paragraph'
-                        ? 'bg-cyan-400 text-slate-950'
-                        : 'text-slate-400 hover:text-slate-100'
-                    }`}
+                    className={`video-view-toggle-btn${videoState.viewMode === 'paragraph' ? ' is-active' : ''}`}
                     onClick={() => setViewMode('paragraph')}
                     type="button"
                   >
@@ -475,11 +471,7 @@ export function VideoLab({
                   </button>
                   <button
                     aria-pressed={videoState.viewMode === 'line'}
-                    className={`rounded px-2.5 py-1 text-xs font-semibold ${
-                      videoState.viewMode === 'line'
-                        ? 'bg-cyan-400 text-slate-950'
-                        : 'text-slate-400 hover:text-slate-100'
-                    }`}
+                    className={`video-view-toggle-btn${videoState.viewMode === 'line' ? ' is-active' : ''}`}
                     onClick={() => setViewMode('line')}
                     type="button"
                   >
@@ -489,7 +481,7 @@ export function VideoLab({
               </header>
 
               <div
-                className="h-72 min-h-0 flex-1 overflow-y-auto px-6 pt-8 pb-24 lg:h-0 [scrollbar-color:theme(colors.slate.600)_transparent]"
+                className="video-transcript-scroll"
                 ref={transcriptRef}
                 style={{
                   maskImage:
@@ -499,18 +491,14 @@ export function VideoLab({
                 }}
               >
                 {videoState.viewMode === 'paragraph' ? (
-                  <div className="text-left text-[1.25rem] font-semibold leading-[2] text-slate-500">
+                  <div className="video-paragraph-view">
                     {result.segments.map((segment, index) => {
                       const isActive =
                         activeIndex >= 0 && index <= activeIndex + 1;
                       return (
                         <span
                           aria-current={isActive ? 'true' : undefined}
-                          className={`cursor-pointer transition-all duration-150 ${
-                            isActive
-                              ? 'font-bold text-cyan-100'
-                              : 'hover:text-cyan-100 hover:underline'
-                          }`}
+                          className={`video-paragraph-word${isActive ? ' is-active' : ''}`}
                           data-segment-index={index}
                           key={`${segment.start}-${index}`}
                           onClick={() => handleSeek(segment.start)}
@@ -527,21 +515,17 @@ export function VideoLab({
                         activeIndex >= 0 && index <= activeIndex + 1;
                       return (
                         <li
-                          className={`video-line-row group grid grid-cols-[3.25rem_1fr_auto] gap-2 rounded-lg border px-3 py-2.5 transition-all duration-150 ${
-                            isActive
-                              ? 'border-cyan-400/30 bg-white/10 font-semibold text-cyan-100'
-                              : 'border-transparent hover:border-slate-700 hover:bg-slate-900'
-                          }`}
+                          className={`video-line-row${isActive ? ' is-active' : ''}`}
                           data-segment-index={index}
                           key={`${segment.start}-${index}`}
                         >
-                          <span className="pt-0.5 font-mono text-xs text-cyan-300">
+                          <span className="video-line-timestamp">
                             {formatTimestamp(segment.start)}
                           </span>
                           <button
                             aria-current={isActive ? 'true' : undefined}
                             aria-label={segment.text}
-                            className="text-left text-sm leading-6 text-slate-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+                            className="video-line-text"
                             onClick={() => handleSeek(segment.start)}
                             type="button"
                           >

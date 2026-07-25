@@ -1,5 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 
+import { ThemeProvider } from '../shared/theme/ThemeProvider';
+import { ThemeSelectorModal } from '../shared/theme/ThemeSelectorModal';
 import { VideoFileTree } from '../features/video/VideoFileTree';
 import { VideoLab } from '../features/video/VideoLab';
 import { VideoLabProvider } from '../features/video/VideoLabContext';
@@ -64,6 +66,7 @@ export function DemoWorkspace() {
   // after hydration so direct links do not cause a React hydration mismatch.
   const [activeId, setActiveId] = useState<ModuleId>('voice');
   const [hasResolvedInitialModule, setHasResolvedInitialModule] = useState(false);
+  const [showThemeModal, setShowThemeModal] = useState(false);
   const isInitialModule = useRef(true);
   const activeModule = MODULES.find((module) => module.id === activeId) ?? MODULES[0];
 
@@ -116,9 +119,20 @@ export function DemoWorkspace() {
             );
           })}
         </div>
-        <a aria-label="Volver a la landing" className="activity-button" href="/" title="Volver a la landing">
-          <HomeGlyph />
-        </a>
+        <div className="activity-list">
+          <button
+            aria-label="Cambiar tema"
+            className="activity-button settings-button"
+            onClick={() => setShowThemeModal(true)}
+            title="Cambiar tema"
+            type="button"
+          >
+            <SettingsGlyph />
+          </button>
+          <a aria-label="Volver a la landing" className="activity-button" href="/" title="Volver a la landing">
+            <HomeGlyph />
+          </a>
+        </div>
       </nav>
 
       <aside className="explorer" aria-labelledby="module-context-title">
@@ -156,17 +170,23 @@ export function DemoWorkspace() {
         <strong>local</strong>
         <span>sin registro · estado reciente en este navegador</span>
       </footer>
+
+      {showThemeModal ? (
+        <ThemeSelectorModal onClose={() => setShowThemeModal(false)} />
+      ) : null}
     </section>
   );
 
   return (
-    <main className="workspace-page">
-      {activeId === 'video' ? (
-        <VideoLabProvider>{workspace}</VideoLabProvider>
-      ) : (
-        workspace
-      )}
-    </main>
+    <ThemeProvider>
+      <main className="workspace-page">
+        {activeId === 'video' ? (
+          <VideoLabProvider>{workspace}</VideoLabProvider>
+        ) : (
+          workspace
+        )}
+      </main>
+    </ThemeProvider>
   );
 }
 
@@ -190,4 +210,25 @@ function ModuleGlyph({ module }: { module: ModuleId }) {
 
 function HomeGlyph() {
   return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="m4.5 11.25 7.5-6 7.5 6v7.25h-5v-4.75h-5v4.75h-5z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.6" /></svg>;
+}
+
+function SettingsGlyph() {
+  return (
+    <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+      <path
+        d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-1.42 3.42 2 2 0 0 1-1.41-.59l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.6"
+      />
+    </svg>
+  );
 }
