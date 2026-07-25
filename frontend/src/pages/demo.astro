@@ -17,7 +17,7 @@ import '../styles/global.css';
     <script is:inline>
       // Anti-FOUC: apply saved theme before first paint.
       (function () {
-        var VALID = ['deepwater', 'ember', 'aurora', 'obsidian'];
+        var VALID = ['deepwater', 'ember', 'aurora', 'obsidian', 'daylight', 'nordic'];
         try {
           var t = localStorage.getItem('vslingo:theme');
           if (t && VALID.indexOf(t) !== -1) {

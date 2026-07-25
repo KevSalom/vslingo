@@ -1,6 +1,12 @@
 /** Semantic theme token definitions for VSLingo workspace themes. */
 
-export type ThemeId = 'deepwater' | 'ember' | 'aurora' | 'obsidian';
+export type ThemeId =
+  | 'deepwater'
+  | 'ember'
+  | 'aurora'
+  | 'obsidian'
+  | 'daylight'
+  | 'nordic';
 
 export type ThemeTokens = {
   readonly ink: string;
@@ -37,10 +43,11 @@ export type ThemeMeta = {
   readonly name: string;
   readonly description: string;
   readonly icon: string;
+  readonly isLight?: boolean;
   readonly tokens: ThemeTokens;
 };
 
-/* ─── Deepwater ───────────────────────────────────────────────── */
+/* ─── Dark Themes ─────────────────────────────────────────────────── */
 
 const DEEPWATER_TOKENS: ThemeTokens = {
   ink: '#090D12',
@@ -72,8 +79,6 @@ const DEEPWATER_TOKENS: ThemeTokens = {
   accentColor: '#22D3EE',
 };
 
-/* ─── Ember ───────────────────────────────────────────────────── */
-
 const EMBER_TOKENS: ThemeTokens = {
   ink: '#0F0D0A',
   editor: '#171310',
@@ -103,8 +108,6 @@ const EMBER_TOKENS: ThemeTokens = {
   selectionFg: '#FEF9C3',
   accentColor: '#F59E0B',
 };
-
-/* ─── Aurora ──────────────────────────────────────────────────── */
 
 const AURORA_TOKENS: ThemeTokens = {
   ink: '#0A0E14',
@@ -136,8 +139,6 @@ const AURORA_TOKENS: ThemeTokens = {
   accentColor: '#34D399',
 };
 
-/* ─── Obsidian ────────────────────────────────────────────────── */
-
 const OBSIDIAN_TOKENS: ThemeTokens = {
   ink: '#0C0C0C',
   editor: '#151515',
@@ -166,6 +167,68 @@ const OBSIDIAN_TOKENS: ThemeTokens = {
   selectionBg: '#2E2650',
   selectionFg: '#F5F3FF',
   accentColor: '#C4B5FD',
+};
+
+/* ─── Light Themes ────────────────────────────────────────────────── */
+
+const DAYLIGHT_TOKENS: ThemeTokens = {
+  ink: '#F8FAFC',
+  editor: '#FFFFFF',
+  panel: '#F1F5F9',
+  primary: '#0284C7',
+  secondary: '#7C3AED',
+  foreground: '#0F172A',
+  muted: '#64748B',
+  mutedStrong: '#334155',
+  border: '#CBD5E1',
+  focus: '#0284C7',
+  surfaceRaised: '#FFFFFF',
+  surfaceRecessed: '#F8FAFC',
+  primaryHover: '#0369A1',
+  primarySubtle: '#E0F2FE',
+  primaryFg: '#FFFFFF',
+  primaryLight: '#0284C7',
+  secondaryLight: '#6D28D9',
+  diffAdded: '#16A34A',
+  diffRemoved: '#DC2626',
+  diffAddedBg: '#DCFCE7',
+  diffRemovedBg: '#FEE2E2',
+  diffAddedText: '#15803D',
+  diffRemovedText: '#B91C1C',
+  aws: '#D97706',
+  selectionBg: '#BAE6FD',
+  selectionFg: '#0369A1',
+  accentColor: '#0284C7',
+};
+
+const NORDIC_TOKENS: ThemeTokens = {
+  ink: '#F4F7F6',
+  editor: '#FFFFFF',
+  panel: '#EAEFEF',
+  primary: '#059669',
+  secondary: '#2563EB',
+  foreground: '#111C24',
+  muted: '#5F7380',
+  mutedStrong: '#2D3E4A',
+  border: '#CBD8D6',
+  focus: '#059669',
+  surfaceRaised: '#FFFFFF',
+  surfaceRecessed: '#F0F4F3',
+  primaryHover: '#047857',
+  primarySubtle: '#D1FAE5',
+  primaryFg: '#FFFFFF',
+  primaryLight: '#059669',
+  secondaryLight: '#1D4ED8',
+  diffAdded: '#16A34A',
+  diffRemoved: '#DC2626',
+  diffAddedBg: '#DCFCE7',
+  diffRemovedBg: '#FEE2E2',
+  diffAddedText: '#15803D',
+  diffRemovedText: '#B91C1C',
+  aws: '#D97706',
+  selectionBg: '#A7F3D0',
+  selectionFg: '#065F46',
+  accentColor: '#059669',
 };
 
 /* ─── Registry ────────────────────────────────────────────────── */
@@ -199,6 +262,22 @@ export const THEMES: readonly ThemeMeta[] = [
     icon: '🪨',
     tokens: OBSIDIAN_TOKENS,
   },
+  {
+    id: 'daylight',
+    name: 'Daylight',
+    description: 'Fondo claro impoluto con acentos azul turquesa.',
+    icon: '☀️',
+    isLight: true,
+    tokens: DAYLIGHT_TOKENS,
+  },
+  {
+    id: 'nordic',
+    name: 'Nordic Frost',
+    description: 'Estética nórdica clara con toque verde menta.',
+    icon: '❄️',
+    isLight: true,
+    tokens: NORDIC_TOKENS,
+  },
 ];
 
 export const DEFAULT_THEME_ID: ThemeId = 'deepwater';
@@ -206,7 +285,12 @@ export const DEFAULT_THEME_ID: ThemeId = 'deepwater';
 export function isValidThemeId(value: unknown): value is ThemeId {
   return (
     typeof value === 'string' &&
-    (value === 'deepwater' || value === 'ember' || value === 'aurora' || value === 'obsidian')
+    (value === 'deepwater' ||
+      value === 'ember' ||
+      value === 'aurora' ||
+      value === 'obsidian' ||
+      value === 'daylight' ||
+      value === 'nordic')
   );
 }
 

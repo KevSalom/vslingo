@@ -4,8 +4,8 @@ import { DEFAULT_THEME_ID, getThemeById, isValidThemeId, THEMES } from '../theme
 
 describe('themeTokens', () => {
   describe('THEMES', () => {
-    it('contains exactly 4 themes', () => {
-      expect(THEMES).toHaveLength(4);
+    it('contains exactly 6 themes', () => {
+      expect(THEMES).toHaveLength(6);
     });
 
     it('has unique ids', () => {
@@ -52,6 +52,8 @@ describe('themeTokens', () => {
       expect(isValidThemeId('ember')).toBe(true);
       expect(isValidThemeId('aurora')).toBe(true);
       expect(isValidThemeId('obsidian')).toBe(true);
+      expect(isValidThemeId('daylight')).toBe(true);
+      expect(isValidThemeId('nordic')).toBe(true);
     });
 
     it('rejects unknown strings', () => {
