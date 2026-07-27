@@ -74,6 +74,8 @@ export function VoiceStudio() {
   const pendingAudioRef = useRef<{ begin: AudioBeginMessage; received: boolean } | null>(null);
   const nextAudioIndexRef = useRef(0);
   const configRevisionRef = useRef(0);
+  /** Last scenario confirmed by session.configured; used to clear UI history only on scenario change. */
+  const configuredScenarioRef = useRef<ScenarioType | null>(null);
   const captureOwnerRef = useRef<'vad' | 'ptt' | null>(null);
   const sessionTokenRef = useRef(0);
   const firstPlaybackSegmentRef = useRef<{ turnId: string; generation: number; segmentId: string } | null>(null);
@@ -224,6 +226,8 @@ export function VoiceStudio() {
 
   const cleanupLocalResources = useCallback(() => {
     sessionTokenRef.current += 1;
+    configRevisionRef.current = 0;
+    configuredScenarioRef.current = null;
     captureOwnerRef.current = null;
     pendingAudioRef.current = null;
     if (recorderRef.current) {
@@ -418,18 +422,29 @@ export function VoiceStudio() {
           case 'session.configured':
             if (msg.config_revision <= configRevisionRef.current) break;
             configRevisionRef.current = msg.config_revision;
+            // Match backend: history.reset only when scenario changes (provider-only keeps memory).
+            const scenarioChanged =
+              configuredScenarioRef.current !== null &&
+              configuredScenarioRef.current !== msg.scenario;
+            configuredScenarioRef.current = msg.scenario;
             scenarioRef.current = msg.scenario;
             speechProviderRef.current = msg.speech_provider;
             setScenario(msg.scenario);
             setSpeechProvider(msg.speech_provider);
             saveVoicePreferences(msg.scenario);
             saveSpeechProvider(msg.speech_provider);
-            setTurnHistory([]);
-            setUserTranscript('');
-            setStreamingAssistant('');
-            setActiveFeedback(null);
-            setFeedbackErrorMsg(null);
-            setSessionMetrics(INITIAL_SESSION_METRICS);
+            if (scenarioChanged) {
+              setTurnHistory([]);
+              setUserTranscript('');
+              userTranscriptRef.current = '';
+              setStreamingAssistant('');
+              accumulatedAssistantRef.current = '';
+              setIsAssistantStreaming(false);
+              setIsFeedbackPending(false);
+              setActiveFeedback(null);
+              setFeedbackErrorMsg(null);
+              setSessionMetrics(INITIAL_SESSION_METRICS);
+            }
             break;
 
           case 'transcript.final':
@@ -625,11 +640,7 @@ export function VoiceStudio() {
         scenario: newScenario,
         speech_provider: newProvider,
       });
-      setTurnHistory([]);
-      setUserTranscript('');
-      setStreamingAssistant('');
-      setActiveFeedback(null);
-      setFeedbackErrorMsg(null);
+      // Conversation UI is cleared only when session.configured confirms a scenario change.
     },
     [cancelCurrentTurn],
   );

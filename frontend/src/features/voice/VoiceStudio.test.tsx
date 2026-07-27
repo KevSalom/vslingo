@@ -224,6 +224,93 @@ describe('VoiceStudio T07 flow', () => {
     });
   });
 
+  it('keeps conversation history when only the speech provider changes', async () => {
+    const user = await connectVoice();
+    act(() =>
+      mocks.socket?.emitMessage({
+        type: 'session.configured',
+        scenario: 'daily_standup',
+        speech_provider: 'aws_polly',
+        config_revision: 1,
+      }),
+    );
+    act(() => mocks.vadOptions?.onSpeechStart());
+    act(() =>
+      mocks.socket?.emitMessage({
+        type: 'transcript.final',
+        generation: 1,
+        turn_id: '00000000-0000-4000-8000-000000000001',
+        text: 'Hello there partner',
+      }),
+    );
+    act(() =>
+      mocks.socket?.emitMessage({
+        type: 'assistant.done',
+        generation: 1,
+        turn_id: '00000000-0000-4000-8000-000000000001',
+        text: 'Hi! Ready to practice?',
+      }),
+    );
+
+    expect(screen.getByText('Hello there partner')).toBeInTheDocument();
+    expect(screen.getByText('Hi! Ready to practice?')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Proveedor de voz' }), 'edge_tts');
+    act(() =>
+      mocks.socket?.emitMessage({
+        type: 'session.configured',
+        scenario: 'daily_standup',
+        speech_provider: 'edge_tts',
+        config_revision: 2,
+      }),
+    );
+
+    expect(screen.getByText('Hello there partner')).toBeInTheDocument();
+    expect(screen.getByText('Hi! Ready to practice?')).toBeInTheDocument();
+  });
+
+  it('clears conversation history when the scenario changes', async () => {
+    const user = await connectVoice();
+    act(() =>
+      mocks.socket?.emitMessage({
+        type: 'session.configured',
+        scenario: 'daily_standup',
+        speech_provider: 'aws_polly',
+        config_revision: 1,
+      }),
+    );
+    act(() => mocks.vadOptions?.onSpeechStart());
+    act(() =>
+      mocks.socket?.emitMessage({
+        type: 'transcript.final',
+        generation: 1,
+        turn_id: '00000000-0000-4000-8000-000000000001',
+        text: 'Status update for standup',
+      }),
+    );
+    act(() =>
+      mocks.socket?.emitMessage({
+        type: 'assistant.done',
+        generation: 1,
+        turn_id: '00000000-0000-4000-8000-000000000001',
+        text: 'Thanks for the update.',
+      }),
+    );
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Escenario' }), 'free');
+    act(() =>
+      mocks.socket?.emitMessage({
+        type: 'session.configured',
+        scenario: 'free',
+        speech_provider: 'aws_polly',
+        config_revision: 2,
+      }),
+    );
+
+    expect(screen.queryByText('Status update for standup')).not.toBeInTheDocument();
+    expect(screen.queryByText('Thanks for the update.')).not.toBeInTheDocument();
+  });
+
   it('cancels an active turn and keeps the latest scenario selection', async () => {
     const user = await connectVoice();
     const scenarioSelect = screen.getByRole('combobox', { name: 'Escenario' });
