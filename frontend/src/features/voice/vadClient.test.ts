@@ -84,11 +84,57 @@ describe('createVadClient', () => {
     });
 
     const speechFrame = new Float32Array(512).fill(0.04);
-    (mocks.options as any)?.onFrameProcessed?.({}, speechFrame);
+    (mocks.options as { onFrameProcessed?: (p: { isSpeech: number }, f: Float32Array) => void })
+      ?.onFrameProcessed?.({ isSpeech: 0.9 }, speechFrame);
 
     expect(onFrameLevel).toHaveBeenCalledOnce();
     const emittedLevel = onFrameLevel.mock.calls[0][0];
     expect(emittedLevel).toBeGreaterThan(0.25);
     expect(emittedLevel).toBeLessThanOrEqual(1.0);
+  });
+
+  it('zeros the visual level when VAD hangover frames are not speech', async () => {
+    const onFrameLevel = vi.fn();
+    await createVadClient({
+      onSpeechStart: vi.fn(),
+      onSpeechEnd: vi.fn(),
+      onSpeechCancel: vi.fn(),
+      onFrameLevel,
+      onError: vi.fn(),
+    });
+
+    const noisyFrame = new Float32Array(512).fill(0.04);
+    (mocks.options as { onFrameProcessed?: (p: { isSpeech: number }, f: Float32Array) => void })
+      ?.onFrameProcessed?.({ isSpeech: 0.9 }, noisyFrame);
+    onFrameLevel.mockClear();
+
+    (mocks.options as { onFrameProcessed?: (p: { isSpeech: number }, f: Float32Array) => void })
+      ?.onFrameProcessed?.({ isSpeech: 0.2 }, noisyFrame);
+
+    expect(onFrameLevel).toHaveBeenCalledOnce();
+    expect(onFrameLevel.mock.calls[0][0]).toBe(0);
+  });
+
+  it('resets visual level when speech ends or misfires', async () => {
+    const onFrameLevel = vi.fn();
+    await createVadClient({
+      onSpeechStart: vi.fn(),
+      onSpeechEnd: vi.fn(),
+      onSpeechCancel: vi.fn(),
+      onFrameLevel,
+      onError: vi.fn(),
+    });
+
+    const speechFrame = new Float32Array(512).fill(0.04);
+    (mocks.options as { onFrameProcessed?: (p: { isSpeech: number }, f: Float32Array) => void })
+      ?.onFrameProcessed?.({ isSpeech: 0.9 }, speechFrame);
+    onFrameLevel.mockClear();
+
+    mocks.options?.onSpeechEnd(new Float32Array(3200));
+    expect(onFrameLevel).toHaveBeenCalledWith(0);
+
+    onFrameLevel.mockClear();
+    mocks.options?.onVADMisfire();
+    expect(onFrameLevel).toHaveBeenCalledWith(0);
   });
 });

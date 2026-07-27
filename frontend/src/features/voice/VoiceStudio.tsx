@@ -931,9 +931,9 @@ export function VoiceStudio() {
                       <div className="voice-message assistant"><strong>VSLingo</strong>{turn.assistantText}</div>
                     </div>
                   ))}
-                  {userTranscript && <div className="voice-message user"><strong>Tú · último turno</strong>{userTranscript}</div>}
+                  {userTranscript && <div className="voice-message user"><strong>Tú</strong>{userTranscript}</div>}
                   {isAssistantStreaming && (
-                    <div className="voice-message assistant"><strong>VSLingo · respondiendo</strong>{streamingAssistant || 'Preparando una respuesta…'}</div>
+                    <div className="voice-message assistant"><strong>VSLingo</strong>{streamingAssistant || 'Preparando una respuesta…'}</div>
                   )}
                 </div>
               </div>

@@ -45,8 +45,17 @@ export async function createVadClient(options: VadClientOptions): Promise<VadCon
       model: 'v5',
       // Control start from VoiceStudio after session token checks (default startOnLoad races cleanup).
       startOnLoad: false,
-      onFrameProcessed: (_probabilities: unknown, frame: Float32Array) => {
+      onFrameProcessed: (probabilities: { isSpeech?: number }, frame: Float32Array) => {
         if (!options.onFrameLevel) return;
+        // Silero still feeds frames during end-of-utterance hangover. Use isSpeech so
+        // ambient hiss cannot keep the bars twitching after the user stops talking.
+        const speechProb =
+          typeof probabilities?.isSpeech === 'number' ? probabilities.isSpeech : 1;
+        if (speechProb < 0.5) {
+          meter.reset();
+          options.onFrameLevel(0);
+          return;
+        }
         let squareSum = 0;
         for (const sample of frame) squareSum += sample * sample;
         const rms = frame.length > 0 ? Math.sqrt(squareSum / frame.length) : 0;
@@ -56,9 +65,13 @@ export async function createVadClient(options: VadClientOptions): Promise<VadCon
         options.onSpeechStart();
       },
       onVADMisfire: () => {
+        meter.reset();
+        options.onFrameLevel?.(0);
         options.onSpeechCancel();
       },
       onSpeechEnd: (audioFloat32: Float32Array) => {
+        meter.reset();
+        options.onFrameLevel?.(0);
         const sampleRate = 16000;
         const durationMs = Math.round((audioFloat32.length / sampleRate) * 1000);
 

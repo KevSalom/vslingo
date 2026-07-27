@@ -132,7 +132,11 @@ describe('createAmplitudeMeter unit tests', () => {
   });
 
   it('applies independent attack and release smoothing factors', () => {
-    const meter = createAmplitudeMeter({ attackFactor: 0.5, releaseFactor: 0.2 });
+    const meter = createAmplitudeMeter({
+      attackFactor: 0.5,
+      releaseFactor: 0.2,
+      idleSnap: 0,
+    });
 
     // Attack (target = 1.0, current = 0 -> 0 + (1 - 0) * 0.5 = 0.5)
     const attackLevel = meter.processFrame(DEFAULT_SPEECH_REFERENCE);
@@ -141,6 +145,20 @@ describe('createAmplitudeMeter unit tests', () => {
     // Release (target = 0, current = 0.5 -> 0.5 + (0 - 0.5) * 0.2 = 0.4)
     const releaseLevel = meter.processFrame(0);
     expect(releaseLevel).toBeCloseTo(0.4, 4);
+  });
+
+  it('snaps residual release tail to idle', () => {
+    const meter = createAmplitudeMeter({
+      attackFactor: 1,
+      releaseFactor: 0.5,
+      idleSnap: 0.2,
+    });
+
+    meter.processFrame(DEFAULT_SPEECH_REFERENCE);
+    // From 1.0 with release 0.5 -> 0.5, then 0.25, then under idleSnap -> 0
+    expect(meter.processFrame(0)).toBeCloseTo(0.5, 4);
+    expect(meter.processFrame(0)).toBeCloseTo(0.25, 4);
+    expect(meter.processFrame(0)).toBe(0);
   });
 
   it('resets internal state on reset() call', () => {

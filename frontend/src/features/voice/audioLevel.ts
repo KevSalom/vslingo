@@ -9,6 +9,7 @@ export interface AmplitudeMeterConfig {
   attackFactor?: number;
   releaseFactor?: number;
   activityGate?: number;
+  idleSnap?: number;
 }
 
 export interface AmplitudeMeter {
@@ -22,9 +23,12 @@ export const DEFAULT_NOISE_FLOOR = 0.0007;
 /** RMS that maps to full visual level after the perceptual curve. */
 export const DEFAULT_SPEECH_REFERENCE = 0.0045;
 export const DEFAULT_ATTACK_FACTOR = 0.7;
-export const DEFAULT_RELEASE_FACTOR = 0.28;
+/** Faster ring-down so bars don't keep bobbing after the speech peak. */
+export const DEFAULT_RELEASE_FACTOR = 0.55;
 /** Soft visual gate: levels below this collapse toward idle. */
 export const DEFAULT_ACTIVITY_GATE = 0.18;
+/** Snap residual textured noise to idle instead of a long exponential tail. */
+export const DEFAULT_IDLE_SNAP = 0.04;
 
 /**
  * Creates a stateful amplitude meter that normalizes RMS energy,
@@ -36,6 +40,7 @@ export function createAmplitudeMeter(config: AmplitudeMeterConfig = {}): Amplitu
   const attackFactor = config.attackFactor ?? DEFAULT_ATTACK_FACTOR;
   const releaseFactor = config.releaseFactor ?? DEFAULT_RELEASE_FACTOR;
   const activityGate = config.activityGate ?? DEFAULT_ACTIVITY_GATE;
+  const idleSnap = config.idleSnap ?? DEFAULT_IDLE_SNAP;
 
   let currentLevel = 0;
 
@@ -60,6 +65,9 @@ export function createAmplitudeMeter(config: AmplitudeMeterConfig = {}): Amplitu
 
       const factor = target > currentLevel ? attackFactor : releaseFactor;
       currentLevel = currentLevel + (target - currentLevel) * factor;
+      if (target === 0 && currentLevel < idleSnap) {
+        currentLevel = 0;
+      }
       currentLevel = Math.max(0, Math.min(1, currentLevel));
 
       return currentLevel;
