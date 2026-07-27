@@ -286,4 +286,61 @@ describe('VoiceStudio T07 flow', () => {
     expect(localStorage.getItem('vslingo:voice:metrics')).toBeNull();
   });
 
+  it('updates input waveform height when VAD emits calibrated level', async () => {
+    await connectVoice();
+    await waitFor(() => expect(mocks.vadOptions?.onFrameLevel).toBeDefined());
+
+    const inputVisualizer = screen.getByRole('img', { name: 'Señal de audio: entrada' });
+    expect(inputVisualizer).toBeInTheDocument();
+
+    const bars = inputVisualizer.querySelectorAll('.voice-signal-bar');
+    expect(bars.length).toBe(22);
+
+
+    const initialMiddleBarTransform = (bars[11] as HTMLElement).style.transform;
+
+    // Frame levels only animate during real speech ("Te escucho").
+    act(() => mocks.vadOptions?.onFrameLevel?.(0.55));
+    expect((bars[11] as HTMLElement).style.transform).toBe(initialMiddleBarTransform);
+
+    act(() => {
+      mocks.vadOptions?.onSpeechStart?.();
+      mocks.vadOptions?.onFrameLevel?.(0.55);
+    });
+
+    await waitFor(() => {
+      const activeMiddleBarTransform = (bars[11] as HTMLElement).style.transform;
+      expect(activeMiddleBarTransform).not.toBe(initialMiddleBarTransform);
+      expect(activeMiddleBarTransform).toContain('scaleY');
+    });
+  });
+
+  it('clears userTranscript after assistant.done to avoid duplicating user message in turnHistory and last turn', async () => {
+    await connectVoice();
+
+    act(() => mocks.vadOptions?.onSpeechStart());
+    act(() =>
+      mocks.socket?.emitMessage({
+        type: 'transcript.final',
+        generation: 1,
+        text: 'Hello, can you help me learn English?',
+      }),
+    );
+
+    expect(screen.getAllByText(/Hello, can you help me learn English\?/i)).toHaveLength(1);
+
+    act(() =>
+      mocks.socket?.emitMessage({
+        type: 'assistant.done',
+        generation: 1,
+        text: 'I would love to help you practice.',
+      }),
+    );
+
+    expect(screen.getAllByText(/Hello, can you help me learn English\?/i)).toHaveLength(1);
+    expect(screen.getByText('I would love to help you practice.')).toBeInTheDocument();
+  });
 });
+
+
+

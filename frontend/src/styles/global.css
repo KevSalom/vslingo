@@ -477,7 +477,7 @@ button:not(:disabled), a[href] { -webkit-tap-highlight-color: transparent; }
 .voice-error { border-color: #9f2643; background: #35101d; color: var(--t-diff-removed-text); }
 .voice-signal { display: grid; grid-template-columns: 6.5rem repeat(22, minmax(2px, 1fr)); min-height: 5.5rem; align-items: center; gap: .25rem; border-block: 1px solid #41556a; padding-block: .8rem; }
 .voice-signal-label { align-self: start; color: var(--t-muted); font-family: "JetBrains Mono", Consolas, monospace; font-size: .68rem; letter-spacing: .09em; text-transform: uppercase; }
-.voice-signal-bar { display: block; min-height: .45rem; background: var(--t-primary); transform-origin: center; transition: transform 75ms linear; }
+.voice-signal-bar { display: block; width: 100%; height: 3.4rem; background: var(--t-primary); transform-origin: center; transition: transform 75ms linear; }
 .voice-signal-bar:nth-of-type(4n) { background: var(--t-secondary); }
 .voice-signal-bar:nth-of-type(5n) { background: var(--t-diff-added); }
 .voice-signal-bar:nth-of-type(7n) { background: var(--t-diff-removed); }

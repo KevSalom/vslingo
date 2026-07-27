@@ -67,4 +67,23 @@ describe('createVadClient', () => {
     expect(onSpeechCancel).toHaveBeenCalledOnce();
     expect(onSpeechEnd).not.toHaveBeenCalled();
   });
+
+  it('emits calibrated frame level on onFrameProcessed', async () => {
+    const onFrameLevel = vi.fn();
+    await createVadClient({
+      onSpeechStart: vi.fn(),
+      onSpeechEnd: vi.fn(),
+      onSpeechCancel: vi.fn(),
+      onFrameLevel,
+      onError: vi.fn(),
+    });
+
+    const speechFrame = new Float32Array(512).fill(0.04);
+    (mocks.options as any)?.onFrameProcessed?.({}, speechFrame);
+
+    expect(onFrameLevel).toHaveBeenCalledOnce();
+    const emittedLevel = onFrameLevel.mock.calls[0][0];
+    expect(emittedLevel).toBeGreaterThan(0.25);
+    expect(emittedLevel).toBeLessThanOrEqual(1.0);
+  });
 });

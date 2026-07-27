@@ -85,6 +85,9 @@ export function VoiceStudio() {
   const userTranscriptRef = useRef('');
   const scenarioRef = useRef<ScenarioType>(scenario);
   const speechProviderRef = useRef<SpeechProviderType>(speechProvider);
+  const isPlayingAudioRef = useRef(false);
+  /** True only while VAD/PTT reports real speech ("Te escucho"). */
+  const speechActiveRef = useRef(false);
 
   useEffect(() => {
     scenarioRef.current = scenario;
@@ -99,21 +102,30 @@ export function VoiceStudio() {
   }, [generation]);
 
   useEffect(() => {
+    isPlayingAudioRef.current = isPlayingAudio;
+  }, [isPlayingAudio]);
+
+  useEffect(() => {
     if (!isPlayingAudio) {
       setOutputLevel(0);
       return;
     }
+    // Ignore residual mic while the assistant reply is playing.
+    setInputLevel(0);
     const analyser = schedulerRef.current?.getAnalyserNode();
     if (!analyser) return;
 
     const samples = new Uint8Array(analyser.frequencyBinCount);
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     let animationFrame = 0;
+    let smoothed = 0;
     const updateLevel = () => {
       analyser.getByteTimeDomainData(samples);
       let peak = 0;
       for (const sample of samples) peak = Math.max(peak, Math.abs(sample - 128) / 128);
-      setOutputLevel(Math.min(1, peak * 2));
+      const target = Math.min(1, Math.max(0, (peak - 0.04) * 1.6));
+      smoothed += (target - smoothed) * (target > smoothed ? 0.45 : 0.2);
+      setOutputLevel(smoothed);
       if (!reducedMotion) animationFrame = requestAnimationFrame(updateLevel);
     };
     updateLevel();
@@ -178,7 +190,12 @@ export function VoiceStudio() {
     firstPlaybackSegmentRef.current = null;
     playbackStartedGenerationRef.current = null;
     setGeneration(nextGeneration);
+    setUserTranscript('');
+    userTranscriptRef.current = '';
+    setStreamingAssistant('');
+    accumulatedAssistantRef.current = '';
     schedulerRef.current?.cancelBefore(nextGeneration);
+
     schedulerRef.current?.stopAll();
     setIsPlayingAudio(false);
     client.sendMessage({
@@ -304,12 +321,15 @@ export function VoiceStudio() {
                   onSpeechStart: () => {
                     if (captureOwnerRef.current === 'ptt') return;
                     captureOwnerRef.current = 'vad';
+                    speechActiveRef.current = true;
                     beginTurn();
                     setInputState('speech');
                   },
                   onSpeechEnd: (wavBytes, durationMs) => {
                     if (captureOwnerRef.current !== 'vad') return;
                     captureOwnerRef.current = null;
+                    speechActiveRef.current = false;
+                    setInputLevel(0);
                     const turnId = currentTurnIdRef.current;
                     if (!turnId || durationMs < 100 || durationMs > 60000 || wavBytes.length <= 44) {
                       cancelCurrentTurn('No se detectó una frase completa. Inténtalo de nuevo.');
@@ -330,13 +350,17 @@ export function VoiceStudio() {
                   },
                   onSpeechCancel: () => {
                     if (captureOwnerRef.current !== 'vad') return;
+                    speechActiveRef.current = false;
+                    setInputLevel(0);
                     cancelCurrentTurn();
                     setInputState('listening');
                   },
                   onFrameLevel: (level) => {
+                    // Only animate mic while real speech is detected, or assistant TTS later.
+                    if (isPlayingAudioRef.current || !speechActiveRef.current) return;
                     const reducedMotion =
                       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-                    setInputLevel(reducedMotion ? (level > 0.05 ? 0.45 : 0) : level);
+                    setInputLevel(reducedMotion ? (level > 0.12 ? 0.45 : 0) : level);
                   },
                   onError: (err) => {
                     console.warn('VAD failed, reverting to fallback PTT:', err);
@@ -406,18 +430,23 @@ export function VoiceStudio() {
             if (!messageIsCurrent(msg)) break;
             setIsAssistantStreaming(false);
             setStreamingAssistant(msg.text);
+            const currentUserText = userTranscriptRef.current;
             setTurnHistory((prev) => {
               const updated = [
                 ...prev,
                 {
                   turnId: msg.turn_id,
-                  userText: userTranscriptRef.current,
+                  userText: currentUserText,
                   assistantText: msg.text,
                 },
               ];
               return updated.slice(-6);
             });
+            setUserTranscript('');
+            userTranscriptRef.current = '';
             break;
+
+
 
           case 'audio.begin': {
             if (pendingAudioRef.current) {
@@ -605,11 +634,15 @@ export function VoiceStudio() {
       }
       beginTurn();
       setState('recording');
+      speechActiveRef.current = true;
+      setInputLevel(0.55);
       setInputState('speech');
     } catch (err) {
       recorder.cleanup();
       if (recorderRef.current === recorder) recorderRef.current = null;
       captureOwnerRef.current = null;
+      speechActiveRef.current = false;
+      setInputLevel(0);
       console.error('Failed to start microphone:', err);
       setErrorMessage('No se pudo acceder al micrófono. Revisa el permiso e inténtalo de nuevo.');
       setState('ready');
@@ -624,6 +657,8 @@ export function VoiceStudio() {
     const recorder = recorderRef.current;
     recorderRef.current = null;
     captureOwnerRef.current = null;
+    speechActiveRef.current = false;
+    setInputLevel(0);
     try {
       const turnId = currentTurnIdRef.current;
       const { wavBytes, durationMs } = recorder.stop();
@@ -767,8 +802,9 @@ export function VoiceStudio() {
         <span className="voice-signal-label">{isPlayingAudio ? 'respuesta' : 'tu voz'}</span>
         {Array.from({ length: 22 }, (_, index) => {
           const level = isPlayingAudio ? outputLevel : inputLevel;
-          const centerWeight = 1 - Math.abs(index - 10.5) / 14;
-          const scale = Math.max(0.12, level * centerWeight);
+          const centerWeight = 0.45 + 0.55 * (1 - Math.abs(index - 10.5) / 10.5);
+          // Keep a quiet baseline and use full bar height when level≈1.
+          const scale = Math.max(0.14, Math.min(1, 0.14 + level * centerWeight * 0.86));
           return (
             <span
               aria-hidden="true"

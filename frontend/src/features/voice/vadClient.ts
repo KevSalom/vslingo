@@ -3,6 +3,8 @@
  * with Silero VAD local ONNX assets.
  */
 
+import { createAmplitudeMeter } from './audioLevel';
+
 export interface VadClientOptions {
   onSpeechStart: () => void;
   onSpeechEnd: (wavBytes: Uint8Array, durationMs: number) => void;
@@ -20,6 +22,7 @@ export interface VadController {
 export async function createVadClient(options: VadClientOptions): Promise<VadController> {
   try {
     const vadModule = await import('@ricky0123/vad-web');
+    const meter = createAmplitudeMeter();
 
     const micVAD = await vadModule.MicVAD.new({
       baseAssetPath: '/vad/',
@@ -30,7 +33,7 @@ export async function createVadClient(options: VadClientOptions): Promise<VadCon
         let squareSum = 0;
         for (const sample of frame) squareSum += sample * sample;
         const rms = frame.length > 0 ? Math.sqrt(squareSum / frame.length) : 0;
-        options.onFrameLevel(Math.min(1, rms * 8));
+        options.onFrameLevel(meter.processFrame(rms));
       },
       onSpeechStart: () => {
         options.onSpeechStart();
