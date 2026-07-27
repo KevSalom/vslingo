@@ -8,17 +8,14 @@ test.describe('Voice Studio E2E', () => {
   test('renders initial Voice Studio setup with scenario options and TTS provider control', async ({ page }) => {
     await expect(page.getByRole('heading', { name: /Voice Studio/i })).toBeVisible();
 
-    // Verify scenario buttons
-    await expect(page.getByRole('button', { name: 'Daily Standup' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'System Design / Technical Interview' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Salary Negotiation' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Libre / Explorar' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Iniciar Voice Studio' })).toBeVisible();
+    await expect(page.getByRole('status', { name: /Estado: Inactivo/i })).toBeVisible();
 
-    // Select scenario
-    await page.getByRole('button', { name: 'System Design / Technical Interview' }).click();
-    await expect(page.getByRole('button', { name: 'System Design / Technical Interview' })).toHaveAttribute('aria-pressed', 'true');
+    const scenarioSelect = page.getByRole('combobox', { name: /Escenario/i });
+    await expect(scenarioSelect).toBeVisible();
+    await scenarioSelect.selectOption('system_design');
+    await expect(scenarioSelect).toHaveValue('system_design');
 
-    // Speech provider control
     const providerSelect = page.getByRole('combobox', { name: /Proveedor de voz/i });
     await expect(providerSelect).toBeVisible();
     await providerSelect.selectOption('aws_polly');

@@ -32,15 +32,15 @@ Copy-Item .env.example .env
 ```
 
 `PUBLIC_API_URL` defaults to `http://127.0.0.1:8000` and is embedded into the
-static build; it never contains provider secrets.
+static build; it never contains provider secrets. REST clients and Voice Studio
+WebSocket (`/api/voice/ws`, `ws`/`wss` derived from the same base) all read this
+variable — do not hardcode a different API host. Production builds must set it
+to the public HTTPS API origin (for example `https://api.example.com`) at
+build time.
 
-The static landing is available at `/`; `/demo` contains the interactive
-workspace with functional Writing Studio and Video Lab verticals. Video Lab
-uses the YouTube IFrame API for playback, polls the playhead every 200 ms,
-keeps paragraph and line transcript views synchronized, and stores its library,
-notes, and view preference in versioned `localStorage`. Its bundled technical
-fixture keeps the complete demo path available without a transcript API call.
-Voice Studio remains a placeholder until its roadmap increments.
+The static landing is available at `/`; `/demo` contains Writing Studio, Video
+Lab, and Voice Studio. Hands-free VAD needs a secure context (HTTPS or
+localhost) and microphone permission; PTT remains available as fallback.
 
 ## URL de sitio para producción
 

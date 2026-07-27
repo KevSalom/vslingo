@@ -104,7 +104,7 @@ const readyMessage: ServerVoiceMessage = {
 async function connectVoice() {
   const user = userEvent.setup();
   render(<VoiceStudio />);
-  await user.click(screen.getByRole('button', { name: 'Iniciar Sesión' }));
+  await user.click(screen.getByRole('button', { name: 'Iniciar Voice Studio' }));
   act(() => mocks.socket?.emitMessage(readyMessage));
   await waitFor(() => expect(mocks.vadStart).toHaveBeenCalledOnce());
   return user;
@@ -127,9 +127,9 @@ describe('VoiceStudio T07 flow', () => {
     expect(
       screen.getByRole('heading', { name: /^Voice Studio$/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Escenario/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Iniciar Sesión' })).toBeInTheDocument();
-    expect(screen.getAllByText('Inactivo').length).toBeGreaterThan(0);
+    expect(screen.getByRole('combobox', { name: 'Escenario' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Iniciar Voice Studio' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: /Estado: Inactivo/i })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Señal de audio: entrada' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Mantén pulsado para hablar/i })).toBeDisabled();
   });
@@ -196,10 +196,11 @@ describe('VoiceStudio T07 flow', () => {
 
   it('cancels an active turn and keeps the latest scenario selection', async () => {
     const user = await connectVoice();
+    const scenarioSelect = screen.getByRole('combobox', { name: 'Escenario' });
     act(() => mocks.vadOptions?.onSpeechStart());
 
-    await user.click(screen.getByRole('button', { name: 'Libre / Explorar' }));
-    await user.click(screen.getByRole('button', { name: 'Salary Negotiation' }));
+    await user.selectOptions(scenarioSelect, 'free');
+    await user.selectOptions(scenarioSelect, 'salary_negotiation');
 
     expect(mocks.socket?.messages).toContainEqual({
       type: 'response.cancel',
@@ -229,10 +230,7 @@ describe('VoiceStudio T07 flow', () => {
       }),
     );
 
-    expect(screen.getByRole('button', { name: 'Salary Negotiation' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(scenarioSelect).toHaveValue('salary_negotiation');
   });
 
   it('cleans the manual recorder if configuration changes while PTT is held', async () => {
@@ -241,7 +239,7 @@ describe('VoiceStudio T07 flow', () => {
     fireEvent.pointerDown(ptt, { pointerId: 7, button: 0 });
     await waitFor(() => expect(mocks.recorderStart).toHaveBeenCalledOnce());
 
-    await user.click(screen.getByRole('button', { name: 'Libre / Explorar' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Escenario' }), 'free');
 
     expect(mocks.recorderCleanup).toHaveBeenCalled();
     expect(mocks.vadStart).toHaveBeenCalledTimes(2);

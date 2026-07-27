@@ -48,5 +48,20 @@ export default defineConfig({
   integrations: [react()],
   vite: {
     plugins: [serveVadStaticPlugin(), tailwindcss()],
+    // Prebundle VAD + ORT so dynamic import does not 504 "Outdated Optimize Dep"
+    // after HMR/dep re-optimization (breaks hands-free mic in dev).
+    optimizeDeps: {
+      include: [
+        '@ricky0123/vad-web',
+        'onnxruntime-web',
+        'onnxruntime-web/wasm',
+      ],
+    },
+    server: {
+      // Keep optimized dep URLs stable for long-running `astro dev` sessions.
+      warmup: {
+        clientFiles: ['./src/features/voice/vadClient.ts'],
+      },
+    },
   },
 });

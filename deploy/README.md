@@ -19,7 +19,9 @@ Este directorio contiene las guías, plantillas y runbooks para el despliegue de
 * **PaaS Gratuita Recomendada:** Render Static Site (configurado vía [`render.yaml`](../render.yaml)) o Vercel / Cloudflare Pages.
 * **Comando de Build:** `pnpm install --frozen-lockfile && pnpm run build`
 * **Directorio de publicación:** `frontend/dist`
-* **Variable de entorno requerida:** `PUBLIC_API_URL=https://api.tu-dominio.com`
+* **Variable de entorno requerida (build-time):** `PUBLIC_API_URL=https://api.tu-dominio.com`
+  - Sirve REST y el WebSocket de Voice (`wss://api.tu-dominio.com/api/voice/ws`).
+  - Debe definirse **antes** de `pnpm run build`; si falta, el cliente cae a `http://127.0.0.1:8000`.
 
 ### Backend (FastAPI Python)
 * **Dokploy (Nixpacks):** Recomendado si usas un VPS con Dokploy. Consulta la guía [`dokploy-nixpacks.md`](dokploy-nixpacks.md).

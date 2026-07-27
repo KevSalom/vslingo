@@ -34,12 +34,17 @@ describe('createVadClient', () => {
 
   it('maps VAD misfires to turn cancellation and delegates lifecycle', async () => {
     const onSpeechCancel = vi.fn();
+    const { MicVAD } = await import('@ricky0123/vad-web');
     const controller = await createVadClient({
       onSpeechStart: vi.fn(),
       onSpeechEnd: vi.fn(),
       onSpeechCancel,
       onError: vi.fn(),
     });
+
+    expect(MicVAD.new).toHaveBeenCalledWith(
+      expect.objectContaining({ startOnLoad: false, model: 'v5' }),
+    );
 
     mocks.options?.onVADMisfire();
     await controller.start();

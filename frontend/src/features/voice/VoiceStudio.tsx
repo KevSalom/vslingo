@@ -376,13 +376,30 @@ export function VoiceStudio() {
                 setInputState('listening');
               } catch (cause) {
                 if (sessionToken !== sessionTokenRef.current) return;
+                console.warn('VAD init failed:', cause);
                 const permissionDenied =
-                  cause instanceof DOMException && cause.name === 'NotAllowedError';
+                  cause instanceof DOMException &&
+                  (cause.name === 'NotAllowedError' || cause.name === 'SecurityError');
+                const causeText =
+                  cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : '';
+                const staleViteDep =
+                  /Failed to fetch dynamically imported module|Outdated Optimize Dep/i.test(
+                    causeText,
+                  );
+                const insecureContext =
+                  typeof window !== 'undefined' &&
+                  !window.isSecureContext &&
+                  window.location.hostname !== 'localhost' &&
+                  window.location.hostname !== '127.0.0.1';
                 setInputState(permissionDenied ? 'permission_denied' : 'fallback_ptt');
                 setErrorMessage(
                   permissionDenied
                     ? 'Permite el acceso al micrófono para usar manos libres. El modo manual sigue disponible.'
-                    : 'No se pudo iniciar la detección automática. Usa “Mantén pulsado para hablar”.',
+                    : insecureContext
+                      ? 'La detección automática requiere HTTPS (o localhost). Usa “Mantén pulsado para hablar” o abre el sitio en un origen seguro.'
+                      : staleViteDep
+                        ? 'No se pudo cargar el motor de escucha (caché de desarrollo). Recarga la página e inténtalo de nuevo; o usa “Mantén pulsado para hablar”.'
+                        : 'No se pudo iniciar la detección automática. Usa “Mantén pulsado para hablar”.',
                 );
               }
             })();
@@ -714,6 +731,34 @@ export function VoiceStudio() {
     };
   }, []);
 
+  const isSessionOff = state === 'idle' || state === 'closed' || state === 'error';
+  const powerMode: 'off' | 'active' | 'pause' = isPlayingAudio
+    ? 'pause'
+    : isSessionOff
+      ? 'off'
+      : 'active';
+  const powerLabel = powerMode === 'off' ? 'Iniciar' : powerMode === 'pause' ? 'Pausar' : 'Activo';
+  const statusDotClass =
+    state === 'ready' || state === 'recording' || state === 'transcribing'
+      ? 'is-ready'
+      : state === 'connecting'
+        ? 'is-working'
+        : inputState === 'speech'
+          ? 'is-ready'
+          : '';
+
+  const handlePowerClick = () => {
+    if (powerMode === 'pause') {
+      handleStopPlayback();
+      return;
+    }
+    if (powerMode === 'off') {
+      void handleConnect();
+      return;
+    }
+    handleDisconnect();
+  };
+
   return (
     <section className="voice-studio" aria-labelledby="voice-title">
       <div className="sr-only" aria-live="polite">
@@ -726,37 +771,18 @@ export function VoiceStudio() {
           <h1 className="voice-title" id="voice-title" tabIndex={-1}>
             Voice Studio
           </h1>
-          <div className="voice-header-actions">
-            {isPlayingAudio && (
-              <button
-                aria-label="Detener respuesta"
-                className="voice-session-action is-stop is-icon"
-                onClick={handleStopPlayback}
-                title="Detener respuesta"
-                type="button"
-              >
-                <svg aria-hidden="true" fill="currentColor" height="18" viewBox="0 0 24 24" width="18">
-                  <rect height="14" rx="1.5" width="14" x="5" y="5" />
-                </svg>
-              </button>
-            )}
-            {state === 'idle' || state === 'closed' ? (
-              <button className="voice-session-action" onClick={handleConnect} type="button">
-                Iniciar Sesión
-              </button>
-            ) : (
-              <button
-                aria-label="Finalizar sesión"
-                className="voice-session-action is-stop is-icon"
-                onClick={handleDisconnect}
-                title="Finalizar sesión"
-                type="button"
-              >
-                <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24" width="18">
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
-              </button>
-            )}
+          <div
+            aria-label={`Estado: ${ACCESSIBLE_INPUT_LABELS[inputState]}${isPlayingAudio ? ', respondiendo' : ''}`}
+            className="voice-header-status"
+            role="status"
+          >
+            <span
+              aria-hidden="true"
+              className={`voice-status-dot ${statusDotClass}${isPlayingAudio ? ' is-playing' : ''}`}
+            />
+            <span className="voice-header-status-label">
+              {isPlayingAudio ? 'Respondiendo' : ACCESSIBLE_INPUT_LABELS[inputState]}
+            </span>
           </div>
         </div>
         <p className="voice-lead">
@@ -771,42 +797,52 @@ export function VoiceStudio() {
           </div>
 
           <section className="voice-setup" aria-label="Preparar práctica de voz">
-            <h2 className="sr-only">Escenario</h2>
-            <div className="voice-scenarios">
-              {(Object.keys(SCENARIO_LABELS) as ScenarioType[]).map((key) => (
-                <button
-                  aria-pressed={scenario === key}
-                  className="voice-scenario"
-                  key={key}
-                  onClick={() => handleScenarioChange(key)}
-                  type="button"
-                >
-                  {SCENARIO_LABELS[key]}
-                </button>
-              ))}
-            </div>
             <div className="voice-settings">
+              <div className="flex items-center gap-2">
+                <label htmlFor="voice-scenario" className="text-xs font-semibold text-slate-300">
+                  Escenario
+                </label>
+                <select
+                  id="voice-scenario"
+                  value={scenario}
+                  onChange={(event) => handleScenarioChange(event.target.value as ScenarioType)}
+                  disabled={state === 'connecting'}
+                  className="h-[2.15rem] rounded border border-[#3b4d60] bg-[#18212c] px-3 text-[0.82rem] font-medium text-[#f1f5f9] outline-none transition-colors hover:border-slate-500 focus:border-[#22d3ee] focus:ring-1 focus:ring-[#22d3ee] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {(Object.keys(SCENARIO_LABELS) as ScenarioType[]).map((key) => (
+                    <option key={key} value={key} className="bg-[#18212c] text-[#f1f5f9]">
+                      {SCENARIO_LABELS[key]}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <SpeechProviderControl
                 id="voice-speech-provider"
                 provider={speechProvider}
                 onChange={handleSpeechProviderChange}
                 disabled={state === 'connecting'}
               />
-              <span className="voice-status">
-                <span
-                  aria-hidden="true"
-                  className={`voice-status-dot ${
-                    state === 'ready' || state === 'recording' || state === 'transcribing'
-                      ? 'is-ready'
-                      : state === 'connecting'
-                        ? 'is-working'
-                        : ''
-                  }`}
-                />
-                {ACCESSIBLE_INPUT_LABELS[inputState]}
-              </span>
             </div>
           </section>
+
+          <div className="voice-power-wrap">
+            <button
+              type="button"
+              className={`voice-power is-${powerMode}`}
+              onClick={handlePowerClick}
+              aria-label={
+                powerMode === 'off'
+                  ? 'Iniciar Voice Studio'
+                  : powerMode === 'pause'
+                    ? 'Pausar respuesta'
+                    : 'Apagar Voice Studio'
+              }
+              title={powerLabel}
+            >
+              <span className="voice-power-ring" aria-hidden="true" />
+              <span className="voice-power-label">{powerLabel}</span>
+            </button>
+          </div>
 
           <p className="voice-vad-notice">
             Escucha automática activa. Habla cuando estés listo; VSLingo detecta una pausa antes de
@@ -890,13 +926,12 @@ export function VoiceStudio() {
             <section className="voice-panel" aria-labelledby="voice-conversation-title">
               <div className="voice-pane-tabs" aria-hidden="true">
                 <span className="voice-pane-tab is-active">conversation.stream</span>
-                <span className="voice-panel-status">{isAssistantStreaming ? 'respondiendo' : 'en espera'}</span>
               </div>
               <div className="voice-panel-body">
                 <h2 className="sr-only" id="voice-conversation-title">Conversación</h2>
                 <div className="voice-scroll">
                   {turnHistory.length === 0 && !userTranscript && !isAssistantStreaming && (
-                    <p className="voice-empty">Inicia una sesión y cuenta cómo va tu trabajo. La conversación aparecerá aquí, en el orden en que sucede.</p>
+                    <p className="voice-empty">Pulsa Iniciar y cuenta cómo va tu trabajo. La conversación aparecerá aquí, en el orden en que sucede.</p>
                   )}
                   {turnHistory.map((turn) => (
                     <div className="voice-turn" key={turn.turnId}>

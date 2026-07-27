@@ -8,20 +8,38 @@ export type VoiceSocketListener = (message: ServerVoiceMessage) => void;
 export type VoiceSocketBinaryListener = (data: ArrayBuffer) => void;
 export type VoiceSocketStatusListener = (connected: boolean) => void;
 
+const DEFAULT_API_BASE_URL =
+  import.meta.env.PUBLIC_API_URL?.trim() || 'http://127.0.0.1:8000';
+
+/** Build Voice WS URL from the same PUBLIC_API_URL used by REST clients. */
+export function resolveVoiceWebSocketUrl(
+  apiBaseUrl: string = DEFAULT_API_BASE_URL,
+): string {
+  const trimmed = apiBaseUrl.trim().replace(/\/$/, '');
+  if (!trimmed) {
+    return resolveVoiceWebSocketUrl('http://127.0.0.1:8000');
+  }
+  if (trimmed.startsWith('ws://') || trimmed.startsWith('wss://')) {
+    return trimmed.endsWith('/api/voice/ws') ? trimmed : `${trimmed}/api/voice/ws`;
+  }
+  const withScheme = trimmed.includes('://') ? trimmed : `https://${trimmed}`;
+  const wsBase = withScheme.replace(/^http/i, 'ws');
+  return `${wsBase}/api/voice/ws`;
+}
+
 export class VoiceSocketClient {
   private socket: WebSocket | null = null;
   private listeners: Set<VoiceSocketListener> = new Set();
   private binaryListeners: Set<VoiceSocketBinaryListener> = new Set();
   private statusListeners: Set<VoiceSocketStatusListener> = new Set();
 
-
-  constructor(private url: string = 'ws://localhost:8000/api/voice/ws') {}
+  constructor(private url: string = resolveVoiceWebSocketUrl()) {}
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
         const wsUrl = this.url.startsWith('http')
-          ? this.url.replace(/^http/, 'ws')
+          ? this.url.replace(/^http/i, 'ws')
           : this.url;
         this.socket = new WebSocket(wsUrl);
 
@@ -29,7 +47,6 @@ export class VoiceSocketClient {
 
         this.socket.onopen = () => {
           this.notifyStatus(true);
-          // Auto send session.start
           this.sendMessage({ type: 'session.start', protocol_version: 1 });
           resolve();
         };
@@ -44,7 +61,6 @@ export class VoiceSocketClient {
             this.notifyBinaryListeners(event.data);
           }
         };
-
 
         this.socket.onerror = (error) => {
           if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
@@ -119,7 +135,6 @@ export class VoiceSocketClient {
       listener(data);
     }
   }
-
 
   private notifyStatus(connected: boolean): void {
     for (const listener of this.statusListeners) {

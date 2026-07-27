@@ -19,15 +19,32 @@ export interface VadController {
   destroy: () => Promise<void>;
 }
 
+async function loadVadWebModule(): Promise<typeof import('@ricky0123/vad-web')> {
+  try {
+    return await import('@ricky0123/vad-web');
+  } catch (first) {
+    // Vite may invalidate the prebundled dep mid-session (504 Outdated Optimize Dep).
+    // One retry after a short delay often lands on the refreshed module graph.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    try {
+      return await import('@ricky0123/vad-web');
+    } catch {
+      throw first instanceof Error ? first : new Error(String(first));
+    }
+  }
+}
+
 export async function createVadClient(options: VadClientOptions): Promise<VadController> {
   try {
-    const vadModule = await import('@ricky0123/vad-web');
+    const vadModule = await loadVadWebModule();
     const meter = createAmplitudeMeter();
 
     const micVAD = await vadModule.MicVAD.new({
       baseAssetPath: '/vad/',
       onnxWASMBasePath: '/vad/',
       model: 'v5',
+      // Control start from VoiceStudio after session token checks (default startOnLoad races cleanup).
+      startOnLoad: false,
       onFrameProcessed: (_probabilities: unknown, frame: Float32Array) => {
         if (!options.onFrameLevel) return;
         let squareSum = 0;
@@ -60,16 +77,23 @@ export async function createVadClient(options: VadClientOptions): Promise<VadCon
       },
     });
 
-
     return {
       start: async () => {
         await micVAD.start();
       },
       pause: async () => {
-        await micVAD.pause();
+        try {
+          await micVAD.pause();
+        } catch {
+          // Ignore pause after partial init / already destroyed.
+        }
       },
       destroy: async () => {
-        await micVAD.destroy();
+        try {
+          await micVAD.destroy();
+        } catch {
+          // MicVAD.destroy throws if start never completed (null audio nodes).
+        }
       },
     };
   } catch (err) {
