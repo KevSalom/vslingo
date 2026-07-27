@@ -343,13 +343,34 @@ button:not(:disabled), a[href] { -webkit-tap-highlight-color: transparent; }
 .note { margin: .85rem 0 0; color: var(--t-muted); font-size: .84rem; }
 
 .signature-frame { align-self: end; border-top: 1px solid #41556a; border-bottom: 1px solid #41556a; padding-block: 1.1rem; }
+.signature-stage { position: relative; min-height: 7.5rem; }
+.signature-panel { position: absolute; inset: 0; display: grid; align-content: center; opacity: 0; animation: signature-cycle 12s infinite; }
+.signature-panel:nth-child(1) { animation-delay: 0s; }
+.signature-panel:nth-child(2) { animation-delay: 4s; }
+.signature-panel:nth-child(3) { animation-delay: 8s; }
 .signature-label { margin: 0 0 .8rem; color: var(--t-muted); font-family: "JetBrains Mono", monospace; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; }
 .waveform-diff { display: grid; grid-template-columns: repeat(28, 1fr); min-height: 5rem; align-items: center; gap: .23rem; }
 .waveform-diff span { display: block; min-height: .45rem; border-radius: 1px; background: #22d3ee; transform-origin: center; animation: signature-reveal 1.25s cubic-bezier(.2,.75,.25,1) both; animation-delay: calc(var(--i) * 30ms); }
 .waveform-diff span:nth-child(4n) { background: #8b5cf6; }
 .waveform-diff span:nth-child(5n) { background: #4ade80; }
 .waveform-diff span:nth-child(7n) { background: #fb7185; }
+.signature-writing { display: grid; gap: .35rem; min-height: 5rem; align-content: center; }
+.sig-diff { display: grid; grid-template-columns: 1.1rem 1fr; gap: .55rem; margin: 0; padding: .55rem .65rem; font-family: "JetBrains Mono", monospace; font-size: clamp(.72rem, 2.2vw, .82rem); line-height: 1.45; }
+.sig-diff span { font-weight: 600; }
+.sig-diff-remove { background: #4c1424; color: #fecdd3; }
+.sig-diff-add { background: #123825; color: #bbf7d0; }
+.signature-video { display: grid; grid-template-columns: 2rem 1fr; gap: .75rem; min-height: 5rem; align-items: center; }
+.sig-play { display: grid; width: 2rem; height: 2rem; place-items: center; border: 1px solid #22d3ee; color: #a5f3fc; font-size: .7rem; }
+.sig-video-meta { display: grid; gap: .45rem; }
+.sig-track { display: block; height: .22rem; background: linear-gradient(90deg, #22d3ee 48%, #2a3746 48%); }
+.sig-caption { display: block; height: .4rem; background: #536578; }
+.sig-caption-short { width: 58%; }
 @keyframes signature-reveal { 0% { opacity: 0; transform: scaleY(.12); } 55% { opacity: 1; background: #22d3ee; transform: scaleY(1); } 100% { opacity: 1; transform: scaleY(.72); } }
+@keyframes signature-cycle {
+  0%, 2% { opacity: 0; transform: translateY(.35rem); }
+  8%, 28% { opacity: 1; transform: translateY(0); }
+  34%, 100% { opacity: 0; transform: translateY(-.25rem); }
+}
 
 .landing-section { border-top: 1px solid var(--t-border); padding-block: clamp(3.5rem, 8vw, 6rem); }
 .section-kicker { margin: 0; color: #a5f3fc; font-family: "JetBrains Mono", monospace; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; }
@@ -419,7 +440,13 @@ button:not(:disabled), a[href] { -webkit-tap-highlight-color: transparent; }
 
  @media (min-width: 45rem) { .hero { grid-template-columns: minmax(0, 1.1fr) minmax(18rem, .9fr); align-items: end; } .proof-grid { grid-template-columns: minmax(0, 1.2fr) minmax(16rem, .8fr); } .contrast-grid { grid-template-columns: repeat(2, 1fr); } .module-grid { grid-template-columns: repeat(3, 1fr); } .pipeline-grid { grid-template-columns: repeat(4, 1fr); } .assurance-grid { grid-template-columns: repeat(2, 1fr); } .final-cta { grid-template-columns: 1fr auto; } }
 @media (max-width: 47.99rem) { .header-nav .text-link { display: none; } .workspace-page { padding: 0; } .workspace { min-height: 100vh; grid-template-columns: 1fr; grid-template-rows: auto auto minmax(0, 1fr) auto; border-inline: 0; } .workspace-topbar { grid-column: auto; } .activity-bar { flex-direction: row; grid-row: 2; border-right: 0; border-bottom: 1px solid var(--t-border); padding: 0; } .activity-list { grid-auto-flow: column; grid-template-columns: repeat(3, 1fr); width: 100%; } .activity-button { min-height: 3.25rem; border-left: 0; border-bottom: 2px solid transparent; } .activity-button[aria-current="page"] { border-bottom-color: var(--t-primary); } .activity-bar > .activity-button:not(.settings-button) { display: none; } .settings-button { display: grid; } .explorer { display: none; } .editor { grid-row: 3; } .workspace-panel { grid-column: auto; grid-row: 4; } }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } .waveform-diff span { animation: none; transform: scaleY(.72); } }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+  .waveform-diff span { animation: none !important; transform: scaleY(.72); }
+  .signature-stage { display: grid; gap: 1.35rem; min-height: 0; }
+  .signature-panel { position: static; opacity: 1 !important; transform: none !important; animation: none !important; }
+}
 
 /* Refinamiento T08: shell de aplicación, Voice guiado y exploración de módulos. */
 .demo-page { height: 100dvh; overflow: hidden; }

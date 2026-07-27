@@ -62,17 +62,39 @@ const waveform = [22, 38, 58, 34, 78, 46, 70, 32, 62, 89, 49, 30, 66, 44, 81, 51
           <div>
             <p class="eyebrow">Public Alpha</p>
             <h1 class="landing-title" id="hero-title">Practica el inglés que usas para desarrollar.</h1>
-            <p class="hero-copy">Habla en un standup, revisa un mensaje o estudia un vídeo técnico. Elige un módulo y empieza, sin registro ni mecánicas que te distraigan.</p>
+            <p class="hero-copy">Habla en un standup, practica un mensaje o estudia un vídeo técnico. Elige un módulo y empieza, sin registro ni mecánicas que te distraigan.</p>
             <div class="hero-actions">
               <a class="cta" href="/demo">Probar demo</a>
               <a class="cta cta-secondary" href="#modulos">Explorar módulos</a>
             </div>
             <p class="note">Sin rachas ni puntos. Sólo práctica profesional en inglés B1-C1.</p>
           </div>
-          <div class="signature-frame" aria-label="Una señal de audio se transforma en cambios de texto">
-            <p class="signature-label">voice.signal → language.diff</p>
-            <div class="waveform-diff" aria-hidden="true">
-              {waveform.map((height, index) => <span style={`--i: ${index}; height: ${height}%`}></span>)}
+          <div class="signature-frame" aria-label="Tres prácticas: voz, escritura y vídeo técnico">
+            <div class="signature-stage" aria-hidden="true">
+              <div class="signature-panel">
+                <p class="signature-label">voice.signal → reply.tts</p>
+                <div class="waveform-diff">
+                  {waveform.map((height, index) => <span style={`--i: ${index}; height: ${height}%`}></span>)}
+                </div>
+              </div>
+              <div class="signature-panel">
+                <p class="signature-label">message.en → corrected.diff</p>
+                <div class="signature-writing">
+                  <p class="sig-diff sig-diff-remove"><span>−</span>I deploy the fix yesterday</p>
+                  <p class="sig-diff sig-diff-add"><span>+</span>I deployed the fix yesterday</p>
+                </div>
+              </div>
+              <div class="signature-panel">
+                <p class="signature-label">video.t → note.local</p>
+                <div class="signature-video">
+                  <span class="sig-play">▶</span>
+                  <div class="sig-video-meta">
+                    <span class="sig-track"></span>
+                    <span class="sig-caption"></span>
+                    <span class="sig-caption sig-caption-short"></span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>

@@ -17,6 +17,9 @@ describe('landing', () => {
     expect(page).toContain('AWS Polly Neural');
     expect(page).toContain('Procesamiento efímero');
     expect(page).toContain('waveform-diff');
+    expect(page).toContain('signature-stage');
+    expect(page).toContain('message.en → corrected.diff');
+    expect(page).toContain('video.t → note.local');
     expect(page).toContain('Elige una práctica, no una racha');
     expect(page).toContain('Sin rachas ni puntos');
     expect(page).toContain('B1-C1');
