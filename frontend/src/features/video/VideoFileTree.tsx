@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 
-import { formatTimestamp } from './sync';
 import { isVideoId, type VideoNote } from './types';
 import { useVideoLab } from './VideoLabContext';
 import { VsCodeModal } from './VsCodeModal';
@@ -230,11 +229,6 @@ export function VideoFileTree({
                     >
                       <FileNoteIcon />
                       <span className="video-tree-label">{note.title}</span>
-                      {note.timestamp !== undefined ? (
-                        <span className="video-tree-meta" aria-hidden="true">
-                          {formatTimestamp(note.timestamp)}
-                        </span>
-                      ) : null}
                     </button>
                     <button
                       aria-label={`Eliminar nota ${note.title}`}
@@ -392,7 +386,7 @@ function FileVideoIcon() {
 
 function FileNoteIcon() {
   return (
-    <svg aria-hidden="true" className="video-tree-icon note" fill="none" viewBox="0 0 16 16">
+    <svg aria-hidden="true" className="video-tree-icon video-tree-icon-note" fill="none" viewBox="0 0 16 16">
       <path
         d="M4 2.75h5.2L12 5.55v7.7H4z"
         stroke="currentColor"

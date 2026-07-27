@@ -26,6 +26,11 @@ export function VsCodeModal({
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
+  const onCancelRef = useRef(onCancel);
+  useEffect(() => {
+    onCancelRef.current = onCancel;
+  });
+
   useEffect(() => {
     previouslyFocused.current =
       document.activeElement instanceof HTMLElement
@@ -40,7 +45,7 @@ export function VsCodeModal({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onCancel();
+        onCancelRef.current();
         return;
       }
       if (event.key !== 'Tab' || !panel) {
@@ -70,7 +75,7 @@ export function VsCodeModal({
       document.removeEventListener('keydown', onKeyDown);
       previouslyFocused.current?.focus();
     };
-  }, [onCancel]);
+  }, []);
 
   const handleSubmit = (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();

@@ -515,7 +515,7 @@ export function VideoLab({
                         activeIndex >= 0 && index <= activeIndex + 1;
                       return (
                         <li
-                          className={`video-line-row${isActive ? ' is-active' : ''}`}
+                          className={`video-line-row group${isActive ? ' is-active' : ''}`}
                           data-segment-index={index}
                           key={`${segment.start}-${index}`}
                         >
@@ -531,7 +531,7 @@ export function VideoLab({
                           >
                             {segment.text}
                           </button>
-                          <div className="video-line-actions flex items-start gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                          <div className="video-line-actions flex items-start gap-0.5 opacity-70 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                             <button
                               aria-label={`Copiar frase: ${segment.text}`}
                               className="video-line-icon"
@@ -591,7 +591,7 @@ export function VideoLab({
             className="vsc-field-input"
             id="video-library-title"
             maxLength={200}
-            onChange={(event) => setLibraryTitle(event.currentTarget.value)}
+            onChange={(event) => setLibraryTitle(event.target.value)}
             value={libraryTitle}
           />
         </VsCodeModal>
@@ -613,13 +613,12 @@ export function VideoLab({
             className="vsc-field-input"
             id="video-phrase-title"
             maxLength={200}
-            onChange={(event) =>
+            onChange={(event) => {
+              const value = event.target.value;
               setNoteDraft((current) =>
-                current
-                  ? { ...current, title: event.currentTarget.value }
-                  : current,
-              )
-            }
+                current ? { ...current, title: value } : null,
+              );
+            }}
             value={noteDraft.title}
           />
           <label className="vsc-field-label" htmlFor="video-phrase-body">
@@ -629,13 +628,12 @@ export function VideoLab({
             className="vsc-field-textarea"
             id="video-phrase-body"
             maxLength={2_000}
-            onChange={(event) =>
+            onChange={(event) => {
+              const value = event.target.value;
               setNoteDraft((current) =>
-                current
-                  ? { ...current, text: event.currentTarget.value }
-                  : current,
-              )
-            }
+                current ? { ...current, text: value } : null,
+              );
+            }}
             rows={4}
             value={noteDraft.text}
           />
