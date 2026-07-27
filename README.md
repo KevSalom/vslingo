@@ -44,7 +44,7 @@ pnpm install --frozen-lockfile
 pnpm run quality
 ```
 
-Los smoke tests live se ejecutan por proveedor y sólo de forma opt-in; consulta
+Los smoke tests live se ejecutan por proveedor y solo de forma opt-in; consulta
 [`backend/README.md`](backend/README.md). No forman parte de las suites normales.
 
 ## Documentación

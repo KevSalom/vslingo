@@ -253,7 +253,7 @@ export function VideoFileTree({
       ) : null}
 
       <p className="explorer-note" style={{ marginTop: '1.1rem' }}>
-        Preferencias y guardados sólo en este navegador.
+        Preferencias y guardados solo en este navegador.
       </p>
 
       {videoModalOpen ? (

@@ -44,4 +44,4 @@ localhost) and microphone permission; PTT remains available as fallback.
 
 ## URL de sitio para producción
 
-Antes de un build de despliegue, definir `SITE_URL` con la URL pública HTTPS final (por ejemplo, en la configuración de Render). Astro usa esta variable para construir los enlaces canonical y Open Graph. En desarrollo local se usa `http://localhost:4321` sólo como origen local.
+Antes de un build de despliegue, definir `SITE_URL` con la URL pública HTTPS final (por ejemplo, en la configuración de Render). Astro usa esta variable para construir los enlaces canonical y Open Graph. En desarrollo local se usa `http://localhost:4321` solo como origen local.

@@ -147,7 +147,7 @@ export function DemoWorkspace() {
             <p className="explorer-title">Enfoque</p>
             <p className="explorer-note">{activeModule.eyebrow}</p>
             <p className="explorer-note" style={{ marginTop: '1rem' }}>
-              Las preferencias y borradores recientes se mantienen sólo en este navegador.
+              Las preferencias y borradores recientes se mantienen solo en este navegador.
             </p>
           </>
         )}

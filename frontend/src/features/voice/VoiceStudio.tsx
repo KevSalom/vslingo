@@ -838,7 +838,7 @@ export function VoiceStudio() {
 
           <p className="voice-vad-notice">
             Escucha automática activa. Habla cuando estés listo; VSLingo detecta una pausa antes de
-            responder. Puedes usar pulsar para hablar cuando prefieras controlar el inicio.
+            responder. Puedes usar «Mantén pulsado para hablar» cuando prefieras controlar el inicio.
           </p>
 
           <div
