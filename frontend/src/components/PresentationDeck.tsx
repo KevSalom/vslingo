@@ -16,8 +16,7 @@ export const PresentationDeck: React.FC = () => {
     {
       id: 'portada',
       tag: 'Hackathon Código Facilito 2026',
-      title: 'VSLingo',
-      subtitle: 'The code-editor interface for mastering developer English',
+      title: '',
       content: (
         <div className="deck-cover">
           <p className="deck-pill">
@@ -30,8 +29,10 @@ export const PresentationDeck: React.FC = () => {
           </h1>
 
           <p className="deck-lead">
-            La experiencia <strong className="deck-em">«al grano, sin ruido»</strong> para
-            desarrolladores hispanohablantes.
+            Practica el inglés profesional que usas para desarrollar —
+            con la naturalidad de un editor de código.
+            Experiencia <strong className="deck-em">«al grano, sin ruido»</strong> para
+            hispanohablantes.
           </p>
 
           <div className="deck-grid deck-grid-3">
@@ -635,6 +636,67 @@ export const PresentationDeck: React.FC = () => {
     },
 
     {
+      id: 'proximos-pasos',
+      tag: 'Roadmap post-Alpha',
+      title: 'Próximos pasos',
+      subtitle: 'Después del despliegue: producto multiidioma, cuenta, datos y modelo de negocio',
+      content: (
+        <div className="deck-stack">
+          <div className="deck-grid deck-grid-2">
+            <article className="deck-card">
+              <p className="deck-card-label">01 · Locale EN</p>
+              <h3>Versión en inglés</h3>
+              <p>
+                La UI y las explicaciones están en <strong>español</strong> para reducir la fricción
+                inicial. Un locale inglés completo permitirá a usuarios más avanzados practicar y
+                recibir feedback todo en inglés.
+              </p>
+            </article>
+            <article className="deck-card">
+              <p className="deck-card-label deck-card-label-success">02 · Datos</p>
+              <h3>Persistencia con base de datos</h3>
+              <p>
+                Historial, biblioteca y preferencias sincronizados entre dispositivos, más allá del{' '}
+                <code>localStorage</code> de la Alpha.
+              </p>
+            </article>
+            <article className="deck-card">
+              <p className="deck-card-label deck-card-label-secondary">03 · Identidad</p>
+              <h3>Autenticación</h3>
+              <p>
+                Cuentas para progreso guardado, cuotas por usuario y experiencia multi-dispositivo
+                cuando deje de bastar el modo anónimo.
+              </p>
+            </article>
+            <article className="deck-card">
+              <p className="deck-card-label deck-card-label-aws">04 · Ops</p>
+              <h3>Telemetría y monitorización</h3>
+              <p>
+                Métricas de latencia, errores y uso por módulo — sin registrar audio, transcripts ni
+                prompts en claro.
+              </p>
+            </article>
+          </div>
+
+          <div className="deck-callout">
+            <div>
+              <p className="deck-card-label">05 · Estrategia</p>
+              <p className="deck-callout-copy">
+                <strong>Monetización</strong> (planes Básico/Pro ya esbozados){' '}
+                <strong>o código abierto</strong>: decisión a validar con la Alpha en producción y
+                la comunidad.
+              </p>
+            </div>
+            <span className="deck-pill">
+              <span className="deck-pill-dot" aria-hidden="true" />
+              post-Alpha
+            </span>
+          </div>
+        </div>
+      ),
+    },
+
+    {
       id: 'cierre',
       tag: 'Cierre',
       title: 'Al grano, sin ruido',
@@ -794,7 +856,9 @@ export const PresentationDeck: React.FC = () => {
         <div className="deck-slide">
           <header className="deck-slide-header">
             <p className="eyebrow">{activeSlide.tag}</p>
-            <h2 className="deck-slide-title">{activeSlide.title}</h2>
+            {activeSlide.title ? (
+              <h2 className="deck-slide-title">{activeSlide.title}</h2>
+            ) : null}
             {activeSlide.subtitle ? (
               <p className="deck-slide-subtitle">{activeSlide.subtitle}</p>
             ) : null}
