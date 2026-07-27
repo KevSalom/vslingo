@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
-import { defineConfig } from 'astro/config';
+import { defineConfig, fontProviders } from 'astro/config';
 
 /** @returns {any} */
 function serveVadStaticPlugin() {
@@ -46,6 +46,35 @@ export default defineConfig({
   // En producción SITE_URL es obligatorio para emitir canonical y OG correctos.
   site: process.env.SITE_URL ?? 'http://localhost:4321',
   integrations: [react()],
+  fonts: [
+    {
+      provider: fontProviders.fontsource(),
+      name: 'Sora',
+      cssVariable: '--font-sora',
+      weights: ['100 800'],
+      styles: ['normal'],
+      subsets: ['latin'],
+      fallbacks: ['Arial', 'sans-serif'],
+    },
+    {
+      provider: fontProviders.fontsource(),
+      name: 'IBM Plex Sans',
+      cssVariable: '--font-ibm-plex-sans',
+      weights: [400, 500, 600],
+      styles: ['normal'],
+      subsets: ['latin'],
+      fallbacks: ['Arial', 'sans-serif'],
+    },
+    {
+      provider: fontProviders.fontsource(),
+      name: 'JetBrains Mono',
+      cssVariable: '--font-jetbrains-mono',
+      weights: [400, 500],
+      styles: ['normal'],
+      subsets: ['latin'],
+      fallbacks: ['Consolas', 'monospace'],
+    },
+  ],
   vite: {
     plugins: [serveVadStaticPlugin(), tailwindcss()],
     // Prebundle VAD + ORT so dynamic import does not 504 "Outdated Optimize Dep"
