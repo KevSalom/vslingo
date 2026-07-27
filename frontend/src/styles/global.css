@@ -736,6 +736,7 @@ button:not(:disabled), a[href] { -webkit-tap-highlight-color: transparent; }
 }
 
 /* ── Video Lab Header, Form & Player (themed) ── */
+.video-lab { width: 100%; max-width: 92rem; margin-inline: auto; }
 .video-lab-header { margin-bottom: 1.25rem; border-bottom: 1px solid var(--t-border); padding-bottom: 1rem; }
 .video-lab-kicker { margin: 0; color: var(--t-primary-light); font-family: "JetBrains Mono", Consolas, monospace; font-size: .7rem; letter-spacing: .11em; text-transform: uppercase; }
 .video-lab-meta { color: var(--t-muted); font-family: "JetBrains Mono", Consolas, monospace; font-size: .75rem; }

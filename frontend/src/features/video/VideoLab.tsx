@@ -300,7 +300,7 @@ export function VideoLab({
   };
 
   return (
-    <section aria-labelledby="video-lab-title" className="mx-auto w-full max-w-6xl">
+    <section aria-labelledby="video-lab-title" className="video-lab mx-auto w-full max-w-[92rem]">
       <header className="video-lab-header">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="video-lab-kicker">
