@@ -13,7 +13,7 @@ Comenzar sólo con Voice funcional (`T07` cerrado) y `progress.md` en `T08`. Ant
 ### Sujeto, audiencia y trabajo de cada página
 
 - Sujeto: practicar cómo un desarrollador explica, escribe y comprende inglés profesional.
-- Audiencia: desarrolladores hispanohablantes B1-B2.
+- Audiencia: desarrolladores hispanohablantes B1-C1.
 - Landing: explicar valor y llevar a “Probar demo”.
 - Workspace: permitir elegir módulo y practicar sin registro ni distracciones.
 
@@ -92,7 +92,7 @@ Cargar Voice mediante `React.lazy(() => import(...))` o frontera dinámica equiv
 8. **CTA final** “Probar demo”.
 9. **Footer:** estado Alpha y enlaces internos/documentales aplicables, sin pricing.
 
-Copy en voz activa, español directo y sin claims no medidos (“fluido”, “instantáneo”, “seguro al 100%”). Conversaciones/ejemplos en inglés B1-B2.
+Copy en voz activa, español directo y sin claims no medidos (“fluido”, “instantáneo”, “seguro al 100%”). Conversaciones/ejemplos en inglés B1-C1.
 
 ## 5. SEO y documento
 

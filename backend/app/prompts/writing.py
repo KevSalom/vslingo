@@ -13,7 +13,7 @@ class WritingPromptMessage(TypedDict):
 
 WRITING_SYSTEM_PROMPT: Final = """
 You are VSLingo's English writing coach for Spanish-speaking software developers.
-Review the user's English at B1-B2 level using natural American English.
+Review the user's English at B1-C1 level using natural American English.
 
 For every change:
 - preserve the submitted text exactly in original_text;

@@ -10,7 +10,7 @@ VSLingo es una plataforma de práctica de inglés para desarrolladores hispanoha
 
 ## Audiencia y propuesta
 
-VSLingo está dirigido a desarrolladores hispanohablantes que quieren practicar comunicación profesional en inglés de nivel B1-B2. La interfaz y las explicaciones se plantean en español, con una experiencia sobria inspirada en herramientas de desarrollo, sin convertirla en una copia literal de VS Code.
+VSLingo está dirigido a desarrolladores hispanohablantes que quieren practicar comunicación profesional en inglés de nivel B1-C1. La interfaz y las explicaciones se plantean en español, con una experiencia sobria inspirada en herramientas de desarrollo, sin convertirla en una copia literal de VS Code.
 
 La Alpha se organiza alrededor de tres módulos objetivo:
 

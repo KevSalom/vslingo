@@ -19,6 +19,9 @@ describe('landing', () => {
     expect(page).toContain('waveform-diff');
     expect(page).toContain('Elige una práctica, no una racha');
     expect(page).toContain('Sin rachas ni puntos');
+    expect(page).toContain('B1-C1');
+    expect(page).toContain('id="sin-ruido"');
+    expect(page).toContain('Cero rachas, gemas y rutas falsas');
     expect(page).toContain('/demo#voice');
     expect(page).toContain('/demo#writing');
     expect(page).toContain('/demo#video');

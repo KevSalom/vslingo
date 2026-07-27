@@ -10,7 +10,7 @@ def test_voice_system_prompts_cover_all_scenarios() -> None:
         prompt = get_voice_system_prompt(scenario)  # type: ignore[arg-type]
         assert isinstance(prompt, str)
         assert len(prompt) > 50
-        assert "B1-B2 English" in prompt
+        assert "B1-C1 English" in prompt
         assert "600 characters" in prompt
         assert "Do NOT mention pronunciation" in prompt
         assert "Do NOT give language corrections" in prompt

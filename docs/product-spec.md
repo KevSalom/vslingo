@@ -11,7 +11,7 @@ Este documento reúne las decisiones persistentes aprobadas para la Alpha de VSL
 VSLingo es una plataforma de práctica de inglés para desarrolladores hispanohablantes. Su filosofía es **«al grano, sin ruido»**: práctica profesional, directa y sin mecánicas de gamificación infantil.
 
 - La interfaz y las explicaciones estarán en español.
-- Las conversaciones, correcciones y el vocabulario estarán en inglés B1-B2.
+- Las conversaciones, correcciones y el vocabulario estarán en inglés B1-C1.
 - La experiencia se presentará como una herramienta profesional para comunicación técnica, no como una copia literal de VS Code.
 - Se podrá probar la aplicación sin registro.
 - Se protegerá el presupuesto sin introducir autenticación.
@@ -33,7 +33,7 @@ La Alpha tiene como objetivo entregar tres módulos funcionales:
 - Landing estática en Astro con CTA **«Probar demo»**.
 - Workspace interactivo en React 19.
 - Interfaz y explicaciones en español.
-- Conversaciones, correcciones y vocabulario en inglés B1-B2.
+- Conversaciones, correcciones y vocabulario en inglés B1-C1.
 - Voice Studio con cuatro escenarios:
   - Daily Standup.
   - System Design / Technical Interview.

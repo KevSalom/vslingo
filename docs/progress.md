@@ -4,13 +4,13 @@
 
 Este es el único documento para el estado mutable de implementación. Debe actualizarse al cerrar cada incremento, sin convertir el roadmap estable en una lista de estados.
 
-Última actualización documental: 2026-07-26.
+Última actualización documental: 2026-07-27.
 
 ## Estado actual
 
 - **Roadmap actual:** `T10` completado (Alpha 1.0 lista).
 - **Próximo incremento:** Despliegue en producción autorizado (Dokploy en VPS para backend y Render/Vercel/Pages para frontend).
-- **Completado:** `T01`–`T10` completos; base reproducible, Writing Studio, Video Lab básico/resiliente, TTS compartido, Protocolo Voice con PTT → STT, Conversación B1-B2 con Feedback Paralelo, VAD local manos libres con Audio Streaming e Interrupción (*barge-in*), sistema visual con landing estática, seguridad, costes y observabilidad, e integración con pruebas E2E deterministas y guías de despliegue en Dokploy con Nixpacks.
+- **Completado:** `T01`–`T10` completos; base reproducible, Writing Studio, Video Lab básico/resiliente, TTS compartido, Protocolo Voice con PTT → STT, Conversación B1-C1 con Feedback Paralelo, VAD local manos libres con Audio Streaming e Interrupción (*barge-in*), sistema visual con landing estática, seguridad, costes y observabilidad, e integración con pruebas E2E deterministas y guías de despliegue en Dokploy con Nixpacks.
 - **Pendiente:** despliegue real en producción VPS/PaaS.
 - **Bloqueos:** ninguno.
 - **Polish post-T10 (2026-07-24):** Video Lab — biblioteca y notas en explorer tree estilo VS Code; notas agnósticas del video (`title` + `text` + `timestamp?`, storage v2); área de estudio limpia; modales Guardar video/nota; hover copiar/guardar frase en vista línea; drawer Explorer en móvil.
@@ -18,6 +18,7 @@ Este es el único documento para el estado mutable de implementación. Debe actu
 - **Polish post-T10 (2026-07-27):** Voice Studio UI — se quitó «Iniciar Sesión»; botón circular on/off en `control.voice` (Iniciar / Activo / Pausar); estado de entrada destacado en el header; escenarios como `<select>` al estilo del proveedor TTS; sin badge «en espera» en `conversation.stream`.
 - **Bugfix post-T10 (2026-07-27):** Voice WebSocket dejaba URL hardcodeada `ws://localhost:8000/api/voice/ws`; ahora deriva de `PUBLIC_API_URL` igual que REST (`resolveVoiceWebSocketUrl`). Documentado en `.env.example`, `frontend/README.md` y `deploy/README.md`.
 - **Bugfix post-T10 (2026-07-27):** Voice Studio — etiquetas de burbuja fijas (`Tú` / `VSLingo`, sin «último turno»/«respondiendo»); ondas de micrófono dejan de vibrar al soltar (gate `isSpeech` del VAD, reset del meter al fin/misfire, release más rápido + snap a idle).
+- **Polish post-T10 (2026-07-27):** Landing — sección `#sin-ruido` (anti-rachas/gemas/rutas); audiencia y prompts ampliados de B1-B2 a **B1-C1** (copy, `product-spec`, monorepo docs, `voice.py`, `writing.py`).
 
 `T10` introdujo la suite E2E determinista con Playwright (`@playwright/test` 1.50.1) cubriendo Landing, Writing Studio, Video Lab y Voice Studio; los archivos de despliegue `render.yaml` (Render Static Site), `deploy/Caddyfile.example`, `deploy/vslingo-api.service.example`, `backend/nixpacks.toml` y la guía paso a paso [`deploy/dokploy-nixpacks.md`](../deploy/dokploy-nixpacks.md) para Dokploy en VPS; y el script raíz unificado de calidad [`scripts/check-quality.ps1`](../scripts/check-quality.ps1).
 

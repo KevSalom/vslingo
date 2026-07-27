@@ -32,11 +32,11 @@ Identificadores ya fijados por protocolo:
 | `daily_standup` | Daily Standup | Pedir/seguir yesterday, today, blockers; respuestas breves de equipo |
 | `system_design` | System Design / Technical Interview | Entrevistar sobre requisitos, trade-offs y comunicación de diseño |
 | `salary_negotiation` | Salary Negotiation | Practicar negociación profesional, claridad, evidencia y límites |
-| `free` | Libre / Explorar | Conversación B1-B2 elegida por usuario, sin imponer software |
+| `free` | Libre / Explorar | Conversación B1-C1 elegida por usuario, sin imponer software |
 
 Crear una función pura por escenario o un mapping exhaustivo en `backend/app/prompts/voice.py`. Reglas comunes obligatorias del system prompt:
 
-- responder en inglés B1-B2, natural y profesional;
+- responder en inglés B1-C1, natural y profesional;
 - una pregunta o siguiente paso claro por turno;
 - no afirmar que se evalúa pronunciación;
 - no incluir feedback lingüístico dentro de la respuesta conversacional;
