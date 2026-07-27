@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   recorderStart: vi.fn(async () => undefined),
   recorderStop: vi.fn(() => ({ wavBytes: new Uint8Array(3200), durationMs: 200 })),
   recorderCleanup: vi.fn(),
+  recorderOptions: null as null | { onFrameLevel?: (level: number) => void },
   schedulerStopAll: vi.fn(),
   schedulerCancelBefore: vi.fn(),
   schedulerClose: vi.fn(async () => undefined),
@@ -82,6 +83,9 @@ vi.mock('./audioCapture', () => ({
     start = mocks.recorderStart;
     stop = mocks.recorderStop;
     cleanup = mocks.recorderCleanup;
+    constructor(options: { onFrameLevel?: (level: number) => void } = {}) {
+      mocks.recorderOptions = options;
+    }
   },
 }));
 
@@ -115,10 +119,13 @@ describe('VoiceStudio T07 flow', () => {
     localStorage.clear();
     mocks.socket = null;
     mocks.vadOptions = null;
+    mocks.recorderOptions = null;
     vi.clearAllMocks();
-    vi.spyOn(globalThis.crypto, 'randomUUID')
-      .mockReturnValueOnce('00000000-0000-4000-8000-000000000001')
-      .mockReturnValueOnce('00000000-0000-4000-8000-000000000002');
+    let uuidSeq = 0;
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockImplementation(() => {
+      uuidSeq += 1;
+      return `00000000-0000-4000-8000-${String(uuidSeq).padStart(12, '0')}`;
+    });
   });
 
   it('renders initial state and keeps manual PTT disabled before connecting', () => {
@@ -161,6 +168,29 @@ describe('VoiceStudio T07 flow', () => {
     fireEvent.pointerUp(ptt, { pointerId: 1, button: 0 });
     await waitFor(() => expect(mocks.recorderStop).toHaveBeenCalledOnce());
     expect(mocks.vadStart).toHaveBeenCalledTimes(2);
+  });
+
+  it('animates input waveform from live PTT mic levels while held', async () => {
+    await connectVoice();
+    const ptt = screen.getByRole('button', { name: /Mantén pulsado para hablar/i });
+
+    fireEvent.pointerDown(ptt, { pointerId: 1, button: 0 });
+    await waitFor(() => expect(mocks.recorderOptions?.onFrameLevel).toBeTypeOf('function'));
+
+    const bars = screen
+      .getByRole('img', { name: 'Señal de audio: entrada' })
+      .querySelectorAll('.voice-signal-bar');
+    const middleBar = bars[9] as HTMLElement;
+    const initialTransform = middleBar.style.transform;
+
+    act(() => mocks.recorderOptions?.onFrameLevel?.(0.72));
+
+    await waitFor(() => {
+      expect(middleBar.style.transform).not.toBe(initialTransform);
+      expect(middleBar.style.transform).toContain('scaleY');
+    });
+
+    fireEvent.pointerUp(ptt, { pointerId: 1, button: 0 });
   });
 
   it('cancels the prior generation locally and remotely when speech interrupts it', async () => {

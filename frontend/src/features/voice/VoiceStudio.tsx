@@ -648,7 +648,14 @@ export function VoiceStudio() {
     captureOwnerRef.current = 'ptt';
     schedulerRef.current?.stopAll();
     setIsPlayingAudio(false);
-    const recorder = new AudioRecorder();
+    const recorder = new AudioRecorder({
+      onFrameLevel: (level) => {
+        if (isPlayingAudioRef.current || captureOwnerRef.current !== 'ptt') return;
+        const reducedMotion =
+          window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+        setInputLevel(reducedMotion ? (level > 0.12 ? 0.45 : 0) : level);
+      },
+    });
     recorderRef.current = recorder;
 
     try {
@@ -661,7 +668,7 @@ export function VoiceStudio() {
       beginTurn();
       setState('recording');
       speechActiveRef.current = true;
-      setInputLevel(0.55);
+      setInputLevel(0);
       setInputState('speech');
     } catch (err) {
       recorder.cleanup();

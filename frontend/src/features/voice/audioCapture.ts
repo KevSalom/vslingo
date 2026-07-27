@@ -1,3 +1,5 @@
+import { createAmplitudeMeter } from './audioLevel';
+
 export function resampleTo16k(samples: Float32Array, inputSampleRate: number): Float32Array {
   if (inputSampleRate === 16000) {
     return samples;
@@ -69,6 +71,10 @@ export type RecordedAudio = {
   durationMs: number;
 };
 
+export type AudioRecorderOptions = {
+  onFrameLevel?: (level: number) => void;
+};
+
 export class AudioRecorder {
   private mediaStream: MediaStream | null = null;
   private audioContext: AudioContext | null = null;
@@ -76,9 +82,16 @@ export class AudioRecorder {
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private pcmChunks: Float32Array[] = [];
   private recordingStartTime = 0;
+  private readonly onFrameLevel?: (level: number) => void;
+  private readonly meter = createAmplitudeMeter();
+
+  constructor(options: AudioRecorderOptions = {}) {
+    this.onFrameLevel = options.onFrameLevel;
+  }
 
   async start(): Promise<void> {
     this.pcmChunks = [];
+    this.meter.reset();
     try {
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -98,6 +111,14 @@ export class AudioRecorder {
       this.processorNode.onaudioprocess = (e) => {
         const inputBuffer = e.inputBuffer.getChannelData(0);
         this.pcmChunks.push(new Float32Array(inputBuffer));
+        if (!this.onFrameLevel) return;
+        let squareSum = 0;
+        for (let i = 0; i < inputBuffer.length; i++) {
+          const sample = inputBuffer[i] ?? 0;
+          squareSum += sample * sample;
+        }
+        const rms = inputBuffer.length > 0 ? Math.sqrt(squareSum / inputBuffer.length) : 0;
+        this.onFrameLevel(this.meter.processFrame(rms));
       };
 
       this.sourceNode.connect(this.processorNode);
