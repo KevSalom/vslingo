@@ -1,0 +1,23 @@
+---
+import { PresentationDeck } from '../components/PresentationDeck';
+import '../styles/global.css';
+
+const title = 'Presentación | VSLingo Hackathon Código Facilito';
+const description =
+  'Diapositivas oficiales de presentación de VSLingo para la Hackathon de Código Facilito.';
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="description" content={description} />
+    <title>{title}</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <PresentationDeck client:load />
+  </body>
+</html>
