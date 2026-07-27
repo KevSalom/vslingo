@@ -11,6 +11,19 @@ services:
         value: 10.32.0
       - key: PUBLIC_API_URL
         value: https://api.vslingo.app
+    routes:
+      - type: rewrite
+        source: /presentacion
+        destination: /presentacion/index.html
+      - type: rewrite
+        source: /presentacion/*
+        destination: /presentacion/index.html
+      - type: rewrite
+        source: /demo
+        destination: /demo/index.html
+      - type: rewrite
+        source: /demo/*
+        destination: /demo/index.html
     headers:
       - path: /*
         name: X-Content-Type-Options
