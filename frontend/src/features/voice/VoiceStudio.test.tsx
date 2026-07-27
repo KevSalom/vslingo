@@ -125,9 +125,9 @@ describe('VoiceStudio T07 flow', () => {
     render(<VoiceStudio />);
 
     expect(
-      screen.getByRole('heading', { name: /practica una conversación en inglés/i }),
+      screen.getByRole('heading', { name: /^Voice Studio$/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Elige un escenario/i)).toBeInTheDocument();
+    expect(screen.getByText(/Escenario/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Iniciar Sesión' })).toBeInTheDocument();
     expect(screen.getAllByText('Inactivo').length).toBeGreaterThan(0);
     expect(screen.getByRole('img', { name: 'Señal de audio: entrada' })).toBeInTheDocument();
@@ -282,7 +282,7 @@ describe('VoiceStudio T07 flow', () => {
 
     expect(screen.getByLabelText('Métricas de sesión')).toHaveTextContent('842 ms');
     expect(screen.getByLabelText('Métricas de sesión')).toHaveTextContent('1200 ms');
-    expect(screen.getByLabelText('Métricas de sesión')).toHaveTextContent('USD 0.00020 · estimado');
+    expect(screen.getByLabelText('Métricas de sesión')).toHaveTextContent('USD 0.00020 · est.');
     expect(localStorage.getItem('vslingo:voice:metrics')).toBeNull();
   });
 
@@ -294,14 +294,14 @@ describe('VoiceStudio T07 flow', () => {
     expect(inputVisualizer).toBeInTheDocument();
 
     const bars = inputVisualizer.querySelectorAll('.voice-signal-bar');
-    expect(bars.length).toBe(22);
+    expect(bars.length).toBe(18);
 
-
-    const initialMiddleBarTransform = (bars[11] as HTMLElement).style.transform;
+    const middleBar = bars[9] as HTMLElement;
+    const initialMiddleBarTransform = middleBar.style.transform;
 
     // Frame levels only animate during real speech ("Te escucho").
     act(() => mocks.vadOptions?.onFrameLevel?.(0.55));
-    expect((bars[11] as HTMLElement).style.transform).toBe(initialMiddleBarTransform);
+    expect(middleBar.style.transform).toBe(initialMiddleBarTransform);
 
     act(() => {
       mocks.vadOptions?.onSpeechStart?.();
@@ -309,7 +309,7 @@ describe('VoiceStudio T07 flow', () => {
     });
 
     await waitFor(() => {
-      const activeMiddleBarTransform = (bars[11] as HTMLElement).style.transform;
+      const activeMiddleBarTransform = middleBar.style.transform;
       expect(activeMiddleBarTransform).not.toBe(initialMiddleBarTransform);
       expect(activeMiddleBarTransform).toContain('scaleY');
     });

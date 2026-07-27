@@ -721,137 +721,131 @@ export function VoiceStudio() {
       </div>
 
       <header className="voice-header">
-        <div>
-          <p className="voice-eyebrow">Voice Studio · conversación técnica</p>
+        <p className="voice-eyebrow">Voice / session.json</p>
+        <div className="voice-header-row">
           <h1 className="voice-title" id="voice-title" tabIndex={-1}>
-            Voice Studio: practica una conversación en inglés
+            Voice Studio
           </h1>
-          <p className="voice-intro">
-            Elige un contexto, inicia la sesión y habla con naturalidad. VSLingo separa la respuesta de las correcciones para que puedas seguir la conversación y aprender de ella.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {isPlayingAudio && (
-            <button className="voice-session-action is-stop" onClick={handleStopPlayback} type="button">
-              Detener respuesta
-            </button>
-          )}
-          {state === 'idle' || state === 'closed' ? (
-            <button className="voice-session-action" onClick={handleConnect} type="button">
-              Iniciar Sesión
-            </button>
-          ) : (
-            <button className="voice-session-action is-stop" onClick={handleDisconnect} type="button">
-              Finalizar Sesión
-            </button>
-          )}
-        </div>
-      </header>
-
-      <section className="voice-setup" aria-label="Preparar práctica de voz">
-        <div>
-          <p className="voice-setup-label">1 · Elige un escenario</p>
-          <div className="voice-scenarios">
-            {(Object.keys(SCENARIO_LABELS) as ScenarioType[]).map((key) => (
+          <div className="voice-header-actions">
+            {isPlayingAudio && (
               <button
-                aria-pressed={scenario === key}
-                className="voice-scenario"
-                key={key}
-                onClick={() => handleScenarioChange(key)}
+                aria-label="Detener respuesta"
+                className="voice-session-action is-stop is-icon"
+                onClick={handleStopPlayback}
+                title="Detener respuesta"
                 type="button"
               >
-                {SCENARIO_LABELS[key]}
+                <svg aria-hidden="true" fill="currentColor" height="18" viewBox="0 0 24 24" width="18">
+                  <rect height="14" rx="1.5" width="14" x="5" y="5" />
+                </svg>
               </button>
-            ))}
+            )}
+            {state === 'idle' || state === 'closed' ? (
+              <button className="voice-session-action" onClick={handleConnect} type="button">
+                Iniciar Sesión
+              </button>
+            ) : (
+              <button
+                aria-label="Finalizar sesión"
+                className="voice-session-action is-stop is-icon"
+                onClick={handleDisconnect}
+                title="Finalizar sesión"
+                type="button"
+              >
+                <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24" width="18">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
-        <div className="voice-settings">
-          <SpeechProviderControl
-            id="voice-speech-provider"
-            provider={speechProvider}
-            onChange={handleSpeechProviderChange}
-            disabled={state === 'connecting'}
-          />
-          <span className="voice-status">
-            <span
-              aria-hidden="true"
-              className={`voice-status-dot ${
-                state === 'ready' || state === 'recording' || state === 'transcribing'
-                  ? 'is-ready'
-                  : state === 'connecting'
-                    ? 'is-working'
-                    : ''
-              }`}
-            />
-            {ACCESSIBLE_INPUT_LABELS[inputState]}
-          </span>
-        </div>
-      </section>
-
-      {(inputState === 'vad_ready' || inputState === 'listening' || inputState === 'speech') && (
-        <p className="voice-vad-notice">
-          <strong>Escucha automática activa.</strong> Habla cuando estés listo; VSLingo detecta una pausa antes de responder. Puedes usar pulsar para hablar cuando prefieras controlar el inicio.
+        <p className="voice-lead">
+          Habla en inglés y recibe respuesta en voz, con feedback de coaching en paralelo.
         </p>
-      )}
+      </header>
 
-      <div
-        aria-label={`Señal de audio: ${isPlayingAudio ? 'salida' : 'entrada'}`}
-        className="voice-signal"
-        role="img"
-      >
-        <span className="voice-signal-label">{isPlayingAudio ? 'respuesta' : 'tu voz'}</span>
-        {Array.from({ length: 22 }, (_, index) => {
-          const level = isPlayingAudio ? outputLevel : inputLevel;
-          const centerWeight = 0.45 + 0.55 * (1 - Math.abs(index - 10.5) / 10.5);
-          // Keep a quiet baseline and use full bar height when level≈1.
-          const scale = Math.max(0.14, Math.min(1, 0.14 + level * centerWeight * 0.86));
-          return (
-            <span
-              aria-hidden="true"
-              className="voice-signal-bar"
-              key={index}
-              style={{ transform: `scaleY(${scale})` }}
-            />
-          );
-        })}
-      </div>
-
-      {errorMessage && <p className="voice-error" role="alert">{errorMessage}</p>}
-
-      <section className="voice-metrics" aria-label="Métricas de sesión">
-        <p className="voice-panel-label">Observabilidad local · esta sesión</p>
-        <dl className="voice-metrics-grid">
-          <div><dt>STT</dt><dd>{sessionMetrics.sttLatencyMs === null ? '—' : `${sessionMetrics.sttLatencyMs} ms`}</dd></div>
-          <div><dt>Primer token</dt><dd>{sessionMetrics.firstTokenLatencyMs === null ? '—' : `${sessionMetrics.firstTokenLatencyMs} ms`}</dd></div>
-          <div><dt>Primer audio</dt><dd>{sessionMetrics.firstAudioLatencyMs === null ? '—' : `${sessionMetrics.firstAudioLatencyMs} ms`}</dd></div>
-          <div><dt>Coste conocido</dt><dd>USD {sessionMetrics.knownCostUsd.toFixed(5)}{sessionMetrics.hasEstimatedCost ? ' · estimado' : ''}</dd></div>
-        </dl>
-      </section>
-
-      <div className="voice-workspace">
-        <section className="voice-panel" aria-labelledby="voice-conversation-title">
-          <header className="voice-panel-header">
-            <div>
-              <p className="voice-panel-label">2 · Conversa</p>
-              <h2 className="voice-panel-title" id="voice-conversation-title">Conversación</h2>
-            </div>
-            <span className="voice-panel-status">{isAssistantStreaming ? 'respondiendo' : 'en espera'}</span>
-          </header>
-          <div className="voice-scroll">
-            {turnHistory.length === 0 && !userTranscript && !isAssistantStreaming && (
-              <p className="voice-empty">Inicia una sesión y cuenta cómo va tu trabajo. La conversación aparecerá aquí, en el orden en que sucede.</p>
-            )}
-            {turnHistory.map((turn) => (
-              <div className="voice-turn" key={turn.turnId}>
-                <div className="voice-message"><strong>Tú</strong>{turn.userText}</div>
-                <div className="voice-message assistant"><strong>VSLingo</strong>{turn.assistantText}</div>
-              </div>
-            ))}
-            {userTranscript && <div className="voice-message"><strong>Tú · último turno</strong>{userTranscript}</div>}
-            {isAssistantStreaming && (
-              <div className="voice-message assistant"><strong>VSLingo · respondiendo</strong>{streamingAssistant || 'Preparando una respuesta…'}</div>
-            )}
+      <div className="voice-split">
+        <div className="voice-pane voice-pane-control">
+          <div className="voice-pane-tabs" aria-hidden="true">
+            <span className="voice-pane-tab is-active">control.voice</span>
           </div>
+
+          <section className="voice-setup" aria-label="Preparar práctica de voz">
+            <h2 className="sr-only">Escenario</h2>
+            <div className="voice-scenarios">
+              {(Object.keys(SCENARIO_LABELS) as ScenarioType[]).map((key) => (
+                <button
+                  aria-pressed={scenario === key}
+                  className="voice-scenario"
+                  key={key}
+                  onClick={() => handleScenarioChange(key)}
+                  type="button"
+                >
+                  {SCENARIO_LABELS[key]}
+                </button>
+              ))}
+            </div>
+            <div className="voice-settings">
+              <SpeechProviderControl
+                id="voice-speech-provider"
+                provider={speechProvider}
+                onChange={handleSpeechProviderChange}
+                disabled={state === 'connecting'}
+              />
+              <span className="voice-status">
+                <span
+                  aria-hidden="true"
+                  className={`voice-status-dot ${
+                    state === 'ready' || state === 'recording' || state === 'transcribing'
+                      ? 'is-ready'
+                      : state === 'connecting'
+                        ? 'is-working'
+                        : ''
+                  }`}
+                />
+                {ACCESSIBLE_INPUT_LABELS[inputState]}
+              </span>
+            </div>
+          </section>
+
+          <p className="voice-vad-notice">
+            Escucha automática activa. Habla cuando estés listo; VSLingo detecta una pausa antes de
+            responder. Puedes usar pulsar para hablar cuando prefieras controlar el inicio.
+          </p>
+
+          <div
+            aria-label={`Señal de audio: ${isPlayingAudio ? 'salida' : 'entrada'}`}
+            className="voice-signal"
+            role="img"
+          >
+            <span className="voice-signal-label">{isPlayingAudio ? 'respuesta' : 'tu voz'}</span>
+            {Array.from({ length: 18 }, (_, index) => {
+              const level = isPlayingAudio ? outputLevel : inputLevel;
+              const centerWeight = 0.45 + 0.55 * (1 - Math.abs(index - 8.5) / 8.5);
+              const scale = Math.max(0.14, Math.min(1, 0.14 + level * centerWeight * 0.86));
+              return (
+                <span
+                  aria-hidden="true"
+                  className="voice-signal-bar"
+                  key={index}
+                  style={{ transform: `scaleY(${scale})` }}
+                />
+              );
+            })}
+          </div>
+
+          {errorMessage && <p className="voice-error" role="alert">{errorMessage}</p>}
+
+          <section className="voice-metrics" aria-label="Métricas de sesión">
+            <p className="voice-panel-label">Observabilidad · sesión</p>
+            <dl className="voice-metrics-grid">
+              <div><dt>STT</dt><dd>{sessionMetrics.sttLatencyMs === null ? '—' : `${sessionMetrics.sttLatencyMs} ms`}</dd></div>
+              <div><dt>Token</dt><dd>{sessionMetrics.firstTokenLatencyMs === null ? '—' : `${sessionMetrics.firstTokenLatencyMs} ms`}</dd></div>
+              <div><dt>Audio</dt><dd>{sessionMetrics.firstAudioLatencyMs === null ? '—' : `${sessionMetrics.firstAudioLatencyMs} ms`}</dd></div>
+              <div><dt>Coste</dt><dd>USD {sessionMetrics.knownCostUsd.toFixed(5)}{sessionMetrics.hasEstimatedCost ? ' · est.' : ''}</dd></div>
+            </dl>
+          </section>
+
           <div className="voice-ptt-wrap">
             <button
               type="button"
@@ -889,54 +883,87 @@ export function VoiceStudio() {
                 : 'Mantén pulsado para hablar (PTT)'}
             </button>
           </div>
-        </section>
+        </div>
 
-        <section className="voice-panel" aria-labelledby="voice-feedback-title">
-          <header className="voice-panel-header">
-            <div>
-              <p className="voice-panel-label">3 · Revisa</p>
-              <h2 className="voice-panel-title" id="voice-feedback-title">Feedback</h2>
-            </div>
-            {isFeedbackPending && <span className="voice-panel-status">preparando feedback</span>}
-          </header>
-          <div className="voice-scroll">
-            {feedbackErrorMsg && <p className="voice-error" role="alert">{feedbackErrorMsg}</p>}
-            {activeFeedback ? (
-              <>
-                <div className="voice-feedback-block">
-                  <h3 className="voice-feedback-heading">Resumen</h3>
-                  <p className="voice-feedback-summary">{activeFeedback.summary_es}</p>
+        <div className="voice-pane voice-pane-session">
+          <div className="voice-workspace">
+            <section className="voice-panel" aria-labelledby="voice-conversation-title">
+              <div className="voice-pane-tabs" aria-hidden="true">
+                <span className="voice-pane-tab is-active">conversation.stream</span>
+                <span className="voice-panel-status">{isAssistantStreaming ? 'respondiendo' : 'en espera'}</span>
+              </div>
+              <div className="voice-panel-body">
+                <h2 className="sr-only" id="voice-conversation-title">Conversación</h2>
+                <div className="voice-scroll">
+                  {turnHistory.length === 0 && !userTranscript && !isAssistantStreaming && (
+                    <p className="voice-empty">Inicia una sesión y cuenta cómo va tu trabajo. La conversación aparecerá aquí, en el orden en que sucede.</p>
+                  )}
+                  {turnHistory.map((turn) => (
+                    <div className="voice-turn" key={turn.turnId}>
+                      <div className="voice-message"><strong>Tú</strong>{turn.userText}</div>
+                      <div className="voice-message assistant"><strong>VSLingo</strong>{turn.assistantText}</div>
+                    </div>
+                  ))}
+                  {userTranscript && <div className="voice-message"><strong>Tú · último turno</strong>{userTranscript}</div>}
+                  {isAssistantStreaming && (
+                    <div className="voice-message assistant"><strong>VSLingo · respondiendo</strong>{streamingAssistant || 'Preparando una respuesta…'}</div>
+                  )}
                 </div>
-                {activeFeedback.corrections.length > 0 && (
-                  <div className="voice-feedback-block">
-                    <h3 className="voice-feedback-heading">Correcciones · {activeFeedback.corrections.length}</h3>
-                    {activeFeedback.corrections.map((correction, index) => (
-                      <div className="voice-feedback-item" key={index}>
-                        <del>{correction.original}</del>
-                        <ins>{correction.corrected}</ins>
-                        <em>{correction.explanation_es}</em>
-                      </div>
-                    ))}
+              </div>
+            </section>
+
+            <section className="voice-panel" aria-labelledby="voice-feedback-title">
+              <div className="voice-pane-tabs" aria-hidden="true">
+                <span className="voice-pane-tab is-active">feedback.coach</span>
+              </div>
+              <div className="voice-panel-body">
+                <h2 className="sr-only" id="voice-feedback-title">Feedback</h2>
+                {isFeedbackPending && (
+                  <div className="voice-panel-status-banner">
+                    <span className="voice-panel-status">preparando feedback</span>
                   </div>
                 )}
-                {activeFeedback.vocabulary.length > 0 && (
-                  <div className="voice-feedback-block">
-                    <h3 className="voice-feedback-heading">Vocabulario sólido · {activeFeedback.vocabulary.length}</h3>
-                    {activeFeedback.vocabulary.map((vocabulary, index) => (
-                      <div className="voice-feedback-summary" key={index}>
-                        <strong>{vocabulary.term}</strong><br />
-                        {vocabulary.meaning_es}<br />
-                        <em>{vocabulary.example_en}</em>
+                <div className="voice-scroll">
+                  {feedbackErrorMsg && <p className="voice-error" role="alert">{feedbackErrorMsg}</p>}
+                  {activeFeedback ? (
+                    <>
+                      <div className="voice-feedback-block">
+                        <h3 className="voice-feedback-heading">Resumen</h3>
+                        <p className="voice-feedback-summary">{activeFeedback.summary_es}</p>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <p className="voice-empty">Después de hablar verás un resumen, correcciones y vocabulario útil. La conversación puede continuar aunque el feedback tarde un poco más.</p>
-            )}
+                      {activeFeedback.corrections.length > 0 && (
+                        <div className="voice-feedback-block">
+                          <h3 className="voice-feedback-heading">Correcciones · {activeFeedback.corrections.length}</h3>
+                          {activeFeedback.corrections.map((correction, index) => (
+                            <div className="voice-feedback-item" key={`corr-${index}-${correction.original}`}>
+                              <del>{correction.original}</del>
+                              <ins>{correction.corrected}</ins>
+                              <em>{correction.explanation_es}</em>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {activeFeedback.vocabulary.length > 0 && (
+                        <div className="voice-feedback-block">
+                          <h3 className="voice-feedback-heading">Vocabulario sólido · {activeFeedback.vocabulary.length}</h3>
+                          {activeFeedback.vocabulary.map((vocabulary, index) => (
+                            <div className="voice-feedback-summary" key={`vocab-${index}-${vocabulary.term}`}>
+                              <strong>{vocabulary.term}</strong><br />
+                              {vocabulary.meaning_es}<br />
+                              <em>{vocabulary.example_en}</em>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="voice-empty">Después de hablar verás un resumen, correcciones y vocabulario útil. La conversación puede continuar aunque el feedback tarde un poco más.</p>
+                  )}
+                </div>
+              </div>
+            </section>
           </div>
-        </section>
+        </div>
       </div>
     </section>
   );
