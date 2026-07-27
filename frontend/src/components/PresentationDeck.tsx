@@ -21,7 +21,7 @@ export const PresentationDeck: React.FC = () => {
         <div className="deck-cover">
           <p className="deck-pill">
             <span className="deck-pill-dot" aria-hidden="true" />
-            Inglés técnico B1–C1 para developers · sin registro
+            Inglés técnico B1–C1 para developers
           </p>
 
           <h1 className="deck-display">
@@ -102,8 +102,8 @@ export const PresentationDeck: React.FC = () => {
               <li>
                 <span className="deck-list-mark" aria-hidden="true">+</span>
                 <span>
-                  <strong>«Al grano, sin ruido»:</strong> interfaz de editor de código. Sin registro
-                  obligatorio.
+                  <strong>«Al grano, sin ruido»:</strong> interfaz de editor de código, sin
+                  distracciones.
                 </span>
               </li>
               <li>
