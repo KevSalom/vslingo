@@ -140,19 +140,9 @@ export function WritingStudio({
 
   return (
     <section aria-labelledby="writing-title" className="writing-studio">
-      <header className="writing-header">
-        <div className="writing-header-row">
-          <p className="writing-kicker">Writing / correction.json</p>
-          <span className="writing-hint-key">Ctrl + Enter para revisar</span>
-        </div>
-        <h1 id="writing-title" tabIndex={-1} className="writing-title">
-          Writing Studio
-        </h1>
-        <p className="writing-lead">
-          Escribe un mensaje técnico en inglés. El resultado y el feedback quedan
-          bajo el editor; los cambios categorizados se abren en el panel derecho.
-        </p>
-      </header>
+      <h1 className="sr-only" id="writing-title" tabIndex={-1}>
+        Writing Studio
+      </h1>
 
       <div
         className={
@@ -160,8 +150,9 @@ export function WritingStudio({
         }
       >
         <div className="writing-pane writing-pane-editor">
-          <div className="writing-pane-tabs" aria-hidden="true">
+          <div className="writing-pane-tabs">
             <span className="writing-pane-tab is-active">draft.en</span>
+            <span className="writing-hint-key">Ctrl + Enter para revisar</span>
           </div>
 
           <form

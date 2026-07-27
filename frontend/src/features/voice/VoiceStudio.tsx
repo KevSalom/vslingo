@@ -765,35 +765,27 @@ export function VoiceStudio() {
         {ACCESSIBLE_INPUT_LABELS[inputState]} {isPlayingAudio ? '— Respondiendo' : ''}
       </div>
 
-      <header className="voice-header">
-        <p className="voice-eyebrow">Voice / session.json</p>
-        <div className="voice-header-row">
-          <h1 className="voice-title" id="voice-title" tabIndex={-1}>
-            Voice Studio
-          </h1>
-          <div
-            aria-label={`Estado: ${ACCESSIBLE_INPUT_LABELS[inputState]}${isPlayingAudio ? ', respondiendo' : ''}`}
-            className="voice-header-status"
-            role="status"
-          >
-            <span
-              aria-hidden="true"
-              className={`voice-status-dot ${statusDotClass}${isPlayingAudio ? ' is-playing' : ''}`}
-            />
-            <span className="voice-header-status-label">
-              {isPlayingAudio ? 'Respondiendo' : ACCESSIBLE_INPUT_LABELS[inputState]}
-            </span>
-          </div>
-        </div>
-        <p className="voice-lead">
-          Habla en inglés y recibe respuesta en voz, con feedback de coaching en paralelo.
-        </p>
-      </header>
+      <h1 className="sr-only" id="voice-title" tabIndex={-1}>
+        Voice Studio
+      </h1>
 
       <div className="voice-split">
         <div className="voice-pane voice-pane-control">
-          <div className="voice-pane-tabs" aria-hidden="true">
+          <div className="voice-pane-tabs">
             <span className="voice-pane-tab is-active">control.voice</span>
+            <div
+              aria-label={`Estado: ${ACCESSIBLE_INPUT_LABELS[inputState]}${isPlayingAudio ? ', respondiendo' : ''}`}
+              className="voice-header-status"
+              role="status"
+            >
+              <span
+                aria-hidden="true"
+                className={`voice-status-dot ${statusDotClass}${isPlayingAudio ? ' is-playing' : ''}`}
+              />
+              <span className="voice-header-status-label">
+                {isPlayingAudio ? 'Respondiendo' : ACCESSIBLE_INPUT_LABELS[inputState]}
+              </span>
+            </div>
           </div>
 
           <section className="voice-setup" aria-label="Preparar práctica de voz">
@@ -933,13 +925,13 @@ export function VoiceStudio() {
                   {turnHistory.length === 0 && !userTranscript && !isAssistantStreaming && (
                     <p className="voice-empty">Pulsa Iniciar y cuenta cómo va tu trabajo. La conversación aparecerá aquí, en el orden en que sucede.</p>
                   )}
-                  {turnHistory.map((turn) => (
-                    <div className="voice-turn" key={turn.turnId}>
-                      <div className="voice-message"><strong>Tú</strong>{turn.userText}</div>
+                  {turnHistory.map((turn, index) => (
+                    <div className="voice-turn" key={turn.turnId || `turn-${index}`}>
+                      <div className="voice-message user"><strong>Tú</strong>{turn.userText}</div>
                       <div className="voice-message assistant"><strong>VSLingo</strong>{turn.assistantText}</div>
                     </div>
                   ))}
-                  {userTranscript && <div className="voice-message"><strong>Tú · último turno</strong>{userTranscript}</div>}
+                  {userTranscript && <div className="voice-message user"><strong>Tú · último turno</strong>{userTranscript}</div>}
                   {isAssistantStreaming && (
                     <div className="voice-message assistant"><strong>VSLingo · respondiendo</strong>{streamingAssistant || 'Preparando una respuesta…'}</div>
                   )}

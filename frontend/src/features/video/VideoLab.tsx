@@ -297,11 +297,19 @@ export function VideoLab({
 
   return (
     <section aria-labelledby="video-lab-title" className="video-lab mx-auto w-full max-w-[92rem]">
-      <header className="video-lab-header">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="video-lab-kicker">
-            Video / playback.clock
-          </p>
+      <h1 className="sr-only" id="video-lab-title" tabIndex={-1}>
+        Video Lab
+      </h1>
+
+      <form
+        aria-busy={isLoading}
+        className="video-url-form"
+        onSubmit={handleSubmit}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <label className="video-url-label" htmlFor="video-url">
+            URL de YouTube
+          </label>
           <div className="flex items-center gap-2">
             <button
               className="video-explorer-toggle"
@@ -315,27 +323,6 @@ export function VideoLab({
             </span>
           </div>
         </div>
-        <h1
-          className="video-lab-title-heading"
-          id="video-lab-title"
-          tabIndex={-1}
-        >
-          Video Lab
-        </h1>
-        <p className="video-lab-description">
-          Estudia inglés técnico con subtítulos navegables. Biblioteca y notas viven
-          en el explorador lateral; aquí sólo el material de estudio.
-        </p>
-      </header>
-
-      <form
-        aria-busy={isLoading}
-        className="video-url-form"
-        onSubmit={handleSubmit}
-      >
-        <label className="video-url-label" htmlFor="video-url">
-          URL de YouTube
-        </label>
         <div className="mt-2 flex flex-col gap-2 lg:flex-row">
           <input
             className="video-url-input"
