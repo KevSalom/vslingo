@@ -47,19 +47,16 @@ export async function createVadClient(options: VadClientOptions): Promise<VadCon
       startOnLoad: false,
       onFrameProcessed: (probabilities: { isSpeech?: number }, frame: Float32Array) => {
         if (!options.onFrameLevel) return;
-        // Silero still feeds frames during end-of-utterance hangover. Use isSpeech so
-        // ambient hiss cannot keep the bars twitching after the user stops talking.
-        const speechProb =
-          typeof probabilities?.isSpeech === 'number' ? probabilities.isSpeech : 1;
-        if (speechProb < 0.5) {
-          meter.reset();
-          options.onFrameLevel(0);
-          return;
-        }
         let squareSum = 0;
         for (const sample of frame) squareSum += sample * sample;
         const rms = frame.length > 0 ? Math.sqrt(squareSum / frame.length) : 0;
-        options.onFrameLevel(meter.processFrame(rms));
+        // Never hard-cut mid-utterance (that clipped the last word). Only gently drain
+        // when Silero is very sure the frame is silence — hangover ambient stays smooth
+        // zero via the meter gate/release, and speech end still hard-resets below.
+        const speechProb =
+          typeof probabilities?.isSpeech === 'number' ? probabilities.isSpeech : 1;
+        const effectiveRms = speechProb < 0.15 ? 0 : rms;
+        options.onFrameLevel(meter.processFrame(effectiveRms));
       },
       onSpeechStart: () => {
         options.onSpeechStart();

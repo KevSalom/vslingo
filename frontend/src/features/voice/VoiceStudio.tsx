@@ -122,9 +122,18 @@ export function VoiceStudio() {
     const updateLevel = () => {
       analyser.getByteTimeDomainData(samples);
       let peak = 0;
-      for (const sample of samples) peak = Math.max(peak, Math.abs(sample - 128) / 128);
-      const target = Math.min(1, Math.max(0, (peak - 0.04) * 1.6));
-      smoothed += (target - smoothed) * (target > smoothed ? 0.45 : 0.2);
+      let sumSq = 0;
+      for (const sample of samples) {
+        const v = (sample - 128) / 128;
+        peak = Math.max(peak, Math.abs(v));
+        sumSq += v * v;
+      }
+      const rms = Math.sqrt(sumSq / samples.length);
+      // TTS decode is quieter than mic RMS; boost so agent bars match user presence.
+      const raw = Math.max(rms * 14, (peak - 0.012) * 4.2);
+      const target = Math.min(1, Math.max(0, raw));
+      smoothed += (target - smoothed) * (target > smoothed ? 0.55 : 0.28);
+      if (target === 0 && smoothed < 0.05) smoothed = 0;
       setOutputLevel(smoothed);
       if (!reducedMotion) animationFrame = requestAnimationFrame(updateLevel);
     };

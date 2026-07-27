@@ -93,7 +93,7 @@ describe('createVadClient', () => {
     expect(emittedLevel).toBeLessThanOrEqual(1.0);
   });
 
-  it('zeros the visual level when VAD hangover frames are not speech', async () => {
+  it('keeps animating through short mid-utterance dips and only drains on clear silence', async () => {
     const onFrameLevel = vi.fn();
     await createVadClient({
       onSpeechStart: vi.fn(),
@@ -103,16 +103,26 @@ describe('createVadClient', () => {
       onError: vi.fn(),
     });
 
-    const noisyFrame = new Float32Array(512).fill(0.04);
-    (mocks.options as { onFrameProcessed?: (p: { isSpeech: number }, f: Float32Array) => void })
-      ?.onFrameProcessed?.({ isSpeech: 0.9 }, noisyFrame);
-    onFrameLevel.mockClear();
+    const speechFrame = new Float32Array(512).fill(0.04);
+    const frameProcessed = (
+      mocks.options as {
+        onFrameProcessed?: (p: { isSpeech: number }, f: Float32Array) => void;
+      }
+    )?.onFrameProcessed;
 
-    (mocks.options as { onFrameProcessed?: (p: { isSpeech: number }, f: Float32Array) => void })
-      ?.onFrameProcessed?.({ isSpeech: 0.2 }, noisyFrame);
+    frameProcessed?.({ isSpeech: 0.9 }, speechFrame);
+    const peak = onFrameLevel.mock.calls.at(-1)?.[0] as number;
+    expect(peak).toBeGreaterThan(0.25);
 
-    expect(onFrameLevel).toHaveBeenCalledOnce();
-    expect(onFrameLevel.mock.calls[0][0]).toBe(0);
+    // Mild isSpeech dip (end of a word) must NOT hard-zero the bars.
+    frameProcessed?.({ isSpeech: 0.35 }, speechFrame);
+    const midWord = onFrameLevel.mock.calls.at(-1)?.[0] as number;
+    expect(midWord).toBeGreaterThan(0.15);
+
+    // Clear silence drains toward idle without a hard cut on the peak frame alone.
+    frameProcessed?.({ isSpeech: 0.05 }, speechFrame);
+    const drained = onFrameLevel.mock.calls.at(-1)?.[0] as number;
+    expect(drained).toBeLessThan(midWord);
   });
 
   it('resets visual level when speech ends or misfires', async () => {
