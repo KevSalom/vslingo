@@ -278,11 +278,7 @@ export function VideoLab({
     if (message) {
       setStatus(message);
     } else {
-      setStatus(
-        note.timestamp !== undefined
-          ? `Nota guardada · ${formatTimestamp(note.timestamp)}`
-          : 'Nota guardada en este navegador.',
-      );
+      setStatus('Nota guardada en este navegador.');
     }
     setNoteDraft(null);
   };
