@@ -192,8 +192,75 @@ export function DemoWorkspace() {
 
 function VoiceFallback() {
   return (
-    <section aria-busy="true" aria-label="Cargando Voice Studio" role="status">
-      <p className="font-mono text-sm text-slate-400">Cargando Voice Studio…</p>
+    <section
+      aria-busy="true"
+      aria-label="Cargando Voice Studio"
+      className="voice-studio voice-studio-fallback"
+      role="status"
+    >
+      <div className="voice-split" aria-hidden="true">
+        <div className="voice-pane voice-pane-control">
+          <div className="voice-pane-tabs">
+            <span className="voice-pane-tab is-active">control.voice</span>
+            <span className="voice-fallback-chip" />
+          </div>
+          <div className="voice-setup">
+            <span className="voice-fallback-line voice-fallback-line-md" />
+            <span className="voice-fallback-line voice-fallback-line-sm" />
+          </div>
+          <div className="voice-power-wrap">
+            <span className="voice-fallback-power" />
+          </div>
+          <div className="voice-vad-notice">
+            <span className="voice-fallback-line" />
+            <span className="voice-fallback-line voice-fallback-line-sm" />
+          </div>
+          <div className="voice-signal">
+            <span className="voice-signal-label">tu voz</span>
+            {Array.from({ length: 18 }, (_, index) => (
+              <span className="voice-signal-bar" key={index} style={{ transform: 'scaleY(0.14)' }} />
+            ))}
+          </div>
+          <div className="voice-metrics">
+            <span className="voice-fallback-line voice-fallback-line-xs" />
+            <div className="voice-metrics-grid">
+              <span className="voice-fallback-line voice-fallback-line-sm" />
+              <span className="voice-fallback-line voice-fallback-line-sm" />
+              <span className="voice-fallback-line voice-fallback-line-sm" />
+              <span className="voice-fallback-line voice-fallback-line-sm" />
+            </div>
+          </div>
+          <div className="voice-ptt-wrap">
+            <span className="voice-fallback-ptt" />
+          </div>
+        </div>
+        <div className="voice-pane voice-pane-session">
+          <div className="voice-workspace">
+            <div className="voice-panel">
+              <div className="voice-pane-tabs">
+                <span className="voice-pane-tab is-active">conversation.stream</span>
+              </div>
+              <div className="voice-panel-body">
+                <div className="voice-scroll">
+                  <span className="voice-fallback-block" />
+                  <span className="voice-fallback-block voice-fallback-block-short" />
+                </div>
+              </div>
+            </div>
+            <div className="voice-panel">
+              <div className="voice-pane-tabs">
+                <span className="voice-pane-tab is-active">feedback.coach</span>
+              </div>
+              <div className="voice-panel-body">
+                <div className="voice-scroll">
+                  <span className="voice-fallback-block" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <span className="sr-only">Cargando Voice Studio…</span>
     </section>
   );
 }

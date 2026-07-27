@@ -1161,6 +1161,47 @@ button:not(:disabled), a[href] { -webkit-tap-highlight-color: transparent; }
    ═══════════════════════════════════════════════════════════════ */
 
 .voice-studio { width: 100%; max-width: 92rem; margin-inline: auto; color: var(--t-foreground); }
+.voice-studio-fallback { pointer-events: none; user-select: none; }
+.voice-fallback-chip {
+  display: inline-block; width: 6.5rem; height: 1.35rem; border-radius: 999px;
+  background: color-mix(in srgb, var(--t-muted) 22%, transparent);
+}
+.voice-fallback-line {
+  display: block; height: .7rem; width: 100%; border-radius: .2rem;
+  background: color-mix(in srgb, var(--t-muted) 20%, transparent);
+}
+.voice-fallback-line + .voice-fallback-line { margin-top: .45rem; }
+.voice-fallback-line-xs { width: 38%; }
+.voice-fallback-line-sm { width: 62%; }
+.voice-fallback-line-md { width: 78%; }
+.voice-fallback-power {
+  display: block; width: 6.5rem; height: 6.5rem; border-radius: 50%;
+  border: 2px solid var(--t-border-strong);
+  background: color-mix(in srgb, var(--t-muted) 12%, var(--t-panel));
+}
+.voice-fallback-ptt {
+  display: block; width: 100%; height: 2.75rem; border-radius: .375rem;
+  background: color-mix(in srgb, var(--t-muted) 18%, transparent);
+}
+.voice-fallback-block {
+  display: block; width: min(85%, 22rem); min-height: 4.25rem; border-radius: .6rem;
+  border: 1px solid var(--t-border);
+  background: color-mix(in srgb, var(--t-muted) 12%, var(--t-panel));
+}
+.voice-fallback-block-short { width: min(70%, 16rem); min-height: 3.25rem; margin-top: .65rem; align-self: flex-end; }
+@media (prefers-reduced-motion: no-preference) {
+  .voice-studio-fallback .voice-fallback-chip,
+  .voice-studio-fallback .voice-fallback-line,
+  .voice-studio-fallback .voice-fallback-power,
+  .voice-studio-fallback .voice-fallback-ptt,
+  .voice-studio-fallback .voice-fallback-block {
+    animation: voice-fallback-pulse 1.1s ease-in-out infinite alternate;
+  }
+}
+@keyframes voice-fallback-pulse {
+  from { opacity: .55; }
+  to { opacity: 1; }
+}
 .voice-header { margin-bottom: 1.1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--t-border); }
 .voice-header-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-top: .7rem; }
 .voice-header-status {
