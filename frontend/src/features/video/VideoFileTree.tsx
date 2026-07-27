@@ -293,6 +293,20 @@ export function VideoFileTree({
 
       {noteModal ? (
         <VsCodeModal
+          actionsLeft={
+            noteModal.mode === 'edit' ? (
+              <button
+                className="vsc-modal-button vsc-modal-button-danger"
+                onClick={() => {
+                  deleteNote(noteModal.note.id);
+                  setNoteModal(null);
+                }}
+                type="button"
+              >
+                Eliminar nota
+              </button>
+            ) : undefined
+          }
           confirmDisabled={!noteTitle.trim() || !noteText.trim()}
           confirmLabel={noteModal.mode === 'create' ? 'Guardar nota' : 'Guardar cambios'}
           description={
@@ -325,18 +339,6 @@ export function VideoFileTree({
             rows={5}
             value={noteText}
           />
-          {noteModal.mode === 'edit' ? (
-            <button
-              className="vsc-modal-button vsc-modal-button-danger"
-              onClick={() => {
-                deleteNote(noteModal.note.id);
-                setNoteModal(null);
-              }}
-              type="button"
-            >
-              Eliminar nota
-            </button>
-          ) : null}
         </VsCodeModal>
       ) : null}
     </div>

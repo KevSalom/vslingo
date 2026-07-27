@@ -8,6 +8,7 @@ type VsCodeModalProps = {
   confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  actionsLeft?: ReactNode;
   children: ReactNode;
 };
 
@@ -19,6 +20,7 @@ export function VsCodeModal({
   confirmDisabled = false,
   onConfirm,
   onCancel,
+  actionsLeft,
   children,
 }: VsCodeModalProps) {
   const titleId = useId();
@@ -113,20 +115,25 @@ export function VsCodeModal({
         <form className="vsc-modal-body" onSubmit={handleSubmit}>
           {children}
           <footer className="vsc-modal-actions">
-            <button
-              className="vsc-modal-button vsc-modal-button-ghost"
-              onClick={onCancel}
-              type="button"
-            >
-              {cancelLabel}
-            </button>
-            <button
-              className="vsc-modal-button vsc-modal-button-primary"
-              disabled={confirmDisabled}
-              type="submit"
-            >
-              {confirmLabel}
-            </button>
+            {actionsLeft ? (
+              <div className="vsc-modal-actions-left">{actionsLeft}</div>
+            ) : null}
+            <div className="vsc-modal-actions-right">
+              <button
+                className="vsc-modal-button vsc-modal-button-ghost"
+                onClick={onCancel}
+                type="button"
+              >
+                {cancelLabel}
+              </button>
+              <button
+                className="vsc-modal-button vsc-modal-button-primary"
+                disabled={confirmDisabled}
+                type="submit"
+              >
+                {confirmLabel}
+              </button>
+            </div>
           </footer>
         </form>
       </div>
