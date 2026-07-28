@@ -30,6 +30,9 @@ export type VoiceState =
   | 'error'
   | 'closed';
 
+/** Exclusive capture path — only one can send audio per session moment. */
+export type CaptureMode = 'vad' | 'ptt';
+
 type SessionMetrics = {
   sttLatencyMs: number | null;
   firstTokenLatencyMs: number | null;
@@ -49,6 +52,8 @@ const INITIAL_SESSION_METRICS: SessionMetrics = {
 export function VoiceStudio() {
   const [state, setState] = useState<VoiceState>('idle');
   const [inputState, setInputState] = useState<InputSubstate>('idle');
+  const [captureMode, setCaptureMode] = useState<CaptureMode>('vad');
+  const [vadAvailable, setVadAvailable] = useState(true);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [inputLevel, setInputLevel] = useState(0);
   const [outputLevel, setOutputLevel] = useState(0);
@@ -77,6 +82,7 @@ export function VoiceStudio() {
   /** Last scenario confirmed by session.configured; used to clear UI history only on scenario change. */
   const configuredScenarioRef = useRef<ScenarioType | null>(null);
   const captureOwnerRef = useRef<'vad' | 'ptt' | null>(null);
+  const captureModeRef = useRef<CaptureMode>('vad');
   const sessionTokenRef = useRef(0);
   const firstPlaybackSegmentRef = useRef<{ turnId: string; generation: number; segmentId: string } | null>(null);
   const playbackStartedGenerationRef = useRef<number | null>(null);
@@ -90,6 +96,10 @@ export function VoiceStudio() {
   const isPlayingAudioRef = useRef(false);
   /** True only while VAD/PTT reports real speech ("Te escucho"). */
   const speechActiveRef = useRef(false);
+
+  useEffect(() => {
+    captureModeRef.current = captureMode;
+  }, [captureMode]);
 
   useEffect(() => {
     scenarioRef.current = scenario;
@@ -154,9 +164,15 @@ export function VoiceStudio() {
       recorder.cleanup();
     }
     if (captureOwner === 'ptt') {
-      void vadControllerRef.current?.start();
+      if (captureModeRef.current === 'vad') {
+        void vadControllerRef.current?.start();
+      }
       setState('ready');
-      setInputState(vadControllerRef.current ? 'listening' : 'fallback_ptt');
+      setInputState(
+        captureModeRef.current === 'vad' && vadControllerRef.current
+          ? 'listening'
+          : 'fallback_ptt',
+      );
     }
     if (!turnId) {
       captureOwnerRef.current = null;
@@ -176,6 +192,12 @@ export function VoiceStudio() {
     setIsFeedbackPending(false);
     setIsPlayingAudio(false);
     if (message) setErrorMessage(message);
+  }, []);
+
+  const readyInputState = useCallback((): InputSubstate => {
+    return captureModeRef.current === 'vad' && vadControllerRef.current
+      ? 'listening'
+      : 'fallback_ptt';
   }, []);
 
   const beginTurn = useCallback(() => {
@@ -332,6 +354,7 @@ export function VoiceStudio() {
               try {
                 const vad = await createVadClient({
                   onSpeechStart: () => {
+                    if (captureModeRef.current !== 'vad') return;
                     if (captureOwnerRef.current === 'ptt') return;
                     captureOwnerRef.current = 'vad';
                     speechActiveRef.current = true;
@@ -339,13 +362,24 @@ export function VoiceStudio() {
                     setInputState('speech');
                   },
                   onSpeechEnd: (wavBytes, durationMs) => {
+                    if (captureModeRef.current !== 'vad') return;
                     if (captureOwnerRef.current !== 'vad') return;
+                    const turnId = currentTurnIdRef.current;
+                    const turnGeneration = generationRef.current;
                     captureOwnerRef.current = null;
                     speechActiveRef.current = false;
                     setInputLevel(0);
-                    const turnId = currentTurnIdRef.current;
                     if (!turnId || durationMs < 100 || durationMs > 60000 || wavBytes.length <= 44) {
                       cancelCurrentTurn('No se detectó una frase completa. Inténtalo de nuevo.');
+                      setInputState('listening');
+                      return;
+                    }
+                    // Abort if PTT/cancel took over while encoding this segment.
+                    if (
+                      currentTurnIdRef.current !== turnId ||
+                      generationRef.current !== turnGeneration ||
+                      captureModeRef.current !== 'vad'
+                    ) {
                       setInputState('listening');
                       return;
                     }
@@ -354,14 +388,21 @@ export function VoiceStudio() {
                     client.sendMessage({
                       type: 'utterance.begin',
                       turn_id: turnId,
-                      generation: generationRef.current,
+                      generation: turnGeneration,
                       media_type: 'audio/wav',
                       byte_length: wavBytes.length,
                       duration_ms: durationMs,
                     });
+                    if (
+                      currentTurnIdRef.current !== turnId ||
+                      generationRef.current !== turnGeneration
+                    ) {
+                      return;
+                    }
                     client.sendBinary(wavBytes);
                   },
                   onSpeechCancel: () => {
+                    if (captureModeRef.current !== 'vad') return;
                     if (captureOwnerRef.current !== 'vad') return;
                     speechActiveRef.current = false;
                     setInputLevel(0);
@@ -369,6 +410,7 @@ export function VoiceStudio() {
                     setInputState('listening');
                   },
                   onFrameLevel: (level) => {
+                    if (captureModeRef.current !== 'vad') return;
                     // Only animate mic while real speech is detected, or assistant TTS later.
                     if (isPlayingAudioRef.current || !speechActiveRef.current) return;
                     const reducedMotion =
@@ -385,8 +427,14 @@ export function VoiceStudio() {
                   return;
                 }
                 vadControllerRef.current = vad;
-                await vad.start();
-                setInputState('listening');
+                setVadAvailable(true);
+                if (captureModeRef.current === 'vad') {
+                  await vad.start();
+                  setInputState('listening');
+                } else {
+                  await vad.pause();
+                  setInputState('fallback_ptt');
+                }
               } catch (cause) {
                 if (sessionToken !== sessionTokenRef.current) return;
                 console.warn('VAD init failed:', cause);
@@ -404,6 +452,9 @@ export function VoiceStudio() {
                   !window.isSecureContext &&
                   window.location.hostname !== 'localhost' &&
                   window.location.hostname !== '127.0.0.1';
+                setVadAvailable(false);
+                setCaptureMode('ptt');
+                captureModeRef.current = 'ptt';
                 setInputState(permissionDenied ? 'permission_denied' : 'fallback_ptt');
                 setErrorMessage(
                   permissionDenied
@@ -458,7 +509,7 @@ export function VoiceStudio() {
             setActiveFeedback(null);
             setFeedbackErrorMsg(null);
             setState('ready');
-            setInputState(vadControllerRef.current ? 'listening' : 'fallback_ptt');
+            setInputState(readyInputState());
             break;
 
           case 'assistant.delta':
@@ -546,7 +597,7 @@ export function VoiceStudio() {
             setIsAssistantStreaming(false);
             setIsFeedbackPending(false);
             setState('ready');
-            setInputState(vadControllerRef.current ? 'listening' : 'fallback_ptt');
+            setInputState(readyInputState());
             break;
 
           case 'metrics.stage':
@@ -621,7 +672,7 @@ export function VoiceStudio() {
       cleanupLocalResources();
     } else {
       setState('ready');
-      setInputState(vadControllerRef.current ? 'listening' : 'fallback_ptt');
+      setInputState(readyInputState());
     }
   };
 
@@ -653,7 +704,37 @@ export function VoiceStudio() {
     applyConfiguration(scenarioRef.current, newProvider);
   };
 
+  const applyCaptureMode = useCallback(
+    (next: CaptureMode) => {
+      if (next === 'vad' && !vadAvailable) return;
+      if (next === captureModeRef.current) return;
+
+      cancelCurrentTurn();
+      captureModeRef.current = next;
+      setCaptureMode(next);
+      speechActiveRef.current = false;
+      setInputLevel(0);
+      setErrorMessage(null);
+
+      if (next === 'ptt') {
+        void vadControllerRef.current?.pause();
+        setInputState(state === 'idle' || state === 'closed' || state === 'error' ? 'idle' : 'fallback_ptt');
+        return;
+      }
+
+      if (vadControllerRef.current && state === 'ready') {
+        void vadControllerRef.current.start().then(() => {
+          if (captureModeRef.current === 'vad') setInputState('listening');
+        });
+      } else if (state === 'ready') {
+        setInputState('listening');
+      }
+    },
+    [cancelCurrentTurn, state, vadAvailable],
+  );
+
   const startRecording = useCallback(async () => {
+    if (captureModeRef.current !== 'ptt') return;
     if (state !== 'ready' || !socketRef.current || captureOwnerRef.current) return;
 
     captureOwnerRef.current = 'ptt';
@@ -691,7 +772,6 @@ export function VoiceStudio() {
       setErrorMessage('No se pudo acceder al micrófono. Revisa el permiso e inténtalo de nuevo.');
       setState('ready');
       setInputState('fallback_ptt');
-      void vadControllerRef.current?.start();
     }
   }, [beginTurn, state]);
 
@@ -705,12 +785,13 @@ export function VoiceStudio() {
     setInputLevel(0);
     try {
       const turnId = currentTurnIdRef.current;
+      const turnGeneration = generationRef.current;
       const { wavBytes, durationMs } = recorder.stop();
 
       if (!turnId || durationMs < 100 || durationMs > 60000 || wavBytes.length <= 44) {
         cancelCurrentTurn('Mantén pulsado al menos un instante y vuelve a hablar.');
         setState('ready');
-        setInputState(vadControllerRef.current ? 'listening' : 'fallback_ptt');
+        setInputState('fallback_ptt');
         return;
       }
 
@@ -719,7 +800,7 @@ export function VoiceStudio() {
       socketRef.current.sendMessage({
         type: 'utterance.begin',
         turn_id: turnId,
-        generation: generationRef.current,
+        generation: turnGeneration,
         media_type: 'audio/wav',
         byte_length: wavBytes.length,
         duration_ms: durationMs,
@@ -731,8 +812,6 @@ export function VoiceStudio() {
       console.error('Error stopping recording:', err);
       setState('ready');
       setInputState('fallback_ptt');
-    } finally {
-      void vadControllerRef.current?.start();
     }
   }, [cancelCurrentTurn]);
 
@@ -841,6 +920,39 @@ export function VoiceStudio() {
                 onChange={handleSpeechProviderChange}
                 disabled={state === 'connecting'}
               />
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs font-semibold text-slate-300" id="voice-capture-mode-label">
+                  Entrada de voz
+                </span>
+                <div
+                  aria-labelledby="voice-capture-mode-label"
+                  className="voice-mode-toggle"
+                  role="radiogroup"
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={captureMode === 'vad'}
+                    disabled={
+                      state === 'connecting' || state === 'recording' || !vadAvailable
+                    }
+                    className={`voice-mode-option${captureMode === 'vad' ? ' is-active' : ''}`}
+                    onClick={() => applyCaptureMode('vad')}
+                  >
+                    Manos libres
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={captureMode === 'ptt'}
+                    disabled={state === 'connecting' || state === 'recording'}
+                    className={`voice-mode-option${captureMode === 'ptt' ? ' is-active' : ''}`}
+                    onClick={() => applyCaptureMode('ptt')}
+                  >
+                    Pulsar para hablar
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -864,8 +976,9 @@ export function VoiceStudio() {
           </div>
 
           <p className="voice-vad-notice">
-            Escucha automática activa. Habla cuando estés listo; VSLingo detecta una pausa antes de
-            responder. Puedes usar «Mantén pulsado para hablar» cuando prefieras controlar el inicio.
+            {captureMode === 'vad'
+              ? 'Manos libres activo. Habla cuando estés listo; VSLingo detecta una pausa antes de responder.'
+              : 'Modo manual activo. Mantén pulsado el botón para hablar y suelta para enviar.'}
           </p>
 
           <div
@@ -901,43 +1014,45 @@ export function VoiceStudio() {
             </dl>
           </section>
 
-          <div className="voice-ptt-wrap">
-            <button
-              type="button"
-              onPointerDown={(event) => {
-                event.currentTarget.setPointerCapture?.(event.pointerId);
-                void startRecording();
-              }}
-              onPointerUp={(event) => {
-                stopRecording();
-                if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-                  event.currentTarget.releasePointerCapture(event.pointerId);
-                }
-              }}
-              onPointerCancel={stopRecording}
-              onLostPointerCapture={stopRecording}
-              onKeyDown={(event) => {
-                if (!event.repeat && (event.key === ' ' || event.key === 'Enter')) {
-                  event.preventDefault();
+          {captureMode === 'ptt' && (
+            <div className="voice-ptt-wrap">
+              <button
+                type="button"
+                onPointerDown={(event) => {
+                  event.currentTarget.setPointerCapture?.(event.pointerId);
                   void startRecording();
-                }
-              }}
-              onKeyUp={(event) => {
-                if (event.key === ' ' || event.key === 'Enter') {
-                  event.preventDefault();
+                }}
+                onPointerUp={(event) => {
                   stopRecording();
-                }
-              }}
-              disabled={state !== 'ready' && state !== 'recording'}
-              className={`voice-ptt ${
-                state === 'recording' ? 'is-recording' : state === 'ready' ? 'is-ready' : ''
-              }`}
-            >
-              {state === 'recording'
-                ? 'Grabando… suelta para enviar'
-                : 'Mantén pulsado para hablar (PTT)'}
-            </button>
-          </div>
+                  if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                  }
+                }}
+                onPointerCancel={stopRecording}
+                onLostPointerCapture={stopRecording}
+                onKeyDown={(event) => {
+                  if (!event.repeat && (event.key === ' ' || event.key === 'Enter')) {
+                    event.preventDefault();
+                    void startRecording();
+                  }
+                }}
+                onKeyUp={(event) => {
+                  if (event.key === ' ' || event.key === 'Enter') {
+                    event.preventDefault();
+                    stopRecording();
+                  }
+                }}
+                disabled={state !== 'ready' && state !== 'recording'}
+                className={`voice-ptt ${
+                  state === 'recording' ? 'is-recording' : state === 'ready' ? 'is-ready' : ''
+                }`}
+              >
+                {state === 'recording'
+                  ? 'Grabando… suelta para enviar'
+                  : 'Mantén pulsado para hablar (PTT)'}
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="voice-pane voice-pane-session">

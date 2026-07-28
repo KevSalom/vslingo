@@ -114,6 +114,11 @@ async function connectVoice() {
   return user;
 }
 
+async function switchToPtt(user: Awaited<ReturnType<typeof userEvent.setup>>) {
+  await user.click(screen.getByRole('radio', { name: 'Pulsar para hablar' }));
+  await waitFor(() => expect(mocks.vadPause).toHaveBeenCalled());
+}
+
 describe('VoiceStudio T07 flow', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -138,7 +143,8 @@ describe('VoiceStudio T07 flow', () => {
     expect(screen.getByRole('button', { name: 'Iniciar Voice Studio' })).toBeInTheDocument();
     expect(screen.getByRole('status', { name: /Estado: Inactivo/i })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Señal de audio: entrada' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Mantén pulsado para hablar/i })).toBeDisabled();
+    expect(screen.getByRole('radio', { name: 'Manos libres' })).toBeChecked();
+    expect(screen.queryByRole('button', { name: /Mantén pulsado para hablar/i })).not.toBeInTheDocument();
   });
 
   it('starts hands-free VAD after session.ready and creates utterances without PTT', async () => {
@@ -157,21 +163,38 @@ describe('VoiceStudio T07 flow', () => {
     );
   });
 
-  it('uses hold-to-talk and pauses VAD while the manual capture owns the microphone', async () => {
-    await connectVoice();
+  it('uses hold-to-talk only in manual mode and pauses VAD while recording', async () => {
+    const user = await connectVoice();
+    await switchToPtt(user);
     const ptt = screen.getByRole('button', { name: /Mantén pulsado para hablar/i });
 
     fireEvent.pointerDown(ptt, { pointerId: 1, button: 0 });
     await waitFor(() => expect(mocks.recorderStart).toHaveBeenCalledOnce());
-    expect(mocks.vadPause).toHaveBeenCalledOnce();
+    expect(mocks.vadPause).toHaveBeenCalled();
 
     fireEvent.pointerUp(ptt, { pointerId: 1, button: 0 });
     await waitFor(() => expect(mocks.recorderStop).toHaveBeenCalledOnce());
-    expect(mocks.vadStart).toHaveBeenCalledTimes(2);
+    // Manual mode stays paused: VAD is not restarted after PTT release.
+    expect(mocks.vadStart).toHaveBeenCalledOnce();
+  });
+
+  it('ignores late VAD speech end after switching to PTT mid-utterance', async () => {
+    const user = await connectVoice();
+    act(() => mocks.vadOptions?.onSpeechStart());
+    const messageCountAfterStart = mocks.socket?.messages.length ?? 0;
+
+    await switchToPtt(user);
+    act(() => mocks.vadOptions?.onSpeechEnd(new Uint8Array(3200), 200));
+
+    const later = (mocks.socket?.messages ?? []).slice(messageCountAfterStart);
+    expect(later.some((message) => (message as { type?: string }).type === 'utterance.begin')).toBe(
+      false,
+    );
   });
 
   it('animates input waveform from live PTT mic levels while held', async () => {
-    await connectVoice();
+    const user = await connectVoice();
+    await switchToPtt(user);
     const ptt = screen.getByRole('button', { name: /Mantén pulsado para hablar/i });
 
     fireEvent.pointerDown(ptt, { pointerId: 1, button: 0 });
@@ -352,6 +375,7 @@ describe('VoiceStudio T07 flow', () => {
 
   it('cleans the manual recorder if configuration changes while PTT is held', async () => {
     const user = await connectVoice();
+    await switchToPtt(user);
     const ptt = screen.getByRole('button', { name: /Mantén pulsado para hablar/i });
     fireEvent.pointerDown(ptt, { pointerId: 7, button: 0 });
     await waitFor(() => expect(mocks.recorderStart).toHaveBeenCalledOnce());
@@ -359,7 +383,6 @@ describe('VoiceStudio T07 flow', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'Escenario' }), 'free');
 
     expect(mocks.recorderCleanup).toHaveBeenCalled();
-    expect(mocks.vadStart).toHaveBeenCalledTimes(2);
   });
 
   it('renders session metrics from safe protocol events without persisting them', async () => {

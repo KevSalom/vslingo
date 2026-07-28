@@ -1279,6 +1279,39 @@ button:not(:disabled), a[href] { -webkit-tap-highlight-color: transparent; }
 .voice-setup { display: grid; gap: .75rem; padding: .9rem; border-bottom: 1px solid var(--t-border); }
 .voice-setup-label, .voice-panel-label { margin: 0; color: var(--t-muted); font-family: var(--font-jetbrains-mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; }
 .voice-settings { display: grid; gap: .55rem; }
+.voice-mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .35rem;
+  padding: .2rem;
+  border: 1px solid var(--t-border-strong);
+  border-radius: .35rem;
+  background: var(--t-panel);
+}
+.voice-mode-option {
+  min-height: 2.1rem;
+  border: 1px solid transparent;
+  border-radius: .25rem;
+  background: transparent;
+  color: var(--t-muted);
+  cursor: pointer;
+  font-size: .78rem;
+  font-weight: 600;
+  padding: .35rem .5rem;
+}
+.voice-mode-option:hover:not(:disabled) {
+  color: var(--t-foreground);
+  border-color: var(--t-border);
+}
+.voice-mode-option.is-active {
+  border-color: color-mix(in srgb, var(--t-primary) 55%, transparent);
+  background: color-mix(in srgb, var(--t-primary) 16%, transparent);
+  color: var(--t-foreground);
+}
+.voice-mode-option:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
 #speech-provider-select, #voice-speech-provider, #voice-scenario {
   border-color: var(--t-border-strong); border-radius: .25rem; background: var(--t-panel); color: var(--t-foreground);
 }
