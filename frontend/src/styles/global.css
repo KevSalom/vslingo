@@ -1390,9 +1390,9 @@ button:not(:disabled), a[href] { -webkit-tap-highlight-color: transparent; }
     align-items: stretch;
     /* Pin the studio to the viewport so long conversations scroll inside
        their panels instead of growing the page. */
-    height: min(38.25rem, calc(100dvh - 10rem));
+    height: min(42.625rem, calc(100dvh - 10rem));
     max-height: calc(100dvh - 10rem);
-    min-height: 0;
+    min-height: min(42.625rem, calc(100dvh - 10rem));
     border: 1px solid var(--t-border); border-radius: .35rem; overflow: hidden; background: var(--t-surface-recessed);
   }
   .voice-split .voice-pane {
