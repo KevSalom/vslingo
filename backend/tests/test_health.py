@@ -10,8 +10,6 @@ def test_health_reports_readiness_without_leaking_secrets() -> None:
         _env_file=None,
         environment="test",
         openrouter_api_key=SecretStr("super-secret-openrouter"),
-        aws_access_key_id=SecretStr("super-secret-key"),
-        aws_secret_access_key=SecretStr("super-secret-aws"),
     )
     client = TestClient(create_app(settings))
 
@@ -20,12 +18,11 @@ def test_health_reports_readiness_without_leaking_secrets() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "status": "ok",
-        "service": "VSLingo API",
+        "service": "Inglés al Grano API",
         "version": "0.1.0",
         "environment": "test",
         "providers": {
             "openrouter": {"configured": True},
-            "aws_polly": {"configured": True},
             "edge_tts": {"configured": True},
         },
     }
@@ -39,5 +36,4 @@ def test_health_works_without_optional_provider_credentials() -> None:
 
     assert response.status_code == 200
     assert response.json()["providers"]["openrouter"]["configured"] is False
-    assert response.json()["providers"]["aws_polly"]["configured"] is False
     assert response.json()["providers"]["edge_tts"]["configured"] is True

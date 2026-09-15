@@ -23,18 +23,18 @@ describe('FixturePlayer', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reproducir demo local' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reproducir ejemplo' }));
     act(() => vi.advanceTimersByTime(PLAYBACK_POLL_INTERVAL_MS * 2));
     expect(onTimeChange).toHaveBeenNthCalledWith(1, 0.2);
     expect(onTimeChange).toHaveBeenNthCalledWith(2, 0.4);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Pausar demo local' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pausar ejemplo' }));
     act(() => vi.advanceTimersByTime(PLAYBACK_POLL_INTERVAL_MS * 2));
     expect(onTimeChange).toHaveBeenCalledTimes(2);
 
     act(() => ref.current?.seekTo(12.5));
     expect(onTimeChange).toHaveBeenLastCalledWith(12.5);
-    expect(screen.getByRole('slider', { name: 'Posición de la demo local' })).toHaveValue('12.5');
+    expect(screen.getByRole('slider', { name: 'Posición del video de ejemplo' })).toHaveValue('12.5');
 
     view.unmount();
     act(() => vi.advanceTimersByTime(PLAYBACK_POLL_INTERVAL_MS * 2));

@@ -70,10 +70,10 @@ def client(
 def test_voice_ws_handshake_and_config(client: TestClient) -> None:
     with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
         # Start session
-        ws.send_json({"type": "session.start", "protocol_version": 1})
+        ws.send_json({"type": "session.start", "protocol_version": 2})
         ready = ws.receive_json()
         assert ready["type"] == "session.ready"
-        assert ready["protocol_version"] == 1
+        assert ready["protocol_version"] == 2
         assert ready["generation"] == 0
         assert "session_id" in ready
 
@@ -81,7 +81,7 @@ def test_voice_ws_handshake_and_config(client: TestClient) -> None:
         ws.send_json({
             "type": "session.config",
             "scenario": "daily_standup",
-            "speech_provider": "aws_polly",
+            "speech_provider": "edge_tts",
         })
         configured = ws.receive_json()
         assert configured["type"] == "session.configured"
@@ -94,7 +94,7 @@ def test_voice_ws_full_ptt_turn_with_stream_and_feedback(client: TestClient) -> 
     turn_id = "123e4567-e89b-12d3-a456-426614174000"
 
     with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
-        ws.send_json({"type": "session.start", "protocol_version": 1})
+        ws.send_json({"type": "session.start", "protocol_version": 2})
         _ = ws.receive_json()
 
         # Proposed generation 1
@@ -149,7 +149,7 @@ def test_voice_ws_feedback_error_does_not_cancel_conversation(
     turn_id = "123e4567-e89b-12d3-a456-426614174000"
 
     with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
-        ws.send_json({"type": "session.start", "protocol_version": 1})
+        ws.send_json({"type": "session.start", "protocol_version": 2})
         _ = ws.receive_json()
 
         ws.send_json({"type": "speech.started", "turn_id": turn_id, "generation": 1})
@@ -177,7 +177,7 @@ def test_voice_ws_feedback_error_does_not_cancel_conversation(
 
 def test_voice_ws_invalid_generation_rejection(client: TestClient) -> None:
     with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
-        ws.send_json({"type": "session.start", "protocol_version": 1})
+        ws.send_json({"type": "session.start", "protocol_version": 2})
         _ = ws.receive_json()
 
         ws.send_json({
@@ -196,7 +196,7 @@ def test_voice_ws_invalid_wav_rejection(client: TestClient) -> None:
     bad_bytes = b"NOT_A_WAV_HEADER_AT_ALL_MOCK_DATA"
 
     with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
-        ws.send_json({"type": "session.start", "protocol_version": 1})
+        ws.send_json({"type": "session.start", "protocol_version": 2})
         _ = ws.receive_json()
 
         ws.send_json({
@@ -223,7 +223,7 @@ def test_voice_ws_invalid_wav_rejection(client: TestClient) -> None:
 
 def test_voice_ws_cancel_turn(client: TestClient) -> None:
     with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
-        ws.send_json({"type": "session.start", "protocol_version": 1})
+        ws.send_json({"type": "session.start", "protocol_version": 2})
         _ = ws.receive_json()
 
         ws.send_json({
@@ -269,7 +269,7 @@ async def test_speech_started_cancels_previous_generation_not_the_new_one(
         speech_service=StubSpeechService(),
     )
     try:
-        await session._handle_text('{"type":"session.start","protocol_version":1}')
+        await session._handle_text('{"type":"session.start","protocol_version":2}')
         await session._handle_text(
             '{"type":"speech.started","turn_id":"turn-1","generation":1}'
         )
@@ -281,7 +281,7 @@ async def test_speech_started_cancels_previous_generation_not_the_new_one(
                 generation=1,
                 segment_index=0,
                 text="Hello.",
-                provider="aws_polly",
+                provider="edge_tts",
             ),
             active_generation=session.current_generation,
         )
@@ -313,7 +313,7 @@ async def test_stale_response_cancel_does_not_cancel_current_generation(
         speech_service=StubSpeechService(),
     )
     try:
-        await session._handle_text('{"type":"session.start","protocol_version":1}')
+        await session._handle_text('{"type":"session.start","protocol_version":2}')
         await session._handle_text(
             '{"type":"speech.started","turn_id":"turn-1","generation":1}'
         )
@@ -326,7 +326,7 @@ async def test_stale_response_cancel_does_not_cancel_current_generation(
 
         assert session.tts_consumer is not None
         accepted = await session.tts_consumer.enqueue(
-            TTSSegmentItem("turn-2", 2, 0, "Current.", "aws_polly"),
+            TTSSegmentItem("turn-2", 2, 0, "Current.", "edge_tts"),
             active_generation=2,
         )
         assert accepted is True
@@ -349,14 +349,14 @@ async def test_active_turn_configuration_is_cancelled_then_applied(
             del code
 
     session = VoiceSession(StubWebSocket(), fake_stt)  # type: ignore[arg-type]
-    await session._handle_text('{"type":"session.start","protocol_version":1}')
+    await session._handle_text('{"type":"session.start","protocol_version":2}')
     await session.outbound_queue.get()
     session.outbound_queue.task_done()
     await session._handle_text(
         '{"type":"speech.started","turn_id":"turn-1","generation":1}'
     )
     await session._handle_text(
-        '{"type":"session.config","scenario":"free","speech_provider":"edge_tts"}'
+        '{"type":"session.config","scenario":"daily_standup","speech_provider":"edge_tts"}'
     )
 
     cancelled = json.loads(await session.outbound_queue.get())
@@ -370,6 +370,6 @@ async def test_active_turn_configuration_is_cancelled_then_applied(
         "generation": 1,
     }
     assert configured["type"] == "session.configured"
-    assert configured["scenario"] == "free"
+    assert configured["scenario"] == "daily_standup"
     assert configured["speech_provider"] == "edge_tts"
     assert session.active_turn_id is None

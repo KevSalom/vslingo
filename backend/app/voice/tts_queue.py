@@ -25,6 +25,7 @@ class TTSSegmentItem:
     segment_index: int
     text: str
     provider: SpeechProviderType
+    voice: str | None = None
     segment_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
 
@@ -137,6 +138,8 @@ class TTSConsumer:
             fatal=False,
             turn_id=item.turn_id,
             generation=item.generation,
+            segment_id=item.segment_id,
+            segment_index=item.segment_index,
         )
         await self._outbound_writer(error.model_dump_json())
 
@@ -156,6 +159,7 @@ class TTSConsumer:
                     request = SpeechRequest(
                         text=item.text,
                         provider=SpeechProvider(item.provider),
+                        voice=item.voice,
                     )
                     self._active_item = item
                     self._active_synthesis_task = asyncio.create_task(

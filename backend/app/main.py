@@ -24,7 +24,6 @@ from app.core.config import Settings
 from app.core.protection import ConnectionLimiter, ProviderGate, ProviderGates, RequestLimiter
 from app.domain.ports import LanguageModelPort, SpeechToTextPort, VoiceFeedbackPort
 from app.domain.speech import SpeechProvider
-from app.providers.aws_polly import AWSPollySynthesizer
 from app.providers.edge_speech import EdgeTTSSynthesizer
 from app.providers.openrouter_chat import OpenRouterChatLanguageModel
 from app.providers.openrouter_feedback import OpenRouterVoiceFeedbackProvider
@@ -36,7 +35,7 @@ from app.services.correction import CorrectionService
 from app.services.speech import SpeechService
 from app.services.video import VideoService
 
-SERVICE_NAME: Final = "VSLingo API"
+SERVICE_NAME: Final = "Inglés al Grano API"
 
 
 class ProviderHealth(BaseModel):
@@ -106,7 +105,6 @@ def create_app(
     )
     runtime_speech_service = speech_service or SpeechService(
         providers={
-            SpeechProvider.AWS_POLLY: AWSPollySynthesizer(runtime_settings),
             SpeechProvider.EDGE_TTS: EdgeTTSSynthesizer(runtime_settings),
         },
         gate=provider_gates.tts,

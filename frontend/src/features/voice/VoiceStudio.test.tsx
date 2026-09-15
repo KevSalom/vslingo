@@ -3,18 +3,15 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ServerVoiceMessage } from './protocol';
-import type { VadClientOptions } from './vadClient';
 import { VoiceStudio } from './VoiceStudio';
 
 const mocks = vi.hoisted(() => ({
   socket: null as null | {
     messages: unknown[];
-    emitMessage: (message: unknown) => void;
+    binaries: Uint8Array[];
+    emitMessage: (message: ServerVoiceMessage) => void;
+    emitBinary: (data: ArrayBuffer) => void;
   },
-  vadOptions: null as VadClientOptions | null,
-  vadStart: vi.fn(async () => undefined),
-  vadPause: vi.fn(async () => undefined),
-  vadDestroy: vi.fn(async () => undefined),
   recorderStart: vi.fn(async () => undefined),
   recorderStop: vi.fn(() => ({ wavBytes: new Uint8Array(3200), durationMs: 200 })),
   recorderCleanup: vi.fn(),
@@ -22,6 +19,10 @@ const mocks = vi.hoisted(() => ({
   schedulerStopAll: vi.fn(),
   schedulerCancelBefore: vi.fn(),
   schedulerClose: vi.fn(async () => undefined),
+  schedulerEnqueue: vi.fn(async () => undefined),
+  schedulerAnalyser: vi.fn(() => null),
+  spoken: [] as SpeechSynthesisUtterance[],
+  speechCancel: vi.fn(),
 }));
 
 vi.mock('./voiceSocket', () => ({
@@ -30,14 +31,17 @@ vi.mock('./voiceSocket', () => ({
     private binaryListeners = new Set<(data: ArrayBuffer) => void>();
     private statusListeners = new Set<(connected: boolean) => void>();
     messages: unknown[] = [];
+    binaries: Uint8Array[] = [];
 
     constructor() {
       mocks.socket = {
         messages: this.messages,
+        binaries: this.binaries,
         emitMessage: (message) => {
-          for (const listener of this.messageListeners) {
-            listener(message as ServerVoiceMessage);
-          }
+          for (const listener of this.messageListeners) listener(message);
+        },
+        emitBinary: (data) => {
+          for (const listener of this.binaryListeners) listener(data);
         },
       };
     }
@@ -45,21 +49,29 @@ vi.mock('./voiceSocket', () => ({
     async connect() {
       for (const listener of this.statusListeners) listener(true);
     }
+
     disconnect() {
       for (const listener of this.statusListeners) listener(false);
     }
+
     sendMessage(message: unknown) {
       this.messages.push(message);
     }
-    sendBinary() {}
+
+    sendBinary(data: Uint8Array) {
+      this.binaries.push(data);
+    }
+
     onMessage(listener: (message: ServerVoiceMessage) => void) {
       this.messageListeners.add(listener);
       return () => this.messageListeners.delete(listener);
     }
+
     onBinary(listener: (data: ArrayBuffer) => void) {
       this.binaryListeners.add(listener);
       return () => this.binaryListeners.delete(listener);
     }
+
     onStatusChange(listener: (connected: boolean) => void) {
       this.statusListeners.add(listener);
       return () => this.statusListeners.delete(listener);
@@ -67,22 +79,12 @@ vi.mock('./voiceSocket', () => ({
   },
 }));
 
-vi.mock('./vadClient', () => ({
-  createVadClient: vi.fn(async (options: VadClientOptions) => {
-    mocks.vadOptions = options;
-    return {
-      start: mocks.vadStart,
-      pause: mocks.vadPause,
-      destroy: mocks.vadDestroy,
-    };
-  }),
-}));
-
 vi.mock('./audioCapture', () => ({
   AudioRecorder: class {
     start = mocks.recorderStart;
     stop = mocks.recorderStop;
     cleanup = mocks.recorderCleanup;
+
     constructor(options: { onFrameLevel?: (level: number) => void } = {}) {
       mocks.recorderOptions = options;
     }
@@ -94,13 +96,26 @@ vi.mock('./audioScheduler', () => ({
     stopAll = mocks.schedulerStopAll;
     cancelBefore = mocks.schedulerCancelBefore;
     close = mocks.schedulerClose;
-    enqueue = vi.fn(async () => undefined);
+    enqueue = mocks.schedulerEnqueue;
+    getAnalyserNode = mocks.schedulerAnalyser;
   },
 }));
 
+class FakeUtterance extends EventTarget {
+  lang = '';
+  voice: SpeechSynthesisVoice | null = null;
+  onstart: ((event: SpeechSynthesisEvent) => void) | null = null;
+  onend: ((event: SpeechSynthesisEvent) => void) | null = null;
+  onerror: ((event: SpeechSynthesisErrorEvent) => void) | null = null;
+
+  constructor(public text: string) {
+    super();
+  }
+}
+
 const readyMessage: ServerVoiceMessage = {
   type: 'session.ready',
-  protocol_version: 1,
+  protocol_version: 2,
   session_id: 'session-1',
   generation: 0,
 };
@@ -108,377 +123,242 @@ const readyMessage: ServerVoiceMessage = {
 async function connectVoice() {
   const user = userEvent.setup();
   render(<VoiceStudio />);
-  await user.click(screen.getByRole('button', { name: 'Iniciar Voice Studio' }));
+  await user.click(screen.getByRole('button', { name: 'Activar micrófono' }));
   act(() => mocks.socket?.emitMessage(readyMessage));
-  await waitFor(() => expect(mocks.vadStart).toHaveBeenCalledOnce());
+  await waitFor(() => expect(screen.getByRole('button', { name: /Mantén pulsado/i })).toBeEnabled());
   return user;
 }
 
-async function switchToPtt(user: Awaited<ReturnType<typeof userEvent.setup>>) {
-  await user.click(screen.getByRole('radio', { name: 'Pulsar para hablar' }));
-  await waitFor(() => expect(mocks.vadPause).toHaveBeenCalled());
+function beginRecording() {
+  const ptt = screen.getByRole('button', { name: /Mantén pulsado para hablar/i });
+  fireEvent.pointerDown(ptt, { pointerId: 1, button: 0 });
+  return ptt;
 }
 
-describe('VoiceStudio T07 flow', () => {
+describe('VoiceStudio MVP flow', () => {
   beforeEach(() => {
     localStorage.clear();
     mocks.socket = null;
-    mocks.vadOptions = null;
     mocks.recorderOptions = null;
+    mocks.spoken.length = 0;
     vi.clearAllMocks();
     let uuidSeq = 0;
     vi.spyOn(globalThis.crypto, 'randomUUID').mockImplementation(() => {
       uuidSeq += 1;
       return `00000000-0000-4000-8000-${String(uuidSeq).padStart(12, '0')}`;
     });
+    vi.stubGlobal('SpeechSynthesisUtterance', FakeUtterance);
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: {
+        cancel: mocks.speechCancel,
+        getVoices: vi.fn(() => []),
+        speak: vi.fn((utterance: SpeechSynthesisUtterance) => mocks.spoken.push(utterance)),
+      },
+    });
   });
 
-  it('renders initial state and keeps manual PTT disabled before connecting', () => {
+  it('starts with a disabled PTT and configures Edge plus the default voice', async () => {
     render(<VoiceStudio />);
 
-    expect(
-      screen.getByRole('heading', { name: /^Voice Studio$/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Escenario' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Iniciar Voice Studio' })).toBeInTheDocument();
-    expect(screen.getByRole('status', { name: /Estado: Inactivo/i })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Señal de audio: entrada' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Manos libres' })).toBeChecked();
-    expect(screen.queryByRole('button', { name: /Mantén pulsado para hablar/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Hablar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Mantén pulsado para hablar/i })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'Voz' })).toHaveValue('en-US-AriaNeural');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Activar micrófono' }));
+    act(() => mocks.socket?.emitMessage(readyMessage));
+
+    await waitFor(() =>
+      expect(mocks.socket?.messages).toContainEqual({
+        type: 'session.config',
+        scenario: 'free',
+        speech_provider: 'edge_tts',
+        speech_voice: 'en-US-AriaNeural',
+      }),
+    );
   });
 
-  it('starts hands-free VAD after session.ready and creates utterances without PTT', async () => {
+  it('records only while PTT is held and sends a bounded WAV utterance', async () => {
     await connectVoice();
+    const ptt = beginRecording();
+    await waitFor(() => expect(mocks.recorderStart).toHaveBeenCalledOnce());
 
-    act(() => mocks.vadOptions?.onSpeechStart());
-    act(() => mocks.vadOptions?.onSpeechEnd(new Uint8Array(3200), 200));
+    act(() => mocks.recorderOptions?.onFrameLevel?.(0.72));
+    fireEvent.pointerUp(ptt, { pointerId: 1, button: 0 });
 
+    await waitFor(() => expect(mocks.recorderStop).toHaveBeenCalledOnce());
     expect(mocks.socket?.messages).toContainEqual({
       type: 'speech.started',
       turn_id: '00000000-0000-4000-8000-000000000001',
       generation: 1,
     });
     expect(mocks.socket?.messages).toContainEqual(
-      expect.objectContaining({ type: 'utterance.begin', generation: 1, duration_ms: 200 }),
+      expect.objectContaining({ type: 'utterance.begin', duration_ms: 200, byte_length: 3200 }),
     );
+    expect(mocks.socket?.binaries).toHaveLength(1);
   });
 
-  it('uses hold-to-talk only in manual mode and pauses VAD while recording', async () => {
+  it('supports tap-to-start/tap-to-send without restoring hands-free capture', async () => {
     const user = await connectVoice();
-    await switchToPtt(user);
-    const ptt = screen.getByRole('button', { name: /Mantén pulsado para hablar/i });
-
-    fireEvent.pointerDown(ptt, { pointerId: 1, button: 0 });
+    await user.click(screen.getByRole('button', { name: 'O toca para empezar' }));
     await waitFor(() => expect(mocks.recorderStart).toHaveBeenCalledOnce());
-    expect(mocks.vadPause).toHaveBeenCalled();
 
-    fireEvent.pointerUp(ptt, { pointerId: 1, button: 0 });
-    await waitFor(() => expect(mocks.recorderStop).toHaveBeenCalledOnce());
-    // Manual mode stays paused: VAD is not restarted after PTT release.
-    expect(mocks.vadStart).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole('button', { name: 'Toca para enviar' }));
+    expect(mocks.recorderStop).toHaveBeenCalledOnce();
   });
 
-  it('ignores late VAD speech end after switching to PTT mid-utterance', async () => {
-    const user = await connectVoice();
-    act(() => mocks.vadOptions?.onSpeechStart());
-    const messageCountAfterStart = mocks.socket?.messages.length ?? 0;
+  it('releases capture when focus leaves the page', async () => {
+    await connectVoice();
+    beginRecording();
+    await waitFor(() => expect(mocks.recorderStart).toHaveBeenCalledOnce());
 
-    await switchToPtt(user);
-    act(() => mocks.vadOptions?.onSpeechEnd(new Uint8Array(3200), 200));
+    fireEvent(window, new Event('blur'));
 
-    const later = (mocks.socket?.messages ?? []).slice(messageCountAfterStart);
-    expect(later.some((message) => (message as { type?: string }).type === 'utterance.begin')).toBe(
-      false,
+    expect(mocks.recorderCleanup).toHaveBeenCalledOnce();
+    expect(mocks.socket?.messages).toContainEqual(
+      expect.objectContaining({ type: 'response.cancel', generation: 1 }),
     );
   });
 
-  it('animates input waveform from live PTT mic levels while held', async () => {
+  it('persists a voice change without cancelling the active turn', async () => {
     const user = await connectVoice();
-    await switchToPtt(user);
-    const ptt = screen.getByRole('button', { name: /Mantén pulsado para hablar/i });
+    beginRecording();
+    await waitFor(() => expect(mocks.recorderStart).toHaveBeenCalledOnce());
 
-    fireEvent.pointerDown(ptt, { pointerId: 1, button: 0 });
-    await waitFor(() => expect(mocks.recorderOptions?.onFrameLevel).toBeTypeOf('function'));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Voz' }), 'en-GB-SoniaNeural');
 
-    const bars = screen
-      .getByRole('img', { name: 'Señal de audio: entrada' })
-      .querySelectorAll('.voice-signal-bar');
-    const middleBar = bars[9] as HTMLElement;
-    const initialTransform = middleBar.style.transform;
-
-    act(() => mocks.recorderOptions?.onFrameLevel?.(0.72));
-
-    await waitFor(() => {
-      expect(middleBar.style.transform).not.toBe(initialTransform);
-      expect(middleBar.style.transform).toContain('scaleY');
-    });
-
-    fireEvent.pointerUp(ptt, { pointerId: 1, button: 0 });
-  });
-
-  it('cancels the prior generation locally and remotely when speech interrupts it', async () => {
-    await connectVoice();
-
-    act(() => mocks.vadOptions?.onSpeechStart());
-    act(() => mocks.vadOptions?.onSpeechEnd(new Uint8Array(3200), 200));
-    act(() => mocks.vadOptions?.onSpeechStart());
-
-    expect(mocks.schedulerCancelBefore).toHaveBeenLastCalledWith(2);
-    expect(mocks.socket?.messages).toContainEqual({
-      type: 'response.cancel',
-      turn_id: '00000000-0000-4000-8000-000000000001',
-      generation: 1,
-    });
-  });
-
-  it('shows and persists the shared Polly/Edge selector', async () => {
-    const user = await connectVoice();
-    const selector = screen.getByRole('combobox', { name: 'Proveedor de voz' });
-
-    expect(selector).toHaveValue('aws_polly');
-    await user.selectOptions(selector, 'edge_tts');
-
-    expect(selector).toHaveValue('edge_tts');
-    expect(localStorage.getItem('vslingo:speech')).toContain('edge_tts');
+    expect(localStorage.getItem('vslingo:speech')).toContain('en-GB-SoniaNeural');
     expect(mocks.socket?.messages).toContainEqual({
       type: 'session.config',
-      scenario: 'daily_standup',
+      scenario: 'free',
       speech_provider: 'edge_tts',
+      speech_voice: 'en-GB-SoniaNeural',
     });
+    expect(mocks.socket?.messages).not.toContainEqual(
+      expect.objectContaining({ type: 'response.cancel' }),
+    );
   });
 
-  it('keeps conversation history when only the speech provider changes', async () => {
-    const user = await connectVoice();
-    act(() =>
-      mocks.socket?.emitMessage({
-        type: 'session.configured',
-        scenario: 'daily_standup',
-        speech_provider: 'aws_polly',
-        config_revision: 1,
-      }),
-    );
-    act(() => mocks.vadOptions?.onSpeechStart());
-    act(() =>
-      mocks.socket?.emitMessage({
-        type: 'transcript.final',
-        generation: 1,
-        turn_id: '00000000-0000-4000-8000-000000000001',
-        text: 'Hello there partner',
-      }),
-    );
-    act(() =>
-      mocks.socket?.emitMessage({
-        type: 'assistant.done',
-        generation: 1,
-        turn_id: '00000000-0000-4000-8000-000000000001',
-        text: 'Hi! Ready to practice?',
-      }),
-    );
-
-    expect(screen.getByText('Hello there partner')).toBeInTheDocument();
-    expect(screen.getByText('Hi! Ready to practice?')).toBeInTheDocument();
-
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Proveedor de voz' }), 'edge_tts');
-    act(() =>
-      mocks.socket?.emitMessage({
-        type: 'session.configured',
-        scenario: 'daily_standup',
-        speech_provider: 'edge_tts',
-        config_revision: 2,
-      }),
-    );
-
-    expect(screen.getByText('Hello there partner')).toBeInTheDocument();
-    expect(screen.getByText('Hi! Ready to practice?')).toBeInTheDocument();
-  });
-
-  it('clears conversation history when the scenario changes', async () => {
-    const user = await connectVoice();
-    act(() =>
-      mocks.socket?.emitMessage({
-        type: 'session.configured',
-        scenario: 'daily_standup',
-        speech_provider: 'aws_polly',
-        config_revision: 1,
-      }),
-    );
-    act(() => mocks.vadOptions?.onSpeechStart());
-    act(() =>
-      mocks.socket?.emitMessage({
-        type: 'transcript.final',
-        generation: 1,
-        turn_id: '00000000-0000-4000-8000-000000000001',
-        text: 'Status update for standup',
-      }),
-    );
-    act(() =>
-      mocks.socket?.emitMessage({
-        type: 'assistant.done',
-        generation: 1,
-        turn_id: '00000000-0000-4000-8000-000000000001',
-        text: 'Thanks for the update.',
-      }),
-    );
-
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Escenario' }), 'free');
-    act(() =>
-      mocks.socket?.emitMessage({
-        type: 'session.configured',
-        scenario: 'free',
-        speech_provider: 'aws_polly',
-        config_revision: 2,
-      }),
-    );
-
-    expect(screen.queryByText('Status update for standup')).not.toBeInTheDocument();
-    expect(screen.queryByText('Thanks for the update.')).not.toBeInTheDocument();
-  });
-
-  it('cancels an active turn and keeps the latest scenario selection', async () => {
-    const user = await connectVoice();
-    const scenarioSelect = screen.getByRole('combobox', { name: 'Escenario' });
-    act(() => mocks.vadOptions?.onSpeechStart());
-
-    await user.selectOptions(scenarioSelect, 'free');
-    await user.selectOptions(scenarioSelect, 'salary_negotiation');
-
-    expect(mocks.socket?.messages).toContainEqual({
-      type: 'response.cancel',
-      turn_id: '00000000-0000-4000-8000-000000000001',
-      generation: 1,
-    });
-    expect(mocks.socket?.messages).toContainEqual({
-      type: 'session.config',
-      scenario: 'salary_negotiation',
-      speech_provider: 'aws_polly',
-    });
-
-    act(() =>
-      mocks.socket?.emitMessage({
-        type: 'session.configured',
-        scenario: 'free',
-        speech_provider: 'aws_polly',
-        config_revision: 1,
-      }),
-    );
-    act(() =>
-      mocks.socket?.emitMessage({
-        type: 'session.configured',
-        scenario: 'salary_negotiation',
-        speech_provider: 'aws_polly',
-        config_revision: 2,
-      }),
-    );
-
-    expect(scenarioSelect).toHaveValue('salary_negotiation');
-  });
-
-  it('cleans the manual recorder if configuration changes while PTT is held', async () => {
-    const user = await connectVoice();
-    await switchToPtt(user);
-    const ptt = screen.getByRole('button', { name: /Mantén pulsado para hablar/i });
-    fireEvent.pointerDown(ptt, { pointerId: 7, button: 0 });
+  it('falls back to one browser utterance per complete failed Edge segment', async () => {
+    await connectVoice();
+    beginRecording();
     await waitFor(() => expect(mocks.recorderStart).toHaveBeenCalledOnce());
-
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Escenario' }), 'free');
-
-    expect(mocks.recorderCleanup).toHaveBeenCalled();
-  });
-
-  it('renders session metrics from safe protocol events without persisting them', async () => {
-    await connectVoice();
-    act(() => mocks.vadOptions?.onSpeechStart());
-
-    act(() =>
-      mocks.socket?.emitMessage({
-        type: 'metrics.stage',
-        turn_id: '00000000-0000-4000-8000-000000000001',
-        generation: 1,
-        stage: 'stt_final',
-        latency_ms: 842,
-        provider: 'openrouter',
-        usage_seconds: 0.2,
-        usage_tokens: null,
-        cost_usd: 0.00004,
-        estimated: false,
-      }),
-    );
-    act(() =>
-      mocks.socket?.emitMessage({
-        type: 'metrics.stage',
-        turn_id: '00000000-0000-4000-8000-000000000001',
-        generation: 1,
-        stage: 'tts_first_byte',
-        latency_ms: 1200,
-        provider: 'aws_polly',
-        usage_seconds: null,
-        usage_tokens: null,
-        cost_usd: 0.00016,
-        estimated: true,
-      }),
-    );
-
-    expect(screen.getByLabelText('Métricas de sesión')).toHaveTextContent('842 ms');
-    expect(screen.getByLabelText('Métricas de sesión')).toHaveTextContent('1200 ms');
-    expect(screen.getByLabelText('Métricas de sesión')).toHaveTextContent('USD 0.00020 · est.');
-    expect(localStorage.getItem('vslingo:voice:metrics')).toBeNull();
-  });
-
-  it('updates input waveform height when VAD emits calibrated level', async () => {
-    await connectVoice();
-    await waitFor(() => expect(mocks.vadOptions?.onFrameLevel).toBeDefined());
-
-    const inputVisualizer = screen.getByRole('img', { name: 'Señal de audio: entrada' });
-    expect(inputVisualizer).toBeInTheDocument();
-
-    const bars = inputVisualizer.querySelectorAll('.voice-signal-bar');
-    expect(bars.length).toBe(18);
-
-    const middleBar = bars[9] as HTMLElement;
-    const initialMiddleBarTransform = middleBar.style.transform;
-
-    // Frame levels only animate during real speech ("Te escucho").
-    act(() => mocks.vadOptions?.onFrameLevel?.(0.55));
-    expect(middleBar.style.transform).toBe(initialMiddleBarTransform);
 
     act(() => {
-      mocks.vadOptions?.onSpeechStart?.();
-      mocks.vadOptions?.onFrameLevel?.(0.55);
+      mocks.socket?.emitMessage({
+        type: 'assistant.segment',
+        turn_id: '00000000-0000-4000-8000-000000000001',
+        generation: 1,
+        segment_id: 'segment-1',
+        segment_index: 0,
+        text: 'This is a complete sentence.',
+      });
+      mocks.socket?.emitMessage({
+        type: 'error',
+        code: 'speech_unavailable',
+        message: 'Edge failed',
+        retryable: true,
+        fatal: false,
+        turn_id: '00000000-0000-4000-8000-000000000001',
+        generation: 1,
+        segment_id: 'segment-1',
+        segment_index: 0,
+      });
     });
 
-    await waitFor(() => {
-      const activeMiddleBarTransform = middleBar.style.transform;
-      expect(activeMiddleBarTransform).not.toBe(initialMiddleBarTransform);
-      expect(activeMiddleBarTransform).toContain('scaleY');
+    expect(mocks.spoken).toHaveLength(1);
+    act(() =>
+      mocks.spoken[0].onstart?.call(
+        mocks.spoken[0],
+        new Event('start') as SpeechSynthesisEvent,
+      ),
+    );
+    expect(mocks.socket?.messages).toContainEqual({
+      type: 'playback.started',
+      turn_id: '00000000-0000-4000-8000-000000000001',
+      generation: 1,
+      segment_id: 'segment-1',
+      segment_index: 0,
+      engine: 'browser',
     });
   });
 
-  it('clears userTranscript after assistant.done to avoid duplicating user message in turnHistory and last turn', async () => {
+  it('keeps completed segments and discards late MP3 after a later Edge failure', async () => {
     await connectVoice();
+    beginRecording();
+    await waitFor(() => expect(mocks.recorderStart).toHaveBeenCalledOnce());
 
-    act(() => mocks.vadOptions?.onSpeechStart());
-    act(() =>
+    act(() => {
       mocks.socket?.emitMessage({
-        type: 'transcript.final',
+        type: 'assistant.segment',
+        turn_id: '00000000-0000-4000-8000-000000000001',
         generation: 1,
-        text: 'Hello, can you help me learn English?',
-      }),
-    );
-
-    expect(screen.getAllByText(/Hello, can you help me learn English\?/i)).toHaveLength(1);
-
-    act(() =>
+        segment_id: 'segment-1',
+        segment_index: 0,
+        text: 'Already played.',
+      });
       mocks.socket?.emitMessage({
-        type: 'assistant.done',
+        type: 'assistant.segment',
+        turn_id: '00000000-0000-4000-8000-000000000001',
         generation: 1,
-        text: 'I would love to help you practice.',
-      }),
-    );
+        segment_id: 'segment-2',
+        segment_index: 1,
+        text: 'Pending sentence.',
+      });
+      mocks.socket?.emitMessage({
+        type: 'audio.begin',
+        turn_id: '00000000-0000-4000-8000-000000000001',
+        generation: 1,
+        segment_id: 'segment-1',
+        segment_index: 0,
+        media_type: 'audio/mpeg',
+        byte_length: 3,
+      });
+      mocks.socket?.emitBinary(new Uint8Array([1, 2, 3]).buffer);
+      mocks.socket?.emitMessage({
+        type: 'audio.end',
+        turn_id: '00000000-0000-4000-8000-000000000001',
+        generation: 1,
+        segment_id: 'segment-1',
+        segment_index: 0,
+      });
+    });
+    mocks.schedulerEnqueue.mockClear();
 
-    expect(screen.getAllByText(/Hello, can you help me learn English\?/i)).toHaveLength(1);
-    expect(screen.getByText('I would love to help you practice.')).toBeInTheDocument();
+    act(() => {
+      mocks.socket?.emitMessage({
+        type: 'error',
+        code: 'speech_unavailable',
+        message: 'Edge failed',
+        retryable: true,
+        fatal: false,
+        generation: 1,
+        segment_id: 'segment-2',
+        segment_index: 1,
+      });
+      mocks.socket?.emitMessage({
+        type: 'audio.begin',
+        turn_id: '00000000-0000-4000-8000-000000000001',
+        generation: 1,
+        segment_id: 'segment-2',
+        segment_index: 1,
+        media_type: 'audio/mpeg',
+        byte_length: 3,
+      });
+      mocks.socket?.emitBinary(new Uint8Array([1, 2, 3]).buffer);
+    });
+
+    expect(mocks.spoken).toHaveLength(1);
+    expect(mocks.spoken[0].text).toBe('Pending sentence.');
+    expect(mocks.schedulerEnqueue).not.toHaveBeenCalled();
+  });
+
+  it('stops local audio resources even when there is no active turn', async () => {
+    const user = await connectVoice();
+    await user.click(screen.getByRole('button', { name: 'Terminar práctica' }));
+
+    expect(mocks.schedulerStopAll).toHaveBeenCalled();
+    expect(mocks.speechCancel).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Activar micrófono' })).toBeInTheDocument();
   });
 });
-
-
-

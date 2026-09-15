@@ -51,15 +51,16 @@ describe('Speech HTTP Client', () => {
 
     const blob = await synthesizeSpeech({
       text: 'Testing audio synthesis',
-      provider: 'aws_polly',
+      provider: 'edge_tts',
+      voice: 'en-US-AriaNeural',
     });
 
     expect(fetchSpy).toHaveBeenCalledWith('http://127.0.0.1:8000/api/speech', expect.objectContaining({
       method: 'POST',
       body: JSON.stringify({
         text: 'Testing audio synthesis',
-        provider: 'aws_polly',
-        voice: null,
+        provider: 'edge_tts',
+        voice: 'en-US-AriaNeural',
       }),
     }));
     expect(blob.size).toBe(3);
@@ -83,7 +84,7 @@ describe('Speech HTTP Client', () => {
     await expect(
       synthesizeSpeech({
         text: 'Testing audio synthesis',
-        provider: 'aws_polly',
+        provider: 'edge_tts',
       }),
     ).rejects.toThrow(SpeechClientError);
   });

@@ -1,36 +1,6 @@
 ---
-import SiteFonts from '../components/SiteFonts.astro';
-import { DemoWorkspace } from '../components/DemoWorkspace';
-import '../styles/global.css';
+import WorkspacePage from '../components/WorkspacePage.astro';
 ---
 
-<!doctype html>
-<html lang="es">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width" />
-    <meta name="generator" content={Astro.generator} />
-    <meta
-      name="description"
-      content="Workspace de práctica de inglés profesional para desarrolladores."
-    />
-    <title>Demo | VSLingo</title>
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <SiteFonts />
-    <script is:inline>
-      // Anti-FOUC: apply saved theme before first paint.
-      (function () {
-        var VALID = ['deepwater', 'ember', 'aurora', 'obsidian', 'daylight', 'nordic'];
-        try {
-          var t = localStorage.getItem('vslingo:theme');
-          if (t && VALID.indexOf(t) !== -1) {
-            document.documentElement.setAttribute('data-theme', t);
-          }
-        } catch (_) {}
-      })();
-    </script>
-  </head>
-  <body class="demo-page">
-    <DemoWorkspace client:load />
-  </body>
-</html>
+<!-- Alias temporal para enlaces de la Alpha. Las llamadas de proveedor requerirán login en F2. -->
+<WorkspacePage title="Practicar" />

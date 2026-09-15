@@ -10,7 +10,6 @@ MAX_SPEECH_TEXT_LENGTH: Final[int] = 3000
 class SpeechProvider(StrEnum):
     """Supported speech synthesis providers."""
 
-    AWS_POLLY = "aws_polly"
     EDGE_TTS = "edge_tts"
 
 

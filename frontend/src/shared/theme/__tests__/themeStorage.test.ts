@@ -12,43 +12,48 @@ describe('themeStorage', () => {
   });
 
   describe('loadThemeId', () => {
-    it('returns deepwater when nothing is stored', () => {
-      expect(loadThemeId()).toBe('deepwater');
+    it('returns light when nothing is stored', () => {
+      expect(loadThemeId()).toBe('light');
     });
 
     it('returns the stored theme id', () => {
-      localStorage.setItem(THEME_STORAGE_KEY, 'ember');
-      expect(loadThemeId()).toBe('ember');
+      localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+      expect(loadThemeId()).toBe('dark');
     });
 
-    it('returns all valid theme ids', () => {
-      for (const id of ['deepwater', 'ember', 'aurora', 'obsidian'] as const) {
+    it('returns both valid mode ids', () => {
+      for (const id of ['light', 'dark'] as const) {
         localStorage.setItem(THEME_STORAGE_KEY, id);
         expect(loadThemeId()).toBe(id);
       }
     });
 
-    it('returns deepwater for an unknown value', () => {
-      localStorage.setItem(THEME_STORAGE_KEY, 'neon-pink');
-      expect(loadThemeId()).toBe('deepwater');
+    it('migrates retired VSLingo themes to light', () => {
+      localStorage.setItem(THEME_STORAGE_KEY, 'deepwater');
+      expect(loadThemeId()).toBe('light');
     });
 
-    it('returns deepwater for empty string', () => {
+    it('returns light for an unknown value', () => {
+      localStorage.setItem(THEME_STORAGE_KEY, 'neon-pink');
+      expect(loadThemeId()).toBe('light');
+    });
+
+    it('returns light for empty string', () => {
       localStorage.setItem(THEME_STORAGE_KEY, '');
-      expect(loadThemeId()).toBe('deepwater');
+      expect(loadThemeId()).toBe('light');
     });
   });
 
   describe('saveThemeId', () => {
     it('persists a valid theme id', () => {
-      saveThemeId('aurora');
-      expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('aurora');
+      saveThemeId('dark');
+      expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
     });
 
     it('overwrites a previously saved id', () => {
-      saveThemeId('ember');
-      saveThemeId('obsidian');
-      expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('obsidian');
+      saveThemeId('dark');
+      saveThemeId('light');
+      expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('light');
     });
   });
 });

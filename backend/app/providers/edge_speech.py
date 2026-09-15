@@ -33,6 +33,12 @@ class EdgeTTSSynthesizer(SpeechSynthesizerPort):
             )
 
         selected_voice = voice or self._settings.edge_tts_voice
+        if selected_voice not in self._settings.edge_tts_allowed_voices:
+            raise IntegrationError(
+                provider="edge_tts",
+                code=IntegrationErrorCode.INVALID_REQUEST,
+                message="La voz de Edge TTS no está permitida.",
+            )
 
         if self._communicate_factory is not None:
             communicate = self._communicate_factory(text, selected_voice)

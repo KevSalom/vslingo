@@ -125,18 +125,18 @@ export function VideoFileTree({
     <div className={compact ? 'video-tree video-tree-compact' : 'video-tree'}>
       {!compact ? (
         <>
-          <p className="explorer-title" id="module-context-title">Módulo activo</p>
-          <p className="explorer-name">Video Lab</p>
+          <p className="explorer-title" id="module-context-title">Tu colección</p>
+          <p className="explorer-name">Videos y notas</p>
           <p className="explorer-description">
-            Navega una transcripción técnica, toma notas y vuelve al contexto.
+            Guarda material para volver a practicar cuando quieras.
           </p>
           <div className="explorer-rule" />
         </>
       ) : null}
 
-      <p className="explorer-title">Explorador</p>
+      <p className="explorer-title">Tu colección</p>
 
-      <div className="video-tree-section" role="tree" aria-label="Videos y notas guardados">
+      <section className="video-tree-section" aria-label="Videos y notas guardados">
         <div className="video-tree-folder-row">
           <button
             aria-expanded={videosOpen}
@@ -146,7 +146,7 @@ export function VideoFileTree({
           >
             <Chevron open={videosOpen} />
             <FolderIcon />
-            <span className="video-tree-folder-name">videos</span>
+            <span className="video-tree-folder-name">Videos</span>
             <span className="video-tree-count">{state.library.length}</span>
           </button>
           <button
@@ -160,12 +160,12 @@ export function VideoFileTree({
           </button>
         </div>
         {videosOpen ? (
-          <ul className="video-tree-children" role="group">
+          <ul className="video-tree-children">
             {state.library.length === 0 ? (
               <li className="video-tree-empty">Sin videos guardados</li>
             ) : (
               state.library.map((item) => (
-                <li key={item.id} role="treeitem">
+                <li key={item.id}>
                   <div className="video-tree-item">
                     <button
                       className="video-tree-file"
@@ -200,7 +200,7 @@ export function VideoFileTree({
           >
             <Chevron open={notesOpen} />
             <FolderIcon />
-            <span className="video-tree-folder-name">notes</span>
+            <span className="video-tree-folder-name">Notas</span>
             <span className="video-tree-count">{state.notes.length}</span>
           </button>
           <button
@@ -214,12 +214,12 @@ export function VideoFileTree({
           </button>
         </div>
         {notesOpen ? (
-          <ul className="video-tree-children" role="group">
+          <ul className="video-tree-children">
             {state.notes.length === 0 ? (
               <li className="video-tree-empty">Sin notas guardadas</li>
             ) : (
               state.notes.map((note) => (
-                <li key={note.id} role="treeitem">
+                <li key={note.id}>
                   <div className="video-tree-item">
                     <button
                       className="video-tree-file"
@@ -244,7 +244,7 @@ export function VideoFileTree({
             )}
           </ul>
         ) : null}
-      </div>
+      </section>
 
       {status ? (
         <p aria-live="polite" className="video-tree-status">
@@ -260,7 +260,7 @@ export function VideoFileTree({
         <VsCodeModal
           confirmDisabled={!canSaveVideo}
           confirmLabel="Guardar video"
-          description="Se añadirá a videos/ del explorador. Puedes abrirlo después para cargar subtítulos."
+          description="Se añadirá a tus videos guardados para que puedas abrirlo después."
           onCancel={() => setVideoModalOpen(false)}
           onConfirm={handleSaveVideoModal}
           title="Nuevo video"
@@ -273,7 +273,7 @@ export function VideoFileTree({
             id="tree-video-title"
             maxLength={200}
             onChange={(event) => setVideoTitle(event.currentTarget.value)}
-            placeholder="Nombre en el explorador"
+            placeholder="Nombre del video"
             value={videoTitle}
           />
           <label className="vsc-field-label" htmlFor="tree-video-url">

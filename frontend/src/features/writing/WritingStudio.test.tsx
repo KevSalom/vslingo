@@ -138,7 +138,7 @@ describe('WritingStudio', () => {
     expect(await screen.findByText('Sin cambios necesarios')).toBeInTheDocument();
   });
 
-  it('renders speech provider control and handle listening toggle', async () => {
+  it('renders the Edge voice control and handles the listening toggle', async () => {
     const user = userEvent.setup();
     render(<WritingStudio correctText={vi.fn().mockResolvedValue(MULTIPLE_CORRECTIONS)} />);
 
@@ -148,11 +148,11 @@ describe('WritingStudio', () => {
     const listenButton = await screen.findByRole('button', { name: 'Escuchar reproducción de texto' });
     expect(listenButton).toBeInTheDocument();
 
-    const providerSelect = screen.getByLabelText('Proveedor de voz');
-    expect(providerSelect).toBeInTheDocument();
-    expect(providerSelect).toHaveValue('aws_polly');
+    const voiceSelect = screen.getByLabelText('Voz');
+    expect(voiceSelect).toBeInTheDocument();
+    expect(voiceSelect).toHaveValue('en-US-AriaNeural');
 
-    await user.selectOptions(providerSelect, 'edge_tts');
-    expect(providerSelect).toHaveValue('edge_tts');
+    await user.selectOptions(voiceSelect, 'en-GB-RyanNeural');
+    expect(voiceSelect).toHaveValue('en-GB-RyanNeural');
   });
 });

@@ -1,266 +1,111 @@
-# VSLingo Public Alpha
+# Inglés al Grano
 
-> **The Code-Editor Interface for Mastering Developer English.**
+**Ya sabes inglés. Ahora practícalo.**
 
-VSLingo es una plataforma de práctica de inglés para desarrolladores hispanohablantes. Su filosofía es **«al grano, sin ruido»**: práctica profesional, directa y sin mecánicas de gamificación infantil (sin rachas, gemas ni rutas obligatorias).
+Aplicación web para jóvenes adultos hispanohablantes con nivel intermedio. Permite
+hablar a su ritmo, mejorar textos y entrenar el oído con videos, con explicaciones
+en español y sin cursos, rachas ni gamificación.
 
-La interfaz y las explicaciones están en **español**. Las conversaciones, correcciones y el vocabulario se trabajan en **inglés B1–C1**. La experiencia se presenta como herramienta de desarrollo profesional, no como una copia de VS Code ni como una app de idiomas genérica.
-
-Se puede probar la demo **sin registro**. El estado vive en `localStorage` versionado en el navegador.
-
----
-
-## Estado
-
-**Public Alpha 1.0 lista** (`T01`–`T10` completados). Los tres módulos del workspace están implementados, con pruebas unitarias/integración y E2E deterministas (proveedores falsos).
-
-| | |
-| --- | --- |
-| **Avance** | Writing Studio · Video Lab · Voice Studio · landing · protecciones · E2E · guías de deploy |
-| **Pendiente inmediato** | Despliegue real en producción (VPS/Dokploy + frontend estático) |
-| **Fuente de estado** | [`docs/progress.md`](docs/progress.md) |
-| **Presentación** | Ruta del sitio `/presentacion` (diapositivas) |
-
----
-
-## Próximos pasos (post-Alpha)
-
-Hoja de ruta orientativa después del despliegue de la Alpha. No forma parte del alcance `T01`–`T10`.
-
-| Dirección | Qué implica |
-| --- | --- |
-| **UI en inglés** | Hoy la interfaz y las explicaciones van en **español** para bajar la fricción inicial de hispanohablantes. Una versión (o locale) en inglés permitirá a usuarios más avanzados usar producto y feedback enteramente en inglés, alineado con B1–C1. |
-| **Persistencia con base de datos** | Sustituir o complementar `localStorage` con historial, biblioteca y preferencias sincronizados entre dispositivos. |
-| **Autenticación** | Cuentas opcionales u obligatorias para guardar progreso, cuotas por usuario y multi-dispositivo. |
-| **Telemetría y monitorización** | Métricas de producto y operación (latencia, errores, uso por módulo) sin registrar audio, transcripts ni prompts en claro. |
-| **Modelo de negocio** | **Monetización** (planes, límites por tier) **o** apertura como **código abierto**, según la estrategia que se decida tras validar la Alpha en producción. |
-
----
+El desarrollo activo sigue el [plan del MVP comercial](docs/commercial-mvp-plan.md).
+La Alpha VSLingo T01–T10 se conserva como contexto histórico en
+[docs/product-spec.md](docs/product-spec.md) y [docs/spec](docs/spec/README.md).
+El estado verificable está en [docs/progress.md](docs/progress.md).
 
 ## Módulos
 
-| Módulo | Qué hace | Capacidad clave |
-| --- | --- | --- |
-| **Voice Studio** | Conversación por voz en tiempo real | VAD manos libres (Silero), barge-in, PTT de respaldo, 4 escenarios, feedback paralelo (diff, vocabulario, resumen), TTS en streaming |
-| **Writing Studio** | Corrección estructurada de inglés técnico | Diff categorizado, feedback en español, copiar/limpiar, historial local, reproducción TTS |
-| **Video Lab** | YouTube + subtítulos sincronizados | Seek, vistas párrafo/línea, biblioteca y notas locales, fixture técnico si YouTube falla |
+| Módulo | Recorrido actual |
+|---|---|
+| **Hablar** | Tema libre por defecto, push-to-talk, respuesta corta, mejora prioritaria, Edge TTS y respaldo de voz del navegador |
+| **Escribir** | Texto de hasta 1.000 caracteres, corrección estructurada, diff y explicación en español |
+| **Videos** | Video, transcripción sincronizada, biblioteca sencilla y notas locales durante F1 |
 
-### Voice Studio — escenarios
+La landing está en `/`. Las rutas estables de práctica son `/app`,
+`/app/hablar`, `/app/escribir` y `/app/videos`. `/demo` permanece como alias
+temporal para enlaces históricos; la autenticación y el bloqueo de operaciones
+anónimas llegan en F2.
 
-1. Daily Standup  
-2. System Design / Technical Interview  
-3. Salary Negotiation  
-4. Libre / Explorar  
+## Oferta aprobada
 
-STT: OpenRouter Whisper. LLM: OpenRouter (conversación en streaming + feedback estructurado en paralelo). TTS seleccionable: **AWS Polly Neural** o **Microsoft Edge Neural** (`edge-tts`).
+Un plan mensual de **US$2,99** y una prueba por cuenta verificada sin tarjeta.
+Los límites mensuales iniciales son 60 minutos de audio enviado por el alumno,
+hasta 180 intervenciones, 100 correcciones y 20 videos nuevos con transcripción.
+La configuración transaccional de planes y cuotas se implementa en F4.
 
-### Writing Studio
+## Arquitectura
 
-- Hasta 1000 caracteres por corrección  
-- Editor + diff + feedback + acciones copiar/limpiar  
-- Reciente en `localStorage`  
-- Misma abstracción TTS que Voice  
+| Área | Tecnología |
+|---|---|
+| Frontend | Astro 7, React 19, TypeScript, Tailwind CSS v4 |
+| Backend | FastAPI, Pydantic, Python 3.12+, uv |
+| LLM | OpenRouter `google/gemini-3.1-flash-lite` |
+| STT | OpenRouter `openai/whisper-large-v3-turbo` |
+| TTS | Edge TTS con cuatro voces permitidas; `speechSynthesis` como respaldo |
+| Datos e identidad | SQLite transaccional + Clerk, previstos para F2–F3 |
 
-### Video Lab
+Las pruebas normales usan fakes y no llaman servicios externos. No se guardan
+buffers WAV o MP3 en disco, base de datos, service worker ni logs.
 
-- Parser de URL YouTube (watch, short, Shorts, Live, embed)  
-- Transcripción EN directa o traducida  
-- Errores accionables si faltan captions o el proveedor bloquea  
-- Explorer estilo tree (biblioteca + notas), notas con timestamp opcional  
+## Desarrollo local
 
-### Landing
+Requisitos: Python 3.12+, [uv](https://docs.astral.sh/uv/), Node.js 22.12+ y
+pnpm 10.32.0.
 
-Ruta `/` estática (Astro, casi sin JS de cliente): hero, módulos, filosofía «sin ruido», privacidad y CTA **Probar demo** → `/demo`.
-
----
-
-## Stack
-
-| Capa | Tecnología | Rol |
-| --- | --- | --- |
-| Landing | Astro | SEO, contenido, entrada a la demo |
-| Workspace | React 19 + Tailwind CSS v4 | UI en `/demo`, audio y VAD en el navegador |
-| Backend | FastAPI · Python 3.11+ | REST + WebSocket Voice, orquestación async |
-| STT | OpenRouter Whisper | Transcripción de segmentos de voz |
-| LLM | OpenRouter (modelo configurable) | Corrección, chat streaming, feedback |
-| TTS | AWS Polly Neural · Microsoft Edge Neural | MP3 `audio/mpeg`, selección explícita (sin fallback silencioso) |
-| Vídeo | `youtube-transcript-api` | Subtítulos disponibles |
-| Estado | `localStorage` versionado | Preferencias, reciente, biblioteca, notas |
-
-**No incluido en Alpha:** auth, base de datos, payments/billing, Redis, multi-worker, Safari/móvil certificados.
-
----
-
-## Arquitectura (resumen)
-
-```text
-Browser (Astro + React)          VPS (FastAPI)                 Proveedores
-───────────────────────          ─────────────                 ───────────
-Landing  →  /demo workspace
-  Writing  ──REST──►  /api/writing, /api/speech, /api/video  → OpenRouter / Polly / Edge / YT
-  Video
-  Voice    ──WS────►  /api/voice/ws
-            VAD (Silero) → WAV 16 kHz
-            Session → STT → LLM+Feedback → TTS → audio chunks
-            localStorage (prefs, notas, historial)
-```
-
-Backend: monolito modular con puertos y adaptadores falsos en tests. Sin credenciales de proveedores opcionales la API arranca y responde health; las rutas que necesiten proveedor devuelven error tipado.
-
----
-
-## Estructura del repositorio
-
-```text
-vslingo/
-├── frontend/          # Astro + React (landing `/`, workspace `/demo`)
-├── backend/           # FastAPI (REST, WebSocket Voice, proveedores)
-├── deploy/            # Dokploy/Nixpacks, Caddy, systemd, runbooks
-├── docs/              # product-spec, implementation-plan, progress, specs
-├── scripts/           # check-quality.ps1 (suite unificada)
-├── render.yaml        # Render Static Site (frontend)
-└── AGENTS.md          # Normas para agentes LLM
-```
-
-Detalles de paquete: [`frontend/README.md`](frontend/README.md) · [`backend/README.md`](backend/README.md) · [`deploy/README.md`](deploy/README.md).
-
----
-
-## Requisitos
-
-| Herramienta | Versión |
-| --- | --- |
-| Node.js | ≥ 22.12.0 |
-| pnpm | 10.32.0 (fijado en `frontend/package.json`) |
-| Python | ≥ 3.11 |
-| uv | gestor del backend |
-| Git | para el repo y `git diff --check` en la suite de calidad |
-| Chrome o Edge | demo de micrófono / Voice (localhost o HTTPS) |
-
----
-
-## Puesta en marcha local
-
-Dos terminales. Los secretos de proveedores **no** son obligatorios para arrancar ni para health; sí lo son para correcciones/voz/TTS reales.
-
-### 1. Backend
+Backend:
 
 ```powershell
-Set-Location backend
-Copy-Item .env.example .env   # solo la primera vez
+cd backend
 uv sync --frozen --all-groups
 uv run vslingo-api
 ```
 
-- API: `http://127.0.0.1:8000`  
-- Health: `GET /api/health`  
-
-Variables habituales en `backend/.env` (vacías = arranque seguro):
-
-- `OPENROUTER_API_KEY`, `OPENROUTER_LLM_MODEL` — Writing, Voice LLM/feedback y smokes  
-- `OPENROUTER_STT_MODEL` — default Whisper turbo  
-- `AWS_*` / `AWS_POLLY_VOICE_ID` — Polly  
-- `EDGE_TTS_VOICE` — Edge Neural (sin credencial Azure)  
-- `FRONTEND_ORIGIN` — CORS / origen WS (default `http://localhost:4321`)  
-
-### 2. Frontend
+Frontend, en otra terminal:
 
 ```powershell
-Set-Location frontend
-Copy-Item .env.example .env   # solo si quieres override
+cd frontend
 pnpm install --frozen-lockfile
-pnpm exec astro dev
+pnpm run dev
 ```
 
-- Landing: `http://localhost:4321/`  
-- Demo: `http://localhost:4321/demo`  
-- `PUBLIC_API_URL` por defecto `http://127.0.0.1:8000` (REST y WebSocket Voice derivados del mismo origen)  
+Variables públicas y de servidor están documentadas en
+[backend/.env.example](backend/.env.example) y
+[frontend/.env.example](frontend/.env.example). Dejar credenciales vacías hasta
+que una prueba live sea autorizada expresamente.
 
-Voice necesita contexto seguro (HTTPS o localhost) y permiso de micrófono. Si el VAD no inicia, queda push-to-talk.
+## Calidad
 
-### Endpoints principales
-
-| Método | Ruta | Uso |
-| --- | --- | --- |
-| `GET` | `/api/health` | Liveness sin secretos |
-| `POST` | `/api/writing/correct` | Corrección estructurada |
-| `POST` | `/api/video/transcript` | Subtítulos YouTube |
-| `POST` | `/api/speech` | TTS MP3 (Polly o Edge) |
-| `WS` | `/api/voice/ws` | Sesión Voice en tiempo real |
-
----
-
-## Validación y calidad
-
-Normal: **fakes deterministas**, sin APIs de pago.
+Desde la raíz:
 
 ```powershell
-# Todo el monorepo (backend + frontend check/test/build + E2E Playwright)
-.\scripts\check-quality.ps1
+pwsh -File scripts/check-quality.ps1
 ```
 
 Por paquete:
 
 ```powershell
-# Backend
-Set-Location backend
-uv sync --frozen --all-groups
+cd backend
 uv lock --check
 uv run ruff check app tests
 uv run mypy
 uv run pytest
 
-# Frontend
-Set-Location ..\frontend
-pnpm install --frozen-lockfile
-pnpm run quality          # check + Vitest + build
-pnpm run test:e2e         # Playwright (Landing, Writing, Video, Voice)
+cd ../frontend
+pnpm run check
+pnpm run test
+pnpm run build
+pnpm run test:e2e
 ```
 
-### Smokes live (opt-in)
-
-Solo con autorización, credenciales y límite de coste explícitos. No van en CI ni en la suite normal:
+Los smokes live están separados de pytest y nunca se ejecutan por defecto:
 
 ```powershell
-Set-Location backend
+cd backend
 uv run vslingo-smoke openrouter-stt --audio .\path\to\short-sample.wav
 uv run vslingo-smoke openrouter-chat
-uv run vslingo-smoke aws-polly
 uv run vslingo-smoke edge-tts
 ```
 
----
-
 ## Despliegue
 
-| Pieza | Destino típico | Notas |
-| --- | --- | --- |
-| Frontend | Render Static Site / Vercel / Pages | Build: `pnpm install --frozen-lockfile && pnpm run build` desde `frontend/`; publicar `frontend/dist`. Definir en **build time** `PUBLIC_API_URL=https://api.tu-dominio.com` y, si aplica, `SITE_URL`. |
-| Backend | VPS (Dokploy + Nixpacks recomendado) o Caddy + systemd | TLS y WSS; ver [`deploy/dokploy-nixpacks.md`](deploy/dokploy-nixpacks.md) |
-
-Más: [`deploy/README.md`](deploy/README.md) · [`render.yaml`](render.yaml) · runbook AWS/presupuesto en [`deploy/aws-polly.md`](deploy/aws-polly.md).
-
----
-
-## Documentación
-
-| Documento | Contenido |
-| --- | --- |
-| [`docs/product-spec.md`](docs/product-spec.md) | Producto, alcance, contratos, arquitectura y decisiones |
-| [`docs/implementation-plan.md`](docs/implementation-plan.md) | Roadmap estable `T01`–`T10` |
-| [`docs/progress.md`](docs/progress.md) | Estado real, evidencia y próximo paso |
-| [`docs/spec/`](docs/spec/README.md) | Specs operativas de incrementos |
-| [`AGENTS.md`](AGENTS.md) | Normas de trabajo para agentes LLM |
-| [`frontend/README.md`](frontend/README.md) / [`backend/README.md`](backend/README.md) | Setup y comandos por paquete |
-| Ruta `/presentacion` | Diapositivas oficiales (hackathon / demo) |
-
----
-
-## Principios de producto (Alpha)
-
-- Sin registro ni cuenta  
-- Sin gamificación infantil  
-- Voice como experiencia diferenciadora; Writing y Video pequeños y fiables  
-- Presupuesto protegido (rate limits, concurrencia, sin auth)  
-- Privacidad: logs solo metadatos de latencia/coste/error — nunca audio, transcripts ni prompts  
-- Cada incremento integrado y demostrable (sin código huérfano)  
+Las guías están en [deploy/README.md](deploy/README.md). F1 es un prototipo
+funcional con fakes; no autoriza despliegue, compra ni ejecución de proveedores
+live. El lanzamiento comercial requiere completar los gates F2–F7 del plan.

@@ -1,0 +1,37 @@
+---
+import SiteFonts from './SiteFonts.astro';
+import { DemoWorkspace } from './DemoWorkspace';
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+}
+
+const { title = 'Practicar' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="description" content="Practica inglés intermedio hablando, escribiendo o con videos." />
+    <meta name="robots" content="noindex" />
+    <title>{title} | Inglés al Grano</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <SiteFonts />
+    <script is:inline>
+      (function () {
+        var VALID = ['light', 'dark'];
+        try {
+          var theme = localStorage.getItem('vslingo:theme');
+          document.documentElement.setAttribute('data-theme', VALID.indexOf(theme) !== -1 ? theme : 'light');
+        } catch (_) { document.documentElement.setAttribute('data-theme', 'light'); }
+      })();
+    </script>
+  </head>
+  <body class="demo-page">
+    <DemoWorkspace client:load />
+  </body>
+</html>

@@ -59,7 +59,7 @@ async def test_first_sentence_reaches_tts_before_llm_stream_finishes() -> None:
             1,
             "I finished the API.",
             "daily_standup",
-            "aws_polly",
+            "edge_tts",
         )
     )
     try:

@@ -40,7 +40,7 @@ async def test_tts_consumer_basic_flow() -> None:
         generation=1,
         segment_index=0,
         text="Hello world.",
-        provider="aws_polly",
+        provider="edge_tts",
     )
     enqueued = await consumer.enqueue(item, active_generation=1)
     assert enqueued is True
@@ -71,7 +71,7 @@ async def test_tts_consumer_cancellation() -> None:
         generation=1,
         segment_index=0,
         text="Hello world.",
-        provider="aws_polly",
+        provider="edge_tts",
     )
     enqueued = await consumer.enqueue(item, active_generation=1)
     assert enqueued is False
@@ -109,7 +109,7 @@ async def test_tts_consumer_cancels_active_synthesis() -> None:
     consumer.start()
     try:
         await consumer.enqueue(
-            TTSSegmentItem("turn-1", 1, 0, "First.", "aws_polly"),
+            TTSSegmentItem("turn-1", 1, 0, "First.", "edge_tts"),
             active_generation=1,
         )
         await asyncio.wait_for(first_started.wait(), timeout=1)
@@ -149,12 +149,12 @@ async def test_tts_consumer_rejects_oversized_audio_and_keeps_running() -> None:
     consumer.start()
     try:
         await consumer.enqueue(
-            TTSSegmentItem("turn-1", 1, 0, "Too large.", "aws_polly"),
+            TTSSegmentItem("turn-1", 1, 0, "Too large.", "edge_tts"),
             active_generation=1,
         )
         await asyncio.wait_for(error_written.wait(), timeout=1)
         await consumer.enqueue(
-            TTSSegmentItem("turn-2", 2, 0, "Valid.", "aws_polly"),
+            TTSSegmentItem("turn-2", 2, 0, "Valid.", "edge_tts"),
             active_generation=2,
         )
         await asyncio.wait_for(valid_written.wait(), timeout=1)

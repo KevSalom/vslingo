@@ -1,0 +1,154 @@
+{
+  "protocol_version": 2,
+  "client_events": {
+    "session_start": {
+      "type": "session.start",
+      "protocol_version": 2
+    },
+    "session_config": {
+      "type": "session.config",
+      "scenario": "free",
+      "speech_provider": "edge_tts",
+      "speech_voice": "en-US-AriaNeural"
+    },
+    "speech_started": {
+      "type": "speech.started",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1
+    },
+    "utterance_begin": {
+      "type": "utterance.begin",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "media_type": "audio/wav",
+      "byte_length": 32044,
+      "duration_ms": 1000
+    },
+    "response_cancel": {
+      "type": "response.cancel",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1
+    },
+    "playback_started": {
+      "type": "playback.started",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "segment_id": "223e4567-e89b-12d3-a456-426614174000",
+      "segment_index": 0,
+      "engine": "browser"
+    },
+    "session_end": {
+      "type": "session.end"
+    }
+  },
+  "server_events": {
+    "session_ready": {
+      "type": "session.ready",
+      "protocol_version": 2,
+      "session_id": "98765432-e89b-12d3-a456-426614174000",
+      "generation": 0
+    },
+    "session_configured": {
+      "type": "session.configured",
+      "scenario": "free",
+      "speech_provider": "edge_tts",
+      "speech_voice": "en-US-AriaNeural",
+      "config_revision": 1
+    },
+    "transcript_final": {
+      "type": "transcript.final",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "text": "I deployed the API.",
+      "duration_seconds": 1.0
+    },
+    "assistant_delta": {
+      "type": "assistant.delta",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "delta": "Thanks for the update."
+    },
+    "assistant_segment": {
+      "type": "assistant.segment",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "segment_id": "223e4567-e89b-12d3-a456-426614174000",
+      "segment_index": 0,
+      "text": "Thanks for the update."
+    },
+    "assistant_done": {
+      "type": "assistant.done",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "text": "Thanks for the update. What will you work on today?"
+    },
+    "feedback_ready": {
+      "type": "feedback.ready",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "feedback": {
+        "summary_es": "La idea se entiende; ajusta el pasado simple.",
+        "strengths": ["Explicaste el resultado con claridad."],
+        "corrections": [
+          {
+            "category": "grammar",
+            "original": "I deploy yesterday",
+            "corrected": "I deployed yesterday",
+            "explanation_es": "Usa pasado simple para una acción terminada."
+          }
+        ],
+        "vocabulary": [
+          {
+            "term": "rollout",
+            "meaning_es": "despliegue gradual",
+            "example_en": "We started a gradual rollout."
+          }
+        ]
+      }
+    },
+    "audio_begin": {
+      "type": "audio.begin",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "segment_id": "223e4567-e89b-12d3-a456-426614174000",
+      "segment_index": 0,
+      "media_type": "audio/mpeg",
+      "byte_length": 1234
+    },
+    "audio_end": {
+      "type": "audio.end",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "segment_id": "223e4567-e89b-12d3-a456-426614174000",
+      "segment_index": 0
+    },
+    "metrics_stage": {
+      "type": "metrics.stage",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "stage": "stt_final",
+      "latency_ms": 842,
+      "provider": "openrouter",
+      "usage_seconds": 3.2,
+      "usage_tokens": null,
+      "cost_usd": 0.00004,
+      "estimated": false
+    },
+    "response_cancelled": {
+      "type": "response.cancelled",
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1
+    },
+    "error": {
+      "type": "error",
+      "code": "speech_unavailable",
+      "message": "La síntesis de voz no está disponible para esta respuesta.",
+      "retryable": true,
+      "fatal": false,
+      "turn_id": "123e4567-e89b-12d3-a456-426614174000",
+      "generation": 1,
+      "segment_id": "223e4567-e89b-12d3-a456-426614174000",
+      "segment_index": 0
+    }
+  }
+}

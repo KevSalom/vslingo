@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import contractFixture from '../../../../docs/contracts/voice-protocol-v1.json';
+import contractFixture from '../../../../docs/contracts/voice-protocol-v2.json';
 import { parseServerMessage } from './protocol';
 
-describe('Voice Protocol v1 parsing', () => {
+describe('Voice Protocol v2 parsing', () => {
   it('parses all server events from contract fixture', () => {
     const serverEvents = contractFixture.server_events;
 
@@ -25,7 +25,7 @@ describe('Voice Protocol v1 parsing', () => {
   it('rejects malformed session.ready', () => {
     const malformed = JSON.stringify({
       type: 'session.ready',
-      protocol_version: 2, // invalid version
+      protocol_version: 1, // invalid version
       session_id: '123',
     });
     expect(parseServerMessage(malformed)).toBeNull();

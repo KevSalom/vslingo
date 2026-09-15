@@ -53,15 +53,10 @@ PORT=8000
 # Proveedor OpenRouter (Whisper STT y LLM)
 OPENROUTER_API_KEY=sk-or-v1-tu-clave-aqui
 OPENROUTER_STT_MODEL=openai/whisper-large-v3-turbo
+OPENROUTER_LLM_MODEL=google/gemini-3.1-flash-lite
 
-# Proveedor AWS Polly (TTS) - Opcional si usas Edge TTS
-AWS_ACCESS_KEY_ID=tu-aws-access-key
-AWS_SECRET_ACCESS_KEY=tu-aws-secret-key
-AWS_REGION=us-east-1
-AWS_POLLY_VOICE_ID=Matthew
-
-# Proveedor Edge TTS (Gratuito)
-EDGE_TTS_VOICE=en-US-GuyNeural
+# Síntesis remota Edge TTS
+EDGE_TTS_VOICE=en-US-AriaNeural
 
 # Tiempos de espera y límites
 PROVIDER_TIMEOUT_SECONDS=30.0
@@ -96,7 +91,7 @@ MAX_WS_CONNECTIONS_PER_IP=2
    ```json
    {
      "status": "ok",
-     "service": "VSLingo API",
+    "service": "Inglés al Grano API",
      "version": "0.1.0",
      "environment": "production",
      "providers": { ... }

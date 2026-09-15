@@ -2,11 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { synthesizeSpeech, SpeechClientError } from './speechClient';
 import { loadSpeechProvider, saveSpeechProvider } from './storage';
-import type { SpeechProvider, SpeechState } from './types';
+import { loadSpeechVoice, saveSpeechVoice } from './storage';
+import type { EdgeVoiceId, SpeechProvider, SpeechState } from './types';
 
 export function useSpeechPlayer() {
   const [provider, setProviderState] = useState<SpeechProvider>(() => loadSpeechProvider());
   const [speechState, setSpeechState] = useState<SpeechState>('idle');
+  const [voice, setVoiceState] = useState<EdgeVoiceId>(loadSpeechVoice);
+  const [isBrowserFallback, setIsBrowserFallback] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const activeAbortController = useRef<AbortController | null>(null);
@@ -34,6 +37,7 @@ export function useSpeechPlayer() {
   const stop = useCallback(() => {
     playGeneration.current += 1;
     cleanupAudio();
+    window.speechSynthesis?.cancel();
     setSpeechState('idle');
   }, [cleanupAudio]);
 
@@ -47,10 +51,44 @@ export function useSpeechPlayer() {
     [stop],
   );
 
+  const setVoice = useCallback((newVoice: EdgeVoiceId) => {
+    stop();
+    setVoiceState(newVoice);
+    saveSpeechVoice(newVoice);
+  }, [stop]);
+
+  const playInBrowser = useCallback((text: string, currentGen: number) => {
+    if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
+      return false;
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = voice.startsWith('en-GB') ? 'en-GB' : 'en-US';
+    const voices = window.speechSynthesis.getVoices();
+    utterance.voice = voices.find((item) => item.name === voice)
+      ?? voices.find((item) => item.lang === utterance.lang && item.localService)
+      ?? voices.find((item) => item.lang.startsWith('en'))
+      ?? null;
+    utterance.onstart = () => {
+      if (currentGen === playGeneration.current) {
+        setIsBrowserFallback(true);
+        setSpeechState('playing');
+      }
+    };
+    utterance.onend = () => {
+      if (currentGen === playGeneration.current) setSpeechState('idle');
+    };
+    utterance.onerror = () => {
+      if (currentGen === playGeneration.current) setSpeechState('error');
+    };
+    window.speechSynthesis.speak(utterance);
+    return true;
+  }, [voice]);
+
   const play = useCallback(
     async (text: string) => {
       stop();
       setError(null);
+      setIsBrowserFallback(false);
 
       if (!text.trim()) {
         return;
@@ -65,6 +103,7 @@ export function useSpeechPlayer() {
         const blob = await synthesizeSpeech({
           text,
           provider,
+          voice,
           signal: controller.signal,
         });
 
@@ -105,6 +144,10 @@ export function useSpeechPlayer() {
           return;
         }
         cleanupAudio();
+        if (playInBrowser(text, currentGen)) {
+          setError('Usando la voz del navegador.');
+          return;
+        }
         const msg =
           cause instanceof SpeechClientError
             ? cause.message
@@ -113,7 +156,7 @@ export function useSpeechPlayer() {
         setSpeechState('error');
       }
     },
-    [cleanupAudio, provider, stop],
+    [cleanupAudio, playInBrowser, provider, stop, voice],
   );
 
   useEffect(() => {
@@ -125,6 +168,9 @@ export function useSpeechPlayer() {
   return {
     provider,
     setProvider,
+    voice,
+    setVoice,
+    isBrowserFallback,
     speechState,
     error,
     play,

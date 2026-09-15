@@ -23,17 +23,18 @@ class Settings(BaseSettings):
 
     openrouter_api_key: SecretStr | None = None
     openrouter_stt_model: str = "openai/whisper-large-v3-turbo"
-    openrouter_llm_model: str = ""
+    openrouter_llm_model: str = "google/gemini-3.1-flash-lite"
     openrouter_base_url: AnyHttpUrl = Field(
         default=AnyHttpUrl("https://openrouter.ai/api/v1")
     )
 
-    aws_access_key_id: SecretStr | None = None
-    aws_secret_access_key: SecretStr | None = None
-    aws_region: str = "us-east-1"
-    aws_polly_voice_id: str = "Matthew"
-
-    edge_tts_voice: str = "en-US-GuyNeural"
+    edge_tts_voice: str = "en-US-AriaNeural"
+    edge_tts_allowed_voices: tuple[str, ...] = (
+        "en-US-AriaNeural",
+        "en-US-GuyNeural",
+        "en-GB-SoniaNeural",
+        "en-GB-RyanNeural",
+    )
     provider_timeout_seconds: float = Field(default=30.0, gt=0.0, le=120.0)
     provider_acquire_timeout_seconds: float = Field(default=1.0, gt=0.0, le=120.0)
 
@@ -49,7 +50,6 @@ class Settings(BaseSettings):
     max_concurrent_llm: int = Field(default=8, ge=1, le=100)
     max_concurrent_tts: int = Field(default=4, ge=1, le=100)
     max_concurrent_video: int = Field(default=4, ge=1, le=100)
-    polly_usd_per_million_chars: float = Field(default=16.0, gt=0.0, le=1_000.0)
 
     @model_validator(mode="after")
     def validate_frontend_origin(self) -> "Settings":
@@ -62,6 +62,12 @@ class Settings(BaseSettings):
             raise ValueError("FRONTEND_ORIGIN must name exactly one concrete host.")
         if self.provider_acquire_timeout_seconds > self.provider_timeout_seconds:
             raise ValueError("PROVIDER_ACQUIRE_TIMEOUT_SECONDS cannot exceed provider timeout.")
+        if not self.edge_tts_allowed_voices or len(set(self.edge_tts_allowed_voices)) != len(
+            self.edge_tts_allowed_voices
+        ):
+            raise ValueError("EDGE_TTS_ALLOWED_VOICES must contain unique voice identifiers.")
+        if self.edge_tts_voice not in self.edge_tts_allowed_voices:
+            raise ValueError("EDGE_TTS_VOICE must be included in EDGE_TTS_ALLOWED_VOICES.")
         if self.environment.lower() not in {"development", "test"} and origin.scheme != "https":
             raise ValueError("FRONTEND_ORIGIN must use https outside development and test.")
         return self
@@ -85,14 +91,6 @@ class Settings(BaseSettings):
         """Return whether an OpenRouter API key is available."""
 
         return self._secret_is_set(self.openrouter_api_key)
-
-    @property
-    def aws_polly_configured(self) -> bool:
-        """Return whether both AWS credentials required by Polly are available."""
-
-        return self._secret_is_set(self.aws_access_key_id) and self._secret_is_set(
-            self.aws_secret_access_key
-        )
 
     @property
     def edge_tts_configured(self) -> bool:

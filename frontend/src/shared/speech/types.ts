@@ -1,4 +1,9 @@
-export type SpeechProvider = 'aws_polly' | 'edge_tts';
+export type SpeechProvider = 'edge_tts';
+export type EdgeVoiceId =
+  | 'en-US-AriaNeural'
+  | 'en-US-GuyNeural'
+  | 'en-GB-SoniaNeural'
+  | 'en-GB-RyanNeural';
 
 export type SpeechState = 'idle' | 'synthesizing' | 'playing' | 'error';
 
@@ -13,8 +18,9 @@ export type SpeechErrorResponse = {
 };
 
 export type SpeechStorageState = {
-  version: 1;
+  version: 2;
   state: {
     provider: SpeechProvider;
+    voice: EdgeVoiceId;
   };
 };

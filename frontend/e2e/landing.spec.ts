@@ -4,22 +4,27 @@ test.describe('Landing Page E2E', () => {
   test('renders static landing page with hero, modules, CTA and SEO metadata', async ({ page }) => {
     await page.goto('/');
 
-    await expect(page).toHaveTitle(/VSLingo/i);
-    await expect(page.locator('#hero-title')).toContainText('Practica el inglés que usas para desarrollar');
+    await expect(page).toHaveTitle(/Inglés al Grano/i);
+    await expect(page.locator('#hero-title')).toContainText('Ya sabes inglés. Ahora practícalo.');
 
-    const demoCta = page.getByRole('link', { name: /Probar demo/i }).first();
+    const demoCta = page.getByRole('link', { name: 'Probar gratis', exact: true }).first();
     await expect(demoCta).toBeVisible();
-    await expect(demoCta).toHaveAttribute('href', '/demo');
+    await expect(demoCta).toHaveAttribute('href', '/app/hablar');
 
-    // Module cards links
-    await expect(page.getByRole('link', { name: /Explorar módulos/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Empezar a hablar/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Mejorar un texto/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Entrenar el oído/i })).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+    await page.getByRole('button', { name: 'Activar modo oscuro' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   });
 
   test('navigates from landing to workspace demo when CTA is clicked', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('link', { name: /Probar demo/i }).first().click();
+    await page.getByRole('link', { name: 'Probar gratis', exact: true }).first().click();
 
-    await page.waitForURL('/demo');
+    await page.waitForURL('/app/hablar');
     await expect(page.locator('#voice-title')).toBeVisible();
   });
 });

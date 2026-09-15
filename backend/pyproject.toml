@@ -9,7 +9,6 @@ description = "Async API and voice orchestration for VSLingo Public Alpha"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "boto3==1.43.54",
     "edge-tts==7.2.8",
     "fastapi==0.139.2",
     "httpx==0.28.1",

@@ -1,10 +1,20 @@
-# VSLingo — Especificación de producto y decisiones técnicas
+# VSLingo — Especificación histórica de la Alpha
 
 > **The Code-Editor Interface for Mastering Developer English.**
 
 [Volver al README](../README.md)
 
-Este documento reúne las decisiones persistentes aprobadas para la Alpha de VSLingo. Define el producto objetivo, sus contratos y sus restricciones; el orden de implementación y el estado de ejecución se documentan por separado.
+Este documento conserva las decisiones que rigieron la Alpha de VSLingo (`T01`–`T10`) y sirve como referencia técnica de la base existente. Para la etapa comercial, la fuente de verdad vigente es [`commercial-mvp-plan.md`](commercial-mvp-plan.md); cuando exista conflicto, ese plan prevalece.
+
+## Etapa vigente: Inglés al Grano
+
+El nuevo producto reutiliza Astro, React/TypeScript, Tailwind, FastAPI, audio, contratos y pruebas de VSLingo, pero amplía y sustituye explícitamente el alcance de la Alpha. En particular, ahora sí incluye login obligatorio con Clerk, SQLite por usuario, historial sincronizado, cuotas, PayPal, PWA y validación móvil. También retira AWS Polly y la experiencia pública basada en VAD para adoptar PTT, Edge TTS y fallback con `speechSynthesis`.
+
+La oferta aprobada es una prueba única sin tarjeta y un único plan de US$2,99/mes. Las cantidades, invariantes económicas, fases F0–F8 y matriz A01–A18 se definen en el [plan comercial](commercial-mvp-plan.md). El estado mutable y la evidencia se registran en [`progress.md`](progress.md).
+
+---
+
+## Base histórica: Alpha VSLingo
 
 ## 1. Producto, audiencia y principios
 

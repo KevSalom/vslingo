@@ -18,6 +18,5 @@ def get_provider_readiness(settings: Settings) -> tuple[ProviderReadiness, ...]:
 
     return (
         ProviderReadiness("openrouter", settings.openrouter_configured),
-        ProviderReadiness("aws_polly", settings.aws_polly_configured),
         ProviderReadiness("edge_tts", settings.edge_tts_configured),
     )

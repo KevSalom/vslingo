@@ -116,7 +116,7 @@ describe('VideoLab', () => {
 
     expect(await screen.findByText(/A neural network receives numbers as input/i)).toBeInTheDocument();
     expect(loadTranscript).not.toHaveBeenCalled();
-    expect(screen.getByText('Fixture local')).toBeInTheDocument();
+    expect(screen.getAllByText('Video de ejemplo')).toHaveLength(2);
   });
 
   it('persists a library entry and a titled local note from the explorer', async () => {
@@ -244,9 +244,9 @@ describe('VideoLab', () => {
     await user.click(await screen.findByRole('button', { name: SAMPLE_VIDEO_TITLE }));
 
     expect(
-      await screen.findByRole('region', { name: 'Reproductor de demo local' }),
+      await screen.findByRole('region', { name: 'Reproductor del video de ejemplo' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Reproducir demo local' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reproducir ejemplo' })).toBeInTheDocument();
   });
 
   it('keeps the latest fixture selection when an older request resolves', async () => {
@@ -295,7 +295,7 @@ describe('VideoLab', () => {
     resolveRequest(RESULT);
 
     await waitFor(() => {
-      expect(screen.getByText('Fixture local')).toBeInTheDocument();
+      expect(screen.getAllByText('Video de ejemplo')).toHaveLength(2);
       expect(screen.queryByText('Neural networks recognize patterns.')).not.toBeInTheDocument();
     });
   });
@@ -400,7 +400,7 @@ describe('VideoLab', () => {
     const user = userEvent.setup();
     renderVideoLab(<VideoLab loadTranscript={vi.fn()} />);
 
-    await user.click(screen.getByRole('button', { name: 'Abrir demo técnica' }));
+    await user.click(screen.getByRole('button', { name: 'Usar video de ejemplo' }));
 
     expect(
       await screen.findByText(/A neural network receives numbers as input/i),

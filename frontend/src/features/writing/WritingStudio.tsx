@@ -6,7 +6,7 @@ import {
   type SyntheticEvent,
 } from 'react';
 
-import { SpeechProviderControl } from '../../shared/speech/SpeechProviderControl';
+import { SpeechVoiceControl } from '../../shared/speech/SpeechVoiceControl';
 import { useSpeechPlayer } from '../../shared/speech/useSpeechPlayer';
 import {
   MAX_CORRECTION_TEXT_LENGTH,
@@ -140,9 +140,9 @@ export function WritingStudio({
 
   return (
     <section aria-labelledby="writing-title" className="writing-studio">
-      <h1 className="sr-only" id="writing-title" tabIndex={-1}>
-        Writing Studio
-      </h1>
+      <h2 className="sr-only" id="writing-title">
+        Escribir
+      </h2>
 
       <div
         className={
@@ -151,7 +151,7 @@ export function WritingStudio({
       >
         <div className="writing-pane writing-pane-editor">
           <div className="writing-pane-tabs">
-            <span className="writing-pane-tab is-active">draft.en</span>
+            <span className="writing-pane-tab is-active">Tu borrador</span>
             <span className="writing-hint-key">Ctrl + Enter para revisar</span>
           </div>
 
@@ -231,9 +231,9 @@ export function WritingStudio({
                     <h2 className="writing-result-title">Texto corregido</h2>
                   </div>
                   <div className="writing-result-actions">
-                    <SpeechProviderControl
-                      provider={speechPlayer.provider}
-                      onChange={speechPlayer.setProvider}
+                    <SpeechVoiceControl
+                      voice={speechPlayer.voice}
+                      onChange={speechPlayer.setVoice}
                       disabled={speechPlayer.isBusy}
                     />
                     <button

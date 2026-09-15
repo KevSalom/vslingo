@@ -45,3 +45,23 @@ async def test_edge_tts_empty_audio_raises_invalid_response() -> None:
 
     assert exc_info.value.code == IntegrationErrorCode.INVALID_RESPONSE
     assert exc_info.value.provider == "edge_tts"
+
+
+@pytest.mark.asyncio
+async def test_edge_tts_rejects_voice_outside_allowlist_before_provider_call() -> None:
+    settings = Settings(_env_file=None)
+    calls = 0
+
+    def communicate_factory(text: str, voice: str) -> MockCommunicate:
+        nonlocal calls
+        del text, voice
+        calls += 1
+        return MockCommunicate()
+
+    synthesizer = EdgeTTSSynthesizer(settings, communicate_factory=communicate_factory)
+
+    with pytest.raises(IntegrationError) as exc_info:
+        await synthesizer.synthesize("Hello Edge", voice="en-US-UnknownNeural")
+
+    assert exc_info.value.code == IntegrationErrorCode.INVALID_REQUEST
+    assert calls == 0

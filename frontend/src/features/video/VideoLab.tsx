@@ -127,7 +127,7 @@ export function VideoLab({
           setError(
             cause instanceof Error
               ? cause.message
-              : 'No se pudo cargar la transcripción. Usa la demo técnica.',
+              : 'No se pudo cargar la transcripción. Usa el video de ejemplo.',
           );
         }
       } finally {
@@ -297,9 +297,9 @@ export function VideoLab({
 
   return (
     <section aria-labelledby="video-lab-title" className="video-lab mx-auto w-full max-w-[92rem]">
-      <h1 className="sr-only" id="video-lab-title" tabIndex={-1}>
-        Video Lab
-      </h1>
+      <h2 className="sr-only" id="video-lab-title">
+        Videos
+      </h2>
 
       <form
         aria-busy={isLoading}
@@ -316,11 +316,8 @@ export function VideoLab({
               onClick={() => setExplorerOpen(true)}
               type="button"
             >
-              Explorer
+              Mis videos y notas
             </button>
-            <span className="video-lab-meta">
-              Sincronización cada 200 ms
-            </span>
           </div>
         </div>
         <div className="mt-2 flex flex-col gap-2 lg:flex-row">
@@ -344,16 +341,16 @@ export function VideoLab({
             >
               {isLoading ? 'Buscando subtítulos…' : 'Cargar transcripción'}
             </button>
-            <button
-              aria-label="Guardar video"
-              className="video-url-bookmark"
-              disabled={!result}
-              onClick={() => setSaveVideoOpen(true)}
-              title="Guardar video"
-              type="button"
-            >
-              <BookmarkIcon />
-            </button>
+            {result ? (
+              <button
+                className="video-url-bookmark"
+                onClick={() => setSaveVideoOpen(true)}
+                type="button"
+              >
+                <BookmarkIcon />
+                <span>Guardar video</span>
+              </button>
+            ) : null}
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -362,7 +359,7 @@ export function VideoLab({
             onClick={() => openFixture()}
             type="button"
           >
-            Abrir demo técnica
+            Usar video de ejemplo
           </button>
         </div>
       </form>
@@ -412,7 +409,7 @@ export function VideoLab({
               </div>
               <div className="video-player-bar">
                 <span className="video-player-playhead">
-                  playhead {formatTimestamp(playbackTime)}
+                  Minuto {formatTimestamp(playbackTime)}
                 </span>
                 <span
                   className={`video-player-source-badge ${
@@ -421,7 +418,7 @@ export function VideoLab({
                       : 'video-player-source-badge--youtube'
                   }`}
                 >
-                  {result.source === 'fixture' ? 'Fixture local' : 'YouTube'}
+                  {result.source === 'fixture' ? 'Video de ejemplo' : 'YouTube'}
                 </span>
               </div>
             </div>
@@ -437,7 +434,7 @@ export function VideoLab({
               <header className="video-transcript-header">
                 <div>
                   <p className="video-transcript-kicker">
-                    Transcript
+                    Transcripción
                   </p>
                   <h2 className="video-transcript-count">
                     {result.segments.length} segmentos
@@ -636,7 +633,7 @@ export function VideoLab({
             className="video-explorer-drawer"
           >
             <div className="video-explorer-drawer-header">
-              <p className="explorer-title">Explorer</p>
+              <p className="explorer-title">Mis videos y notas</p>
               <button
                 aria-label="Cerrar"
                 className="video-tree-action"

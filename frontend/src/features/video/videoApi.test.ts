@@ -51,7 +51,7 @@ describe('fetchVideoTranscript', () => {
         JSON.stringify({
           error: {
             code: 'provider_blocked',
-            message: 'YouTube bloqueó temporalmente la solicitud. Usa la demo técnica.',
+            message: 'YouTube bloqueó temporalmente la solicitud. Usa el video de ejemplo.',
             retryable: false,
           },
         }),

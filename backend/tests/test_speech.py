@@ -30,74 +30,71 @@ class ConfigurableFakeSynthesizer:
 
 
 def test_speech_provider_enum() -> None:
-    assert SpeechProvider.AWS_POLLY == "aws_polly"
     assert SpeechProvider.EDGE_TTS == "edge_tts"
 
 
 def test_speech_request_validation() -> None:
-    req = SpeechRequest(text="  Hello world  ", provider=SpeechProvider.AWS_POLLY, voice="Joanna")
+    req = SpeechRequest(
+        text="  Hello world  ",
+        provider=SpeechProvider.EDGE_TTS,
+        voice="en-US-AriaNeural",
+    )
     assert req.clean_text == "Hello world"
-    assert req.voice == "Joanna"
+    assert req.voice == "en-US-AriaNeural"
 
     too_long = "a" * 3001
     with pytest.raises(SpeechServiceError) as exc_info:
-        SpeechRequest(text=too_long, provider=SpeechProvider.AWS_POLLY).validate()
+        SpeechRequest(text=too_long, provider=SpeechProvider.EDGE_TTS).validate()
     assert exc_info.value.code == "text_too_long"
 
     empty = "   "
     with pytest.raises(SpeechServiceError) as exc_info:
-        SpeechRequest(text=empty, provider=SpeechProvider.AWS_POLLY).validate()
+        SpeechRequest(text=empty, provider=SpeechProvider.EDGE_TTS).validate()
     assert exc_info.value.code == "empty_text"
 
 
 @pytest.mark.asyncio
-async def test_speech_service_success_polly() -> None:
-    polly_fake = ConfigurableFakeSynthesizer(b"ID3-polly-audio")
+async def test_speech_service_success_edge() -> None:
     edge_fake = ConfigurableFakeSynthesizer(b"ID3-edge-audio")
     service = SpeechService(
         providers={
-            SpeechProvider.AWS_POLLY: polly_fake,
             SpeechProvider.EDGE_TTS: edge_fake,
         }
     )
 
-    req = SpeechRequest(text="Test speech", provider=SpeechProvider.AWS_POLLY)
+    req = SpeechRequest(text="Test speech", provider=SpeechProvider.EDGE_TTS)
     speech = await service.synthesize(req)
 
-    assert speech.audio == b"ID3-polly-audio"
+    assert speech.audio == b"ID3-edge-audio"
     assert speech.media_type == "audio/mpeg"
-    assert polly_fake.last_text == "Test speech"
-    assert edge_fake.last_text is None
+    assert edge_fake.last_text == "Test speech"
 
 
 @pytest.mark.asyncio
-async def test_speech_service_no_fallback_on_error() -> None:
-    polly_fake = ConfigurableFakeSynthesizer(
-        error=IntegrationError("aws_polly", IntegrationErrorCode.UNAVAILABLE, "Polly down")
+async def test_speech_service_maps_edge_error() -> None:
+    edge_fake = ConfigurableFakeSynthesizer(
+        error=IntegrationError("edge_tts", IntegrationErrorCode.UNAVAILABLE, "Edge down")
     )
-    edge_fake = ConfigurableFakeSynthesizer(b"ID3-edge-audio")
     service = SpeechService(
         providers={
-            SpeechProvider.AWS_POLLY: polly_fake,
             SpeechProvider.EDGE_TTS: edge_fake,
         }
     )
 
-    req = SpeechRequest(text="Test speech", provider=SpeechProvider.AWS_POLLY)
+    req = SpeechRequest(text="Test speech", provider=SpeechProvider.EDGE_TTS)
     with pytest.raises(SpeechServiceError) as exc_info:
         await service.synthesize(req)
 
     assert exc_info.value.code == "provider_unavailable"
     assert exc_info.value.retryable is True
-    assert edge_fake.last_text is None
+    assert edge_fake.last_text == "Test speech"
 
 
 def test_speech_api_success_headers_and_bytes() -> None:
-    polly_fake = ConfigurableFakeSynthesizer(b"ID3-polly-binary-data")
+    edge_fake = ConfigurableFakeSynthesizer(b"ID3-edge-binary-data")
     service = SpeechService(
         providers={
-            SpeechProvider.AWS_POLLY: polly_fake,
-            SpeechProvider.EDGE_TTS: ConfigurableFakeSynthesizer(),
+            SpeechProvider.EDGE_TTS: edge_fake,
         }
     )
     app = create_app(speech_service=service)
@@ -105,14 +102,14 @@ def test_speech_api_success_headers_and_bytes() -> None:
 
     response = client.post(
         "/api/speech",
-        json={"text": "Hello VSLingo", "provider": "aws_polly", "voice": None},
+        json={"text": "Hello", "provider": "edge_tts", "voice": "en-US-AriaNeural"},
     )
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "audio/mpeg"
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["x-content-type-options"] == "nosniff"
-    assert response.content == b"ID3-polly-binary-data"
+    assert response.content == b"ID3-edge-binary-data"
 
 
 def test_speech_api_invalid_provider_returns_422() -> None:
@@ -136,7 +133,7 @@ def test_speech_api_empty_text_returns_422() -> None:
 
     response = client.post(
         "/api/speech",
-        json={"text": "   ", "provider": "aws_polly"},
+        json={"text": "   ", "provider": "edge_tts"},
     )
 
     assert response.status_code == 422
@@ -151,7 +148,7 @@ def test_speech_api_text_too_long_returns_422() -> None:
 
     response = client.post(
         "/api/speech",
-        json={"text": "x" * 3001, "provider": "aws_polly"},
+        json={"text": "x" * 3001, "provider": "edge_tts"},
     )
 
     assert response.status_code == 422

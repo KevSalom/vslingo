@@ -1,4 +1,4 @@
-"""Voice Protocol v1 schemas and discriminators for WebSocket communication."""
+"""Voice Protocol v2 schemas and discriminators for WebSocket communication."""
 
 from typing import Annotated, Literal
 
@@ -14,17 +14,24 @@ class BaseVoiceMessage(BaseModel):
 # Client Messages
 class SessionStartMessage(BaseVoiceMessage):
     type: Literal["session.start"] = "session.start"
-    protocol_version: Literal[1] = 1
+    protocol_version: Literal[2] = 2
 
 
 ScenarioType = Literal["daily_standup", "system_design", "salary_negotiation", "free"]
-SpeechProviderType = Literal["aws_polly", "edge_tts"]
+SpeechProviderType = Literal["edge_tts"]
+SpeechVoiceType = Literal[
+    "en-US-AriaNeural",
+    "en-US-GuyNeural",
+    "en-GB-SoniaNeural",
+    "en-GB-RyanNeural",
+]
 
 
 class SessionConfigMessage(BaseVoiceMessage):
     type: Literal["session.config"] = "session.config"
-    scenario: ScenarioType = "daily_standup"
-    speech_provider: SpeechProviderType = "aws_polly"
+    scenario: ScenarioType = "free"
+    speech_provider: SpeechProviderType = "edge_tts"
+    speech_voice: SpeechVoiceType = "en-US-AriaNeural"
 
 
 class SpeechStartedMessage(BaseVoiceMessage):
@@ -53,6 +60,8 @@ class PlaybackStartedMessage(BaseVoiceMessage):
     turn_id: str
     generation: int = Field(ge=1)
     segment_id: str
+    segment_index: int = Field(ge=0)
+    engine: Literal["edge_tts", "browser"] = "edge_tts"
 
 
 class SessionEndMessage(BaseVoiceMessage):
@@ -74,7 +83,7 @@ ClientVoiceMessage = Annotated[
 # Server Messages
 class SessionReadyMessage(BaseVoiceMessage):
     type: Literal["session.ready"] = "session.ready"
-    protocol_version: Literal[1] = 1
+    protocol_version: Literal[2] = 2
     session_id: str
     generation: int = 0
 
@@ -83,6 +92,7 @@ class SessionConfiguredMessage(BaseVoiceMessage):
     type: Literal["session.configured"] = "session.configured"
     scenario: ScenarioType
     speech_provider: SpeechProviderType
+    speech_voice: SpeechVoiceType
     config_revision: int = Field(ge=1)
 
 
@@ -105,6 +115,15 @@ class AssistantDoneMessage(BaseVoiceMessage):
     type: Literal["assistant.done"] = "assistant.done"
     turn_id: str
     generation: int = Field(ge=1)
+    text: str = Field(min_length=1, max_length=600)
+
+
+class AssistantSegmentMessage(BaseVoiceMessage):
+    type: Literal["assistant.segment"] = "assistant.segment"
+    turn_id: str
+    generation: int = Field(ge=1)
+    segment_id: str
+    segment_index: int = Field(ge=0)
     text: str = Field(min_length=1, max_length=600)
 
 
@@ -149,7 +168,7 @@ MetricStage = Literal[
     "playback_started",
     "turn_cancelled",
 ]
-MetricProvider = Literal["openrouter", "aws_polly", "edge_tts"]
+MetricProvider = Literal["openrouter", "edge_tts"]
 
 
 class MetricsStageMessage(BaseVoiceMessage):
@@ -166,10 +185,10 @@ class MetricsStageMessage(BaseVoiceMessage):
 
     @model_validator(mode="after")
     def validate_estimated_cost(self) -> "MetricsStageMessage":
-        """Reserve estimated cost for Polly's explicit character-price calculation."""
+        """Reject estimated provider costs until a verified Edge price exists."""
 
-        if self.estimated and (self.provider != "aws_polly" or self.cost_usd is None):
-            raise ValueError("Estimated cost is only valid for a known Polly estimate.")
+        if self.estimated:
+            raise ValueError("Estimated TTS cost is not supported for Edge TTS.")
         return self
 
 
@@ -202,6 +221,8 @@ class ErrorMessage(BaseVoiceMessage):
     fatal: bool
     turn_id: str | None = None
     generation: int | None = None
+    segment_id: str | None = None
+    segment_index: int | None = Field(default=None, ge=0)
 
 
 ServerVoiceMessage = Annotated[
@@ -210,6 +231,7 @@ ServerVoiceMessage = Annotated[
     | TranscriptFinalMessage
     | AssistantDeltaMessage
     | AssistantDoneMessage
+    | AssistantSegmentMessage
     | FeedbackReadyMessage
     | ResponseCancelledMessage
     | AudioBeginMessage

@@ -1,4 +1,4 @@
-"""WebSocket router for Voice Studio protocol v1."""
+"""WebSocket router for the Inglés al Grano voice protocol v2."""
 
 from urllib.parse import urlsplit
 

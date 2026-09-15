@@ -12,11 +12,8 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Final
 
-import boto3
 import edge_tts
 import httpx
-from botocore.config import Config
-from botocore.exceptions import ConnectTimeoutError, ReadTimeoutError
 from pydantic import SecretStr
 
 from app.core.config import Settings
@@ -193,78 +190,6 @@ async def smoke_openrouter_chat(settings: Settings) -> None:
         )
 
 
-async def smoke_aws_polly(settings: Settings) -> None:
-    """Synthesize a short in-memory MP3 with AWS Polly Neural."""
-
-    access_key = _required_secret(
-        settings.aws_access_key_id,
-        provider="aws_polly",
-        name="AWS_ACCESS_KEY_ID",
-    )
-    secret_key = _required_secret(
-        settings.aws_secret_access_key,
-        provider="aws_polly",
-        name="AWS_SECRET_ACCESS_KEY",
-    )
-    try:
-        client = boto3.client(
-            "polly",
-            region_name=settings.aws_region,
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
-            config=Config(
-                connect_timeout=settings.provider_timeout_seconds,
-                read_timeout=settings.provider_timeout_seconds,
-                retries={"max_attempts": 0, "mode": "standard"},
-            ),
-        )
-    except Exception as exc:
-        raise IntegrationError(
-            "aws_polly",
-            IntegrationErrorCode.NOT_CONFIGURED,
-            "AWS Polly client configuration failed.",
-        ) from exc
-
-    audio = b""
-    try:
-        response = await asyncio.to_thread(
-            client.synthesize_speech,
-            Text=SAMPLE_TEXT,
-            OutputFormat="mp3",
-            VoiceId=settings.aws_polly_voice_id,
-            Engine="neural",
-        )
-        audio_stream = response.get("AudioStream")
-        if audio_stream is None:
-            raise IntegrationError(
-                "aws_polly",
-                IntegrationErrorCode.INVALID_RESPONSE,
-                "AWS Polly returned no audio stream.",
-            )
-        try:
-            audio = await asyncio.to_thread(audio_stream.read)
-        finally:
-            audio_stream.close()
-    except (ConnectTimeoutError, ReadTimeoutError) as exc:
-        raise IntegrationError(
-            "aws_polly", IntegrationErrorCode.TIMEOUT, "AWS Polly timed out."
-        ) from exc
-    except IntegrationError:
-        raise
-    except Exception as exc:
-        raise IntegrationError(
-            "aws_polly", IntegrationErrorCode.UNAVAILABLE, "AWS Polly request failed."
-        ) from exc
-    finally:
-        client.close()
-
-    if not audio:
-        raise IntegrationError(
-            "aws_polly",
-            IntegrationErrorCode.INVALID_RESPONSE,
-            "AWS Polly returned empty audio.",
-        )
-
 
 async def smoke_edge_tts(settings: Settings) -> None:
     """Synthesize a short in-memory MP3 with Microsoft Edge Neural."""
@@ -310,7 +235,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "provider",
-        choices=("openrouter-stt", "openrouter-chat", "aws-polly", "edge-tts"),
+        choices=("openrouter-stt", "openrouter-chat", "edge-tts"),
     )
     parser.add_argument(
         "--audio",
@@ -323,7 +248,6 @@ def _build_parser() -> argparse.ArgumentParser:
 async def _run(provider: str, audio: Path | None, settings: Settings) -> None:
     checks: dict[str, Callable[[], Awaitable[None]]] = {
         "openrouter-chat": lambda: smoke_openrouter_chat(settings),
-        "aws-polly": lambda: smoke_aws_polly(settings),
         "edge-tts": lambda: smoke_edge_tts(settings),
     }
     if provider == "openrouter-stt":

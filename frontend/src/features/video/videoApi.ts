@@ -55,7 +55,7 @@ export async function fetchVideoTranscript(
     }
     throw new VideoRequestError(
       'network_error',
-      'No se pudo conectar con el servidor de transcripciones. Usa la demo técnica.',
+      'No se pudo conectar con el servidor de transcripciones. Usa el video de ejemplo.',
       true,
       { cause },
     );
@@ -102,7 +102,7 @@ function serverError(payload: unknown): VideoRequestError {
 
   return new VideoRequestError(
     'request_failed',
-    'No se pudo cargar la transcripción. Inténtalo de nuevo o usa la demo técnica.',
+    'No se pudo cargar la transcripción. Inténtalo de nuevo o usa el video de ejemplo.',
     true,
   );
 }

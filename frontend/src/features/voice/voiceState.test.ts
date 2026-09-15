@@ -12,8 +12,8 @@ describe('VoiceState and Preferences', () => {
     localStorage.clear();
   });
 
-  it('loads default scenario daily_standup when localStorage is empty', () => {
-    expect(loadVoicePreferences()).toBe('daily_standup');
+  it('loads the free conversation by default when localStorage is empty', () => {
+    expect(loadVoicePreferences()).toBe('free');
   });
 
   it('saves and loads preferred scenario from localStorage', () => {
@@ -23,7 +23,7 @@ describe('VoiceState and Preferences', () => {
 
   it('ignores corrupted localStorage data and returns default', () => {
     localStorage.setItem(VOICE_STORAGE_KEY, 'invalid json');
-    expect(loadVoicePreferences()).toBe('daily_standup');
+    expect(loadVoicePreferences()).toBe('free');
   });
 
   it('creates initial voice state using stored preference', () => {
@@ -36,6 +36,6 @@ describe('VoiceState and Preferences', () => {
 
   it('contains labels for all four scenarios', () => {
     expect(Object.keys(SCENARIO_LABELS)).toHaveLength(4);
-    expect(SCENARIO_LABELS.free).toBe('Libre / Explorar');
+    expect(SCENARIO_LABELS.free).toBe('Tema libre');
   });
 });

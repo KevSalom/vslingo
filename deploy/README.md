@@ -7,9 +7,8 @@ Este directorio contiene las guías, plantillas y runbooks para el despliegue de
 ## Archivos Disponibles
 
 1. **[`dokploy-nixpacks.md`](dokploy-nixpacks.md):** Guía paso a paso para desplegar el backend FastAPI en un VPS con **Dokploy y Nixpacks** (PaaS self-hosted con SSL Traefik automático).
-2. **[`aws-polly.md`](aws-polly.md):** Runbook para presupuestos AWS Billing, políticas IAM de Polly Neural y límites de gasto en OpenRouter.
-3. **[`Caddyfile.example`](Caddyfile.example):** Configuración de Caddy reverse proxy si prefieres desplegar directamente sobre Debian/Ubuntu en VPS sin Dokploy.
-4. **[`vslingo-api.service.example`](vslingo-api.service.example):** Servicio `systemd` para ejecutar Uvicorn como demonio Linux en VPS tradicional.
+2. **[`Caddyfile.example`](Caddyfile.example):** Configuración de Caddy reverse proxy si prefieres desplegar directamente sobre Debian/Ubuntu en VPS sin Dokploy.
+3. **[`vslingo-api.service.example`](vslingo-api.service.example):** Servicio `systemd` para ejecutar Uvicorn como demonio Linux en VPS tradicional.
 
 ---
 

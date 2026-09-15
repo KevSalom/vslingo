@@ -116,7 +116,7 @@ def test_ws_rejects_wrong_or_missing_origin_before_accepting() -> None:
     with client.websocket_connect(
         "/api/voice/ws", headers={"origin": "http://localhost:4321"}
     ) as websocket:
-        websocket.send_json({"type": "session.start", "protocol_version": 1})
+        websocket.send_json({"type": "session.start", "protocol_version": 2})
         assert websocket.receive_json()["type"] == "session.ready"
 
 
@@ -141,7 +141,7 @@ async def test_turn_limit_is_fatal_and_never_logs_or_returns_canary_content(
         settings=settings(),
     )
     try:
-        await session._handle_text('{"type":"session.start","protocol_version":1}')
+        await session._handle_text('{"type":"session.start","protocol_version":2}')
         await session.outbound_queue.get()
         session.outbound_queue.task_done()
         await session._handle_text(
@@ -172,7 +172,7 @@ async def test_turn_limit_is_fatal_and_never_logs_or_returns_canary_content(
 
 def test_shared_protocol_fixture_includes_safe_metrics_contract() -> None:
     fixture = json.loads(
-        (Path(__file__).parents[2] / "docs" / "contracts" / "voice-protocol-v1.json").read_text(
+        (Path(__file__).parents[2] / "docs" / "contracts" / "voice-protocol-v2.json").read_text(
             encoding="utf-8"
         )
     )
@@ -182,6 +182,8 @@ def test_shared_protocol_fixture_includes_safe_metrics_contract() -> None:
         "turn_id": "123e4567-e89b-12d3-a456-426614174000",
         "generation": 1,
         "segment_id": "223e4567-e89b-12d3-a456-426614174000",
+        "segment_index": 0,
+        "engine": "browser",
     }
     metric = fixture["server_events"]["metrics_stage"]
     assert metric["type"] == "metrics.stage"

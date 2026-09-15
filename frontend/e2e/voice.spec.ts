@@ -1,14 +1,14 @@
 import { expect, test } from '@playwright/test';
 
-test.describe('Voice Studio E2E', () => {
+test.describe('Hablar E2E', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/demo');
+    await page.goto('/app/hablar');
   });
 
-  test('renders initial Voice Studio setup with scenario options and TTS provider control', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: /Voice Studio/i })).toBeVisible();
+  test('renders the PTT setup with scenario and allowlisted voice controls', async ({ page }) => {
+    await expect(page.getByRole('heading', { name: 'Hablar' })).toBeVisible();
 
-    await expect(page.getByRole('button', { name: 'Iniciar' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Activar micrófono' })).toBeVisible();
     await expect(page.locator('.voice-header-status')).toContainText(/Inactivo/i);
 
     const scenarioSelect = page.getByRole('combobox', { name: /Escenario/i });
@@ -16,23 +16,22 @@ test.describe('Voice Studio E2E', () => {
     await scenarioSelect.selectOption('system_design');
     await expect(scenarioSelect).toHaveValue('system_design');
 
-    const providerSelect = page.getByRole('combobox', { name: /Proveedor de voz/i });
-    await expect(providerSelect).toBeVisible();
-    await providerSelect.selectOption('aws_polly');
-    await expect(providerSelect).toHaveValue('aws_polly');
+    const voiceSelect = page.getByRole('combobox', { name: 'Voz' });
+    await expect(voiceSelect).toBeVisible();
+    await voiceSelect.selectOption('en-GB-SoniaNeural');
+    await expect(voiceSelect).toHaveValue('en-GB-SoniaNeural');
 
-    // Long conversation should scroll inside the panel, not push the document.
+    // The human-first layout may use natural document scroll, but must never overflow sideways.
     await expect.poll(async () =>
       page.evaluate(() => {
-        const split = document.querySelector('.voice-split');
-        const body = document.body;
-        return split instanceof HTMLElement && getComputedStyle(body).overflowY !== 'auto';
+        const root = document.documentElement;
+        return root.scrollWidth <= root.clientWidth;
       }),
     ).toBe(true);
   });
 
-  test('presents session metrics section in initial state', async ({ page }) => {
-    await expect(page.getByLabel('Métricas de sesión')).toBeVisible();
-    await expect(page.getByText('Observabilidad · sesión')).toBeVisible();
+  test('keeps the learner interface free of provider and cost diagnostics', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'Mantén pulsado para hablar' })).toBeVisible();
+    await expect(page.getByText(/Observabilidad|Coste|Proveedor de voz/)).toHaveCount(0);
   });
 });

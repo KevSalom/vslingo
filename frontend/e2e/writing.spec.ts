@@ -1,9 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-test.describe('Writing Studio E2E', () => {
+test.describe('Escribir E2E', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/demo');
-    await page.locator('.activity-button[title="Writing Studio"]').click();
+    await page.goto('/app/escribir');
   });
 
   test('renders writing editor and clears draft', async ({ page }) => {

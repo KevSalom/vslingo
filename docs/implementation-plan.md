@@ -1,8 +1,16 @@
-# VSLingo — Plan de implementación
+# VSLingo — Roadmap histórico de la Alpha
 
 [Volver al README](../README.md) · [Especificación](product-spec.md) · [Estado actual](progress.md)
 
-Este documento contiene el roadmap estable de la Alpha. Describe el orden y el resultado esperado de cada incremento, pero no registra qué está completado ni cuál es el siguiente paso; ese estado mutable pertenece exclusivamente a [`progress.md`](progress.md).
+Este documento conserva el roadmap completado `T01`–`T10` de la Alpha. La implementación vigente de Inglés al Grano usa las fases `F0`–`F8` de [`commercial-mvp-plan.md`](commercial-mvp-plan.md). No se deben reiniciar los incrementos históricos ni usar sus exclusiones para limitar el nuevo alcance. El estado mutable pertenece exclusivamente a [`progress.md`](progress.md).
+
+## Roadmap vigente
+
+F0–F7 llevan el producto desde la base actual hasta la beta comercial; F8 añade referidos después del lanzamiento. Se ejecuta una fase integrada a la vez, con pruebas dirigidas, fakes por defecto y actualización de `progress.md`. Los detalles, dependencias y criterios de cierre están en la [sección 8 del plan comercial](commercial-mvp-plan.md#8-fases-ejecutables).
+
+---
+
+## Roadmap histórico T01–T10
 
 ## Principios de ejecución
 

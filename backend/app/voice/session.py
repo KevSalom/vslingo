@@ -1,4 +1,4 @@
-"""VoiceSession handling WebSocket v1 lifecycle, actor tasks, and T06 conversation/feedback."""
+"""VoiceSession handling WebSocket v2 lifecycle, conversation, feedback, and speech."""
 
 import asyncio
 import json
@@ -106,11 +106,13 @@ class VoiceSession:
         self.session_id = str(uuid4())
         self.current_generation = 0
         self.config_revision = 0
-        self.scenario: ScenarioType = "daily_standup"
-        self.speech_provider: SpeechProviderType = "aws_polly"
+        self.scenario: ScenarioType = "free"
+        self.speech_provider: SpeechProviderType = "edge_tts"
+        self.speech_voice = self.settings.edge_tts_voice
         self.active_turn_id: str | None = None
         self.active_scenario: ScenarioType = self.scenario
         self.active_speech_provider: SpeechProviderType = self.speech_provider
+        self.active_speech_voice = self.speech_voice
         self.cancelled_turns: set[tuple[str, int]] = set()
 
         self.history = ConversationHistory()
@@ -124,7 +126,8 @@ class VoiceSession:
         self.turn_count = 0
         self._turn_t0: dict[tuple[str, int], float] = {}
         self._first_audio_segments: dict[tuple[str, int], str] = {}
-        self._playback_confirmed: set[tuple[str, int]] = set()
+        self._text_segments: dict[tuple[str, int, int], str] = {}
+        self._playback_confirmed: set[tuple[str, int, int]] = set()
         self._tts_metrics_emitted: set[tuple[str, int]] = set()
         self.session_cost_usd = 0.0
         self.session_cost_estimated = False
@@ -215,7 +218,7 @@ class VoiceSession:
                 self.session_limit_task = asyncio.create_task(self._enforce_session_limit())
                 await self._enqueue_message({
                     "type": "session.ready",
-                    "protocol_version": 1,
+                    "protocol_version": 2,
                     "session_id": self.session_id,
                     "generation": self.current_generation,
                 })
@@ -236,7 +239,17 @@ class VoiceSession:
                 fatal=False,
             )
         elif parsed_msg.type == "session.config":
-            if self.active_turn_id is not None:
+            if parsed_msg.speech_voice not in self.settings.edge_tts_allowed_voices:
+                await self._send_error(
+                    code="invalid_event",
+                    message="La voz seleccionada no está permitida.",
+                    retryable=False,
+                    fatal=False,
+                )
+                return
+
+            scenario_changed = parsed_msg.scenario != self.scenario
+            if self.active_turn_id is not None and scenario_changed:
                 cancelled_turn = (self.active_turn_id, self.current_generation)
                 if self.active_stt_task and not self.active_stt_task.done():
                     self.active_stt_task.cancel()
@@ -253,16 +266,18 @@ class VoiceSession:
                 self.pending_begin = None
                 self.active_turn_id = None
 
-            if parsed_msg.scenario != self.scenario:
+            if scenario_changed:
                 self.history.clear()
 
             self.scenario = parsed_msg.scenario
             self.speech_provider = parsed_msg.speech_provider
+            self.speech_voice = parsed_msg.speech_voice
             self.config_revision += 1
             await self._enqueue_message({
                 "type": "session.configured",
                 "scenario": self.scenario,
                 "speech_provider": self.speech_provider,
+                "speech_voice": self.speech_voice,
                 "config_revision": self.config_revision,
             })
 
@@ -290,6 +305,7 @@ class VoiceSession:
             self.active_turn_id = parsed_msg.turn_id
             self.active_scenario = self.scenario
             self.active_speech_provider = self.speech_provider
+            self.active_speech_voice = self.speech_voice
             if self.active_stt_task and not self.active_stt_task.done():
                 self.active_stt_task.cancel()
 
@@ -367,12 +383,16 @@ class VoiceSession:
                 })
 
         elif parsed_msg.type == "playback.started":
-            key = (parsed_msg.turn_id, parsed_msg.generation)
+            segment_key = (
+                parsed_msg.turn_id,
+                parsed_msg.generation,
+                parsed_msg.segment_index,
+            )
             if (
                 parsed_msg.generation != self.current_generation
                 or parsed_msg.turn_id != self.active_turn_id
-                or self._first_audio_segments.get(key) != parsed_msg.segment_id
-                or key in self._playback_confirmed
+                or self._text_segments.get(segment_key) != parsed_msg.segment_id
+                or segment_key in self._playback_confirmed
             ):
                 await self._send_error(
                     code="invalid_event",
@@ -383,7 +403,7 @@ class VoiceSession:
                     generation=parsed_msg.generation,
                 )
                 return
-            self._playback_confirmed.add(key)
+            self._playback_confirmed.add(segment_key)
             await self._emit_metric(
                 turn_id=parsed_msg.turn_id,
                 generation=parsed_msg.generation,
@@ -489,6 +509,7 @@ class VoiceSession:
                         result.text,
                         self.active_scenario,
                         self.active_speech_provider,
+                        self.active_speech_voice,
                     )
                 )
                 self.active_generation_tasks.append(conv_task)
@@ -556,6 +577,7 @@ class VoiceSession:
         user_text: str,
         scenario: ScenarioType,
         speech_provider: SpeechProviderType,
+        speech_voice: str = "en-US-AriaNeural",
     ) -> None:
         if not self.llm_provider:
             return
@@ -568,7 +590,6 @@ class VoiceSession:
         ]
         accumulator = SentenceAccumulator()
         segment_index = 0
-        tts_character_count = 0
         active_speech_provider = speech_provider
 
         try:
@@ -596,19 +617,15 @@ class VoiceSession:
 
                 chunks = accumulator.feed(delta)
                 for chunk in chunks:
-                    if self.tts_consumer:
-                        tts_character_count += len(chunk)
-                        item = TTSSegmentItem(
-                            turn_id=turn_id,
-                            generation=generation,
-                            segment_index=segment_index,
-                            text=chunk,
-                            provider=active_speech_provider,
-                        )
-                        await self.tts_consumer.enqueue(
-                            item, active_generation=self.current_generation
-                        )
-                        segment_index += 1
+                    await self._emit_speech_segment(
+                        turn_id=turn_id,
+                        generation=generation,
+                        segment_index=segment_index,
+                        text=chunk,
+                        provider=active_speech_provider,
+                        voice=speech_voice,
+                    )
+                    segment_index += 1
 
             if generation != self.current_generation:
                 return
@@ -616,19 +633,15 @@ class VoiceSession:
             if full_assistant_text:
                 flushed_chunks = accumulator.flush()
                 for chunk in flushed_chunks:
-                    if self.tts_consumer:
-                        tts_character_count += len(chunk)
-                        item = TTSSegmentItem(
-                            turn_id=turn_id,
-                            generation=generation,
-                            segment_index=segment_index,
-                            text=chunk,
-                            provider=active_speech_provider,
-                        )
-                        await self.tts_consumer.enqueue(
-                            item, active_generation=self.current_generation
-                        )
-                        segment_index += 1
+                    await self._emit_speech_segment(
+                        turn_id=turn_id,
+                        generation=generation,
+                        segment_index=segment_index,
+                        text=chunk,
+                        provider=active_speech_provider,
+                        voice=speech_voice,
+                    )
+                    segment_index += 1
 
                 await self._enqueue_message({
                     "type": "assistant.done",
@@ -646,19 +659,6 @@ class VoiceSession:
                     usage_tokens=llm_usage.tokens if llm_usage else None,
                     cost_usd=llm_usage.cost_usd if llm_usage else None,
                 )
-                if self.tts_consumer and active_speech_provider == "aws_polly":
-                    await self._emit_metric(
-                        turn_id=turn_id,
-                        generation=generation,
-                        stage="llm_done",
-                        provider="aws_polly",
-                        cost_usd=(
-                            tts_character_count
-                            * self.settings.polly_usd_per_million_chars
-                            / 1_000_000
-                        ),
-                        estimated=True,
-                    )
                 self.history.add_completed_turn(user_text, full_assistant_text)
 
             else:
@@ -695,6 +695,38 @@ class VoiceSession:
                 turn_id=turn_id,
                 generation=generation,
             )
+
+    async def _emit_speech_segment(
+        self,
+        *,
+        turn_id: str,
+        generation: int,
+        segment_index: int,
+        text: str,
+        provider: SpeechProviderType,
+        voice: str,
+    ) -> None:
+        """Publish the complete text segment before optional remote synthesis."""
+
+        item = TTSSegmentItem(
+            turn_id=turn_id,
+            generation=generation,
+            segment_index=segment_index,
+            text=text,
+            provider=provider,
+            voice=voice,
+        )
+        self._text_segments[(turn_id, generation, segment_index)] = item.segment_id
+        await self._enqueue_message({
+            "type": "assistant.segment",
+            "turn_id": turn_id,
+            "generation": generation,
+            "segment_id": item.segment_id,
+            "segment_index": segment_index,
+            "text": text,
+        })
+        if self.tts_consumer:
+            await self.tts_consumer.enqueue(item, active_generation=self.current_generation)
 
     async def _process_feedback(
         self, turn_id: str, generation: int, user_text: str, scenario: ScenarioType
@@ -820,7 +852,7 @@ class VoiceSession:
         )
 
     async def _on_tts_ready(self, item: TTSSegmentItem) -> None:
-        """Record only the first valid MP3; Polly's full estimate is known at LLM completion."""
+        """Record timing for the first valid remote-audio segment."""
 
         key = (item.turn_id, item.generation)
         self._first_audio_segments.setdefault(key, item.segment_id)

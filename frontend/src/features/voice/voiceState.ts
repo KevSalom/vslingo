@@ -9,10 +9,10 @@ export interface VoiceStoredState {
 }
 
 export const SCENARIO_LABELS: Record<ScenarioType, string> = {
-  daily_standup: 'Daily Standup',
-  system_design: 'System Design / Technical Interview',
-  salary_negotiation: 'Salary Negotiation',
-  free: 'Libre / Explorar',
+  daily_standup: 'Reunión breve',
+  system_design: 'Explicar una idea',
+  salary_negotiation: 'Conversación de trabajo',
+  free: 'Tema libre',
 };
 
 export interface TurnRecord {
@@ -36,9 +36,6 @@ export interface ActiveTurnState {
 
 export type InputSubstate =
   | 'idle'
-  | 'initializing_vad'
-  | 'vad_ready'
-  | 'listening'
   | 'speech'
   | 'encoding'
   | 'fallback_ptt'
@@ -48,12 +45,9 @@ export type InputSubstate =
 
 export const ACCESSIBLE_INPUT_LABELS: Record<InputSubstate, string> = {
   idle: 'Inactivo',
-  initializing_vad: 'Inicializando micrófono...',
-  vad_ready: 'Listo',
-  listening: 'Escuchando',
   speech: 'Te escucho',
-  encoding: 'Procesando',
-  fallback_ptt: 'Modo manual (PTT)',
+  encoding: 'Preparando respuesta',
+  fallback_ptt: 'Listo para hablar',
   permission_denied: 'Permiso de micrófono denegado',
   input_error: 'Error de entrada de audio',
   interrupted: 'Interrumpido',
@@ -84,7 +78,7 @@ export function loadVoicePreferences(): ScenarioType {
   } catch {
     // Ignore storage errors
   }
-  return 'daily_standup';
+  return 'free';
 }
 
 export function saveVoicePreferences(scenario: ScenarioType): void {

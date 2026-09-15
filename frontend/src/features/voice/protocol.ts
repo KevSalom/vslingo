@@ -1,5 +1,10 @@
 export type ScenarioType = 'daily_standup' | 'system_design' | 'salary_negotiation' | 'free';
-export type SpeechProviderType = 'aws_polly' | 'edge_tts';
+export type SpeechProviderType = 'edge_tts';
+export type SpeechVoiceType =
+  | 'en-US-AriaNeural'
+  | 'en-US-GuyNeural'
+  | 'en-GB-SoniaNeural'
+  | 'en-GB-RyanNeural';
 
 export type ErrorCodeType =
   | 'invalid_event'
@@ -45,13 +50,14 @@ export type VoiceFeedback = {
 // Client Messages
 export type SessionStartMessage = {
   type: 'session.start';
-  protocol_version: 1;
+  protocol_version: 2;
 };
 
 export type SessionConfigMessage = {
   type: 'session.config';
   scenario: ScenarioType;
   speech_provider: SpeechProviderType;
+  speech_voice: SpeechVoiceType;
 };
 
 export type SpeechStartedMessage = {
@@ -80,6 +86,8 @@ export type PlaybackStartedMessage = {
   turn_id: string;
   generation: number;
   segment_id: string;
+  segment_index: number;
+  engine: 'edge_tts' | 'browser';
 };
 
 export type SessionEndMessage = {
@@ -98,7 +106,7 @@ export type ClientVoiceMessage =
 // Server Messages
 export type SessionReadyMessage = {
   type: 'session.ready';
-  protocol_version: 1;
+  protocol_version: 2;
   session_id: string;
   generation: number;
 };
@@ -107,6 +115,7 @@ export type SessionConfiguredMessage = {
   type: 'session.configured';
   scenario: ScenarioType;
   speech_provider: SpeechProviderType;
+  speech_voice: SpeechVoiceType;
   config_revision: number;
 };
 
@@ -129,6 +138,15 @@ export type AssistantDoneMessage = {
   type: 'assistant.done';
   turn_id: string;
   generation: number;
+  text: string;
+};
+
+export type AssistantSegmentMessage = {
+  type: 'assistant.segment';
+  turn_id: string;
+  generation: number;
+  segment_id: string;
+  segment_index: number;
   text: string;
 };
 
@@ -173,7 +191,7 @@ export type MetricStageType =
   | 'playback_started'
   | 'turn_cancelled';
 
-export type MetricProviderType = 'openrouter' | 'aws_polly' | 'edge_tts' | null;
+export type MetricProviderType = 'openrouter' | 'edge_tts' | null;
 
 export type MetricsStageMessage = {
   type: 'metrics.stage';
@@ -196,6 +214,8 @@ export type ErrorMessage = {
   fatal: boolean;
   turn_id?: string;
   generation?: number;
+  segment_id?: string;
+  segment_index?: number;
 };
 
 export type ServerVoiceMessage =
@@ -204,6 +224,7 @@ export type ServerVoiceMessage =
   | TranscriptFinalMessage
   | AssistantDeltaMessage
   | AssistantDoneMessage
+  | AssistantSegmentMessage
   | FeedbackReadyMessage
   | ResponseCancelledMessage
   | AudioBeginMessage
@@ -221,7 +242,13 @@ const SCENARIOS: ReadonlySet<ScenarioType> = new Set([
   'salary_negotiation',
   'free',
 ]);
-const SPEECH_PROVIDERS: ReadonlySet<SpeechProviderType> = new Set(['aws_polly', 'edge_tts']);
+const SPEECH_PROVIDERS: ReadonlySet<SpeechProviderType> = new Set(['edge_tts']);
+const SPEECH_VOICES: ReadonlySet<SpeechVoiceType> = new Set([
+  'en-US-AriaNeural',
+  'en-US-GuyNeural',
+  'en-GB-SoniaNeural',
+  'en-GB-RyanNeural',
+]);
 const ERROR_CODES: ReadonlySet<ErrorCodeType> = new Set([
   'invalid_event',
   'invalid_generation',
@@ -254,7 +281,6 @@ const METRIC_STAGES: ReadonlySet<MetricStageType> = new Set([
 ]);
 const METRIC_PROVIDERS: ReadonlySet<Exclude<MetricProviderType, null>> = new Set([
   'openrouter',
-  'aws_polly',
   'edge_tts',
 ]);
 
@@ -285,7 +311,7 @@ export function parseServerMessage(data: string): ServerVoiceMessage | null {
     switch (raw.type) {
       case 'session.ready':
         if (
-          raw.protocol_version === 1 &&
+          raw.protocol_version === 2 &&
           isNonEmptyId(raw.session_id) &&
           isIntegerInRange(raw.generation, 0)
         ) {
@@ -297,6 +323,7 @@ export function parseServerMessage(data: string): ServerVoiceMessage | null {
         if (
           SCENARIOS.has(raw.scenario as ScenarioType) &&
           SPEECH_PROVIDERS.has(raw.speech_provider as SpeechProviderType) &&
+          SPEECH_VOICES.has(raw.speech_voice as SpeechVoiceType) &&
           isIntegerInRange(raw.config_revision, 1)
         ) {
           return raw as SessionConfiguredMessage;
@@ -331,6 +358,20 @@ export function parseServerMessage(data: string): ServerVoiceMessage | null {
           typeof raw.text === 'string'
         ) {
           return raw as AssistantDoneMessage;
+        }
+        return null;
+
+      case 'assistant.segment':
+        if (
+          isNonEmptyId(raw.turn_id) &&
+          isIntegerInRange(raw.generation, 1) &&
+          isNonEmptyId(raw.segment_id) &&
+          isIntegerInRange(raw.segment_index, 0) &&
+          typeof raw.text === 'string' &&
+          raw.text.length > 0 &&
+          raw.text.length <= 600
+        ) {
+          return raw as AssistantSegmentMessage;
         }
         return null;
 

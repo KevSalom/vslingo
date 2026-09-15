@@ -8,7 +8,7 @@ export interface AudioSchedulerOptions {
   onPlaybackStart?: (generation: number, index: number) => void;
   onSegmentEnd?: (generation: number, index: number) => void;
   onIdle?: () => void;
-  onError?: (error: Error) => void;
+  onError?: (error: Error, generation: number, index: number) => void;
 }
 
 export interface SegmentPayload {
@@ -31,7 +31,7 @@ export class AudioScheduler {
   private onPlaybackStart?: (generation: number, index: number) => void;
   private onSegmentEnd?: (generation: number, index: number) => void;
   private onIdle?: () => void;
-  private onError?: (error: Error) => void;
+  private onError?: (error: Error, generation: number, index: number) => void;
 
   constructor(options: AudioSchedulerOptions = {}) {
     if (options.audioContext) {
@@ -96,7 +96,7 @@ export class AudioScheduler {
       this.drainQueue();
     } catch (err) {
       if (this.onError && err instanceof Error) {
-        this.onError(err);
+        this.onError(err, segment.generation, segment.index);
       }
     }
   }

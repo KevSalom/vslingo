@@ -1,4 +1,4 @@
-"""Tests for Voice Protocol v1 Pydantic models against shared contract fixture."""
+"""Tests for Voice Protocol v2 Pydantic models against the shared contract fixture."""
 
 import json
 from pathlib import Path
@@ -11,14 +11,14 @@ from app.domain.voice_protocol import (
     server_adapter,
 )
 
-CONTRACT_PATH = Path(__file__).parents[2] / "docs" / "contracts" / "voice-protocol-v1.json"
+CONTRACT_PATH = Path(__file__).parents[2] / "docs" / "contracts" / "voice-protocol-v2.json"
 
 
 def test_fixture_parsing() -> None:
     assert CONTRACT_PATH.exists(), f"Contract fixture missing at {CONTRACT_PATH}"
     data = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
 
-    assert data["protocol_version"] == 1
+    assert data["protocol_version"] == 2
 
     # Validate client events
     for _name, msg in data["client_events"].items():
@@ -35,7 +35,7 @@ def test_rejects_extra_fields() -> None:
     with pytest.raises(ValidationError):
         client_adapter.validate_python({
             "type": "session.start",
-            "protocol_version": 1,
+            "protocol_version": 2,
             "extra_field": "hacker",
         })
 
@@ -56,5 +56,5 @@ def test_rejects_unsupported_protocol() -> None:
     with pytest.raises(ValidationError):
         client_adapter.validate_python({
             "type": "session.start",
-            "protocol_version": 2,
+            "protocol_version": 1,
         })

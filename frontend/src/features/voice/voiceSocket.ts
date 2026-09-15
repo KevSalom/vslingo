@@ -47,7 +47,7 @@ export class VoiceSocketClient {
 
         this.socket.onopen = () => {
           this.notifyStatus(true);
-          this.sendMessage({ type: 'session.start', protocol_version: 1 });
+          this.sendMessage({ type: 'session.start', protocol_version: 2 });
           resolve();
         };
 

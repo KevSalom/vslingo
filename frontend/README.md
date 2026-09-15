@@ -1,6 +1,6 @@
-# VSLingo Frontend
+# Inglés al Grano Frontend
 
-Astro 7, React 19 and Tailwind CSS v4 frontend for the VSLingo Public Alpha.
+Astro 7, React 19 and Tailwind CSS v4 frontend for the commercial MVP.
 
 ## Requirements
 
@@ -38,9 +38,11 @@ variable — do not hardcode a different API host. Production builds must set it
 to the public HTTPS API origin (for example `https://api.example.com`) at
 build time.
 
-The static landing is available at `/`; `/demo` contains Writing Studio, Video
-Lab, and Voice Studio. Hands-free VAD needs a secure context (HTTPS or
-localhost) and microphone permission; PTT remains available as fallback.
+The static landing is available at `/`. The stable practice routes are `/app`,
+`/app/hablar`, `/app/escribir`, and `/app/videos`; `/demo` remains a temporary
+alias for links from the historical Alpha. Voice uses push-to-talk in a secure
+context (HTTPS or localhost), Edge TTS, and browser speech synthesis as the
+text-preserving fallback.
 
 ## URL de sitio para producción
 

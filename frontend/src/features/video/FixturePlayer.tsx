@@ -66,20 +66,19 @@ export const FixturePlayer = forwardRef<VideoPlayerHandle, YouTubePlayerProps>(
 
     return (
       <div
-        aria-label="Reproductor de demo local"
-        className="absolute inset-0 flex flex-col justify-between bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.18),_transparent_45%),linear-gradient(145deg,#020617,#172033)] p-5 text-slate-100 sm:p-7"
+        aria-label="Reproductor del video de ejemplo"
+        className="fixture-player absolute inset-0 flex flex-col justify-between p-5 sm:p-7"
         role="region"
       >
         <div>
-          <p className="font-mono text-[0.6875rem] font-semibold uppercase tracking-[0.2em] text-violet-300">
-            Demo local / deterministic clock
+          <p className="fixture-player-label">
+            Video de ejemplo
           </p>
           <h2 className="mt-3 max-w-md text-xl font-semibold tracking-tight sm:text-3xl">
             Neural network signal path
           </h2>
           <p className="mt-2 max-w-md text-xs leading-5 text-slate-400 sm:text-sm">
-            Este simulador no carga YouTube. Conserva el recorrido de sincronización,
-            seek, vistas y notas cuando la red o el proveedor no están disponibles.
+            Practica con esta transcripción cuando no quieras pegar un enlace de YouTube.
           </p>
         </div>
 
@@ -90,8 +89,8 @@ export const FixturePlayer = forwardRef<VideoPlayerHandle, YouTubePlayerProps>(
                 <span
                   className={`w-full rounded-t-sm ${
                     index / 12 <= currentTime / FIXTURE_DURATION_SECONDS
-                      ? 'bg-cyan-300'
-                      : 'bg-slate-700'
+                      ? 'fixture-bar-active'
+                      : 'fixture-bar-inactive'
                   }`}
                   key={`${height}-${index}`}
                   style={{ height: `${height}%` }}
@@ -100,8 +99,8 @@ export const FixturePlayer = forwardRef<VideoPlayerHandle, YouTubePlayerProps>(
             )}
           </div>
           <input
-            aria-label="Posición de la demo local"
-            className="w-full accent-cyan-300"
+            aria-label="Posición del video de ejemplo"
+            className="w-full"
             max={FIXTURE_DURATION_SECONDS}
             min={0}
             onChange={(event) => seekTo(Number(event.currentTarget.value))}
@@ -111,7 +110,7 @@ export const FixturePlayer = forwardRef<VideoPlayerHandle, YouTubePlayerProps>(
           />
           <div className="flex items-center justify-between gap-3">
             <button
-              className="rounded-lg bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-200"
+              className="fixture-play-button"
               onClick={() => {
                 if (currentTimeRef.current >= FIXTURE_DURATION_SECONDS) {
                   seekTo(0);
@@ -120,9 +119,9 @@ export const FixturePlayer = forwardRef<VideoPlayerHandle, YouTubePlayerProps>(
               }}
               type="button"
             >
-              {isPlaying ? 'Pausar demo local' : 'Reproducir demo local'}
+              {isPlaying ? 'Pausar ejemplo' : 'Reproducir ejemplo'}
             </button>
-            <span className="font-mono text-xs text-slate-300">
+            <span className="fixture-time">
               {formatTimestamp(currentTime)} /{' '}
               {formatTimestamp(FIXTURE_DURATION_SECONDS)}
             </span>

@@ -4,8 +4,8 @@ import { DEFAULT_THEME_ID, getThemeById, isValidThemeId, THEMES } from '../theme
 
 describe('themeTokens', () => {
   describe('THEMES', () => {
-    it('contains exactly 6 themes', () => {
-      expect(THEMES).toHaveLength(6);
+    it('contains only the English Corrector light and dark modes', () => {
+      expect(THEMES.map((theme) => theme.id)).toEqual(['light', 'dark']);
     });
 
     it('has unique ids', () => {
@@ -20,7 +20,7 @@ describe('themeTokens', () => {
         'surfaceRaised', 'surfaceRecessed', 'primaryHover', 'primarySubtle',
         'primaryFg', 'primaryLight', 'secondaryLight', 'diffAdded',
         'diffRemoved', 'diffAddedBg', 'diffRemovedBg', 'diffAddedText',
-        'diffRemovedText', 'aws', 'selectionBg', 'selectionFg', 'accentColor',
+        'diffRemovedText', 'warning', 'selectionBg', 'selectionFg', 'accentColor',
       ];
       for (const theme of THEMES) {
         for (const key of requiredKeys) {
@@ -41,23 +41,39 @@ describe('themeTokens', () => {
   });
 
   describe('DEFAULT_THEME_ID', () => {
-    it('is deepwater', () => {
-      expect(DEFAULT_THEME_ID).toBe('deepwater');
+    it('is light', () => {
+      expect(DEFAULT_THEME_ID).toBe('light');
+    });
+  });
+
+  it('uses the English Corrector terracotta palette', () => {
+    expect(getThemeById('light').tokens).toMatchObject({
+      ink: '#FAFAF9',
+      editor: '#FAFAF9',
+      panel: '#FFFFFF',
+      primary: '#CA6A43',
+      foreground: '#292524',
+      border: '#E7E5E4',
+    });
+    expect(getThemeById('dark').tokens).toMatchObject({
+      ink: '#1C1917',
+      editor: '#1C1917',
+      panel: '#292524',
+      primary: '#CC6236',
+      foreground: '#F5F5F4',
+      border: '#3E3A38',
     });
   });
 
   describe('isValidThemeId', () => {
     it('accepts all known ids', () => {
-      expect(isValidThemeId('deepwater')).toBe(true);
-      expect(isValidThemeId('ember')).toBe(true);
-      expect(isValidThemeId('aurora')).toBe(true);
-      expect(isValidThemeId('obsidian')).toBe(true);
-      expect(isValidThemeId('daylight')).toBe(true);
-      expect(isValidThemeId('nordic')).toBe(true);
+      expect(isValidThemeId('light')).toBe(true);
+      expect(isValidThemeId('dark')).toBe(true);
     });
 
     it('rejects unknown strings', () => {
       expect(isValidThemeId('monokai')).toBe(false);
+      expect(isValidThemeId('deepwater')).toBe(false);
       expect(isValidThemeId('')).toBe(false);
     });
 
