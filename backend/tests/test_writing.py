@@ -14,6 +14,8 @@ from app.main import create_app
 from app.providers.fakes import FakeCorrectionProvider
 from app.services.correction import CorrectionService
 
+AUTH_HEADERS = {"Authorization": "Bearer dev-session-token"}
+
 
 def _client_for(
     result: CorrectionResult | None = None,
@@ -26,7 +28,8 @@ def _client_for(
         create_app(
             Settings(_env_file=None, environment="test"),
             correction_service=service,
-        )
+        ),
+        headers=AUTH_HEADERS,
     )
 
 
@@ -223,7 +226,8 @@ def _client_for_scripted_provider(provider: _ScriptedCorrectionProvider) -> Test
         create_app(
             Settings(_env_file=None, environment="test"),
             correction_service=CorrectionService(provider),
-        )
+        ),
+        headers=AUTH_HEADERS,
     )
 
 

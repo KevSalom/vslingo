@@ -15,6 +15,7 @@ describe('DemoWorkspace', () => {
     render(<DemoWorkspace />);
 
     expect(screen.getByText('Prueba gratis')).toBeInTheDocument();
+    expect(screen.getByText('Sesión local')).toBeInTheDocument();
     const voiceLink = screen.getByRole('link', { name: 'Hablar' });
     expect(voiceLink).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('status', { name: /cargando Hablar/i })).toBeInTheDocument();

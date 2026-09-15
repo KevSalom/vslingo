@@ -1,4 +1,5 @@
 import type { SpeechErrorResponse, SpeechProvider } from './types';
+import { authenticatedFetch } from '../auth/sessionClient';
 
 const DEFAULT_API_BASE_URL =
   import.meta.env.PUBLIC_API_URL?.trim() || 'http://127.0.0.1:8000';
@@ -29,7 +30,7 @@ export async function synthesizeSpeech(options: SynthesizeOptions): Promise<Blob
 
   let response: Response;
   try {
-    response = await fetch(`${baseUrl}/api/speech`, {
+    response = await authenticatedFetch(fetch, `${baseUrl}/api/speech`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -33,10 +33,15 @@ Copy-Item .env.example .env
 
 `PUBLIC_API_URL` defaults to `http://127.0.0.1:8000` and is embedded into the
 static build; it never contains provider secrets. REST clients and Voice Studio
-WebSocket (`/api/voice/ws`, `ws`/`wss` derived from the same base) all read this
-variable — do not hardcode a different API host. Production builds must set it
-to the public HTTPS API origin (for example `https://api.example.com`) at
-build time.
+WebSocket all read this variable. Voice obtains a short-lived ticket over authenticated
+REST before opening `/api/voice/ws`; neither the Clerk token nor a user ID enters the
+WebSocket URL. Production builds must set the public HTTPS API origin.
+
+Local development defaults to `PUBLIC_AUTH_MODE=fake` and needs no Clerk account.
+Production sets `PUBLIC_AUTH_MODE=clerk` and `PUBLIC_CLERK_PUBLISHABLE_KEY`; secret and
+JWT verification keys belong only in the backend. The React island then shows Clerk
+sign-in, derives the bearer token from the active session and revokes the backend
+session before signing out.
 
 The static landing is available at `/`. The stable practice routes are `/app`,
 `/app/hablar`, `/app/escribir`, and `/app/videos`; `/demo` remains a temporary

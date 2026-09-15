@@ -3,11 +3,14 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import Settings
 from app.domain.errors import IntegrationError, IntegrationErrorCode
 from app.domain.models import SynthesizedSpeech
 from app.domain.speech import SpeechProvider, SpeechRequest
 from app.main import create_app
 from app.services.speech import SpeechService, SpeechServiceError
+
+AUTH_HEADERS = {"Authorization": "Bearer dev-session-token"}
 
 
 class ConfigurableFakeSynthesizer:
@@ -97,8 +100,8 @@ def test_speech_api_success_headers_and_bytes() -> None:
             SpeechProvider.EDGE_TTS: edge_fake,
         }
     )
-    app = create_app(speech_service=service)
-    client = TestClient(app)
+    app = create_app(Settings(_env_file=None, environment="test"), speech_service=service)
+    client = TestClient(app, headers=AUTH_HEADERS)
 
     response = client.post(
         "/api/speech",
@@ -113,8 +116,8 @@ def test_speech_api_success_headers_and_bytes() -> None:
 
 
 def test_speech_api_invalid_provider_returns_422() -> None:
-    app = create_app()
-    client = TestClient(app)
+    app = create_app(Settings(_env_file=None, environment="test"))
+    client = TestClient(app, headers=AUTH_HEADERS)
 
     response = client.post(
         "/api/speech",
@@ -128,8 +131,8 @@ def test_speech_api_invalid_provider_returns_422() -> None:
 
 
 def test_speech_api_empty_text_returns_422() -> None:
-    app = create_app()
-    client = TestClient(app)
+    app = create_app(Settings(_env_file=None, environment="test"))
+    client = TestClient(app, headers=AUTH_HEADERS)
 
     response = client.post(
         "/api/speech",
@@ -143,8 +146,8 @@ def test_speech_api_empty_text_returns_422() -> None:
 
 
 def test_speech_api_text_too_long_returns_422() -> None:
-    app = create_app()
-    client = TestClient(app)
+    app = create_app(Settings(_env_file=None, environment="test"))
+    client = TestClient(app, headers=AUTH_HEADERS)
 
     response = client.post(
         "/api/speech",

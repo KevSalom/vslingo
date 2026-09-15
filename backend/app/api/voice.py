@@ -7,6 +7,7 @@ from fastapi import APIRouter, Response, WebSocket
 from app.core.config import Settings
 from app.core.protection import ConnectionLimiter, ProviderGates
 from app.domain.ports import LanguageModelPort, SpeechToTextPort, VoiceFeedbackPort
+from app.persistence.ws_tickets import WebSocketTicketRepository
 from app.services.speech import SpeechService
 from app.voice.session import VoiceSession
 
@@ -53,6 +54,7 @@ def build_voice_router(
     settings: Settings | None = None,
     gates: ProviderGates | None = None,
     connection_limiter: ConnectionLimiter | None = None,
+    ticket_repository: WebSocketTicketRepository | None = None,
 ) -> APIRouter:
     """Construct router with admission checks that run before WebSocket accept."""
 
@@ -66,6 +68,16 @@ def build_voice_router(
             origin is None
             or _normalize_origin(origin) != runtime_settings.normalized_frontend_origin
         ):
+            await websocket.send_denial_response(
+                Response(status_code=403, headers=_DENIAL_HEADERS)
+            )
+            return
+
+        ticket = websocket.query_params.get("ticket", "")
+        consumed_ticket = (
+            ticket_repository.consume(ticket) if ticket_repository is not None else None
+        )
+        if consumed_ticket is None:
             await websocket.send_denial_response(
                 Response(status_code=403, headers=_DENIAL_HEADERS)
             )

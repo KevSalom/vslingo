@@ -4,6 +4,7 @@ import {
   type CorrectionResponse,
   type WritingErrorCode,
 } from './types';
+import { authenticatedFetch } from '../../shared/auth/sessionClient';
 
 const DEFAULT_API_BASE_URL =
   import.meta.env.PUBLIC_API_URL?.trim() || 'http://127.0.0.1:8000';
@@ -39,7 +40,7 @@ export async function correctWriting(
 
   let response: Response;
   try {
-    response = await fetcher(`${baseUrl}/api/writing/correct`, {
+    response = await authenticatedFetch(fetcher, `${baseUrl}/api/writing/correct`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),

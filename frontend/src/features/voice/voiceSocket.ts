@@ -3,6 +3,7 @@ import {
   parseServerMessage,
   type ServerVoiceMessage,
 } from './protocol';
+import { issueWebSocketTicket } from '../../shared/auth/sessionClient';
 
 export type VoiceSocketListener = (message: ServerVoiceMessage) => void;
 export type VoiceSocketBinaryListener = (data: ArrayBuffer) => void;
@@ -27,6 +28,12 @@ export function resolveVoiceWebSocketUrl(
   return `${wsBase}/api/voice/ws`;
 }
 
+export function resolveTicketedVoiceWebSocketUrl(url: string, ticket: string): string {
+  const ticketed = new URL(url);
+  ticketed.searchParams.set('ticket', ticket);
+  return ticketed.toString();
+}
+
 export class VoiceSocketClient {
   private socket: WebSocket | null = null;
   private listeners: Set<VoiceSocketListener> = new Set();
@@ -35,13 +42,14 @@ export class VoiceSocketClient {
 
   constructor(private url: string = resolveVoiceWebSocketUrl()) {}
 
-  connect(): Promise<void> {
+  async connect(): Promise<void> {
+    const ticket = await issueWebSocketTicket();
     return new Promise((resolve, reject) => {
       try {
         const wsUrl = this.url.startsWith('http')
           ? this.url.replace(/^http/i, 'ws')
           : this.url;
-        this.socket = new WebSocket(wsUrl);
+        this.socket = new WebSocket(resolveTicketedVoiceWebSocketUrl(wsUrl, ticket));
 
         this.socket.binaryType = 'arraybuffer';
 

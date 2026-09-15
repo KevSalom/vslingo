@@ -18,10 +18,14 @@ Este directorio contiene las guías, plantillas y runbooks para el despliegue de
 * **PaaS Gratuita Recomendada:** Render Static Site (configurado vía [`render.yaml`](../render.yaml)) o Vercel / Cloudflare Pages.
 * **Comando de Build:** `pnpm install --frozen-lockfile && pnpm run build`
 * **Directorio de publicación:** `frontend/dist`
-* **Variable de entorno requerida (build-time):** `PUBLIC_API_URL=https://api.tu-dominio.com`
+* **Variables requeridas en build:** `PUBLIC_API_URL=https://api.tu-dominio.com`,
+  `PUBLIC_AUTH_MODE=clerk` y `PUBLIC_CLERK_PUBLISHABLE_KEY`.
   - Sirve REST y el WebSocket de Voice (`wss://api.tu-dominio.com/api/voice/ws`).
   - Debe definirse **antes** de `pnpm run build`; si falta, el cliente cae a `http://127.0.0.1:8000`.
+  - La clave pública puede llegar al navegador; `CLERK_SECRET_KEY` y `CLERK_JWT_KEY` nunca.
 
 ### Backend (FastAPI Python)
 * **Dokploy (Nixpacks):** Recomendado si usas un VPS con Dokploy. Consulta la guía [`dokploy-nixpacks.md`](dokploy-nixpacks.md).
 * **VPS Linux Tradicional (Caddy + Systemd):** Consulta [`Caddyfile.example`](Caddyfile.example) y [`vslingo-api.service.example`](vslingo-api.service.example).
+* Producción requiere `AUTH_MODE=clerk`, un solo worker y `DATABASE_PATH` dentro de
+  un volumen persistente. La aplicación activa foreign keys, WAL y busy timeout.

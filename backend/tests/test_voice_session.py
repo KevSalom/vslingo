@@ -5,11 +5,19 @@ import struct
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import Settings
 from app.domain.models import Transcription
 from app.main import create_app
 from app.providers.fakes import FakeLanguageModel, FakeSpeechToText, FakeVoiceFeedback
 
 VOICE_ORIGIN_HEADERS = {"origin": "http://localhost:4321"}
+AUTH_HEADERS = {"Authorization": "Bearer dev-session-token"}
+
+
+def voice_ws_path(client: TestClient) -> str:
+    response = client.post("/api/session/ws-ticket")
+    assert response.status_code == 200
+    return f"/api/voice/ws?ticket={response.json()['ticket']}"
 
 
 def make_valid_wav_pcm_16k_mono(duration_ms: int = 1000) -> bytes:
@@ -60,15 +68,16 @@ def client(
     fake_feedback: FakeVoiceFeedback,
 ) -> TestClient:
     app = create_app(
+        Settings(_env_file=None, environment="test"),
         stt_provider=fake_stt,
         llm_provider=fake_llm,
         feedback_provider=fake_feedback,
     )
-    return TestClient(app)
+    return TestClient(app, headers=AUTH_HEADERS)
 
 
 def test_voice_ws_handshake_and_config(client: TestClient) -> None:
-    with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
+    with client.websocket_connect(voice_ws_path(client), headers=VOICE_ORIGIN_HEADERS) as ws:
         # Start session
         ws.send_json({"type": "session.start", "protocol_version": 2})
         ready = ws.receive_json()
@@ -93,7 +102,7 @@ def test_voice_ws_full_ptt_turn_with_stream_and_feedback(client: TestClient) -> 
     wav_bytes = make_valid_wav_pcm_16k_mono(1000)
     turn_id = "123e4567-e89b-12d3-a456-426614174000"
 
-    with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
+    with client.websocket_connect(voice_ws_path(client), headers=VOICE_ORIGIN_HEADERS) as ws:
         ws.send_json({"type": "session.start", "protocol_version": 2})
         _ = ws.receive_json()
 
@@ -140,15 +149,16 @@ def test_voice_ws_feedback_error_does_not_cancel_conversation(
 ) -> None:
     failing_feedback = FakeVoiceFeedback(error=RuntimeError("Feedback model down"))
     app = create_app(
+        Settings(_env_file=None, environment="test"),
         stt_provider=fake_stt,
         llm_provider=fake_llm,
         feedback_provider=failing_feedback,
     )
-    client = TestClient(app)
+    client = TestClient(app, headers=AUTH_HEADERS)
     wav_bytes = make_valid_wav_pcm_16k_mono(1000)
     turn_id = "123e4567-e89b-12d3-a456-426614174000"
 
-    with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
+    with client.websocket_connect(voice_ws_path(client), headers=VOICE_ORIGIN_HEADERS) as ws:
         ws.send_json({"type": "session.start", "protocol_version": 2})
         _ = ws.receive_json()
 
@@ -176,7 +186,7 @@ def test_voice_ws_feedback_error_does_not_cancel_conversation(
 
 
 def test_voice_ws_invalid_generation_rejection(client: TestClient) -> None:
-    with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
+    with client.websocket_connect(voice_ws_path(client), headers=VOICE_ORIGIN_HEADERS) as ws:
         ws.send_json({"type": "session.start", "protocol_version": 2})
         _ = ws.receive_json()
 
@@ -195,7 +205,7 @@ def test_voice_ws_invalid_generation_rejection(client: TestClient) -> None:
 def test_voice_ws_invalid_wav_rejection(client: TestClient) -> None:
     bad_bytes = b"NOT_A_WAV_HEADER_AT_ALL_MOCK_DATA"
 
-    with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
+    with client.websocket_connect(voice_ws_path(client), headers=VOICE_ORIGIN_HEADERS) as ws:
         ws.send_json({"type": "session.start", "protocol_version": 2})
         _ = ws.receive_json()
 
@@ -222,7 +232,7 @@ def test_voice_ws_invalid_wav_rejection(client: TestClient) -> None:
 
 
 def test_voice_ws_cancel_turn(client: TestClient) -> None:
-    with client.websocket_connect("/api/voice/ws", headers=VOICE_ORIGIN_HEADERS) as ws:
+    with client.websocket_connect(voice_ws_path(client), headers=VOICE_ORIGIN_HEADERS) as ws:
         ws.send_json({"type": "session.start", "protocol_version": 2})
         _ = ws.receive_json()
 

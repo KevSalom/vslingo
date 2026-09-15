@@ -21,8 +21,8 @@ El estado verificable está en [docs/progress.md](docs/progress.md).
 
 La landing está en `/`. Las rutas estables de práctica son `/app`,
 `/app/hablar`, `/app/escribir` y `/app/videos`. `/demo` permanece como alias
-temporal para enlaces históricos; la autenticación y el bloqueo de operaciones
-anónimas llegan en F2.
+temporal para enlaces históricos. Las operaciones de proveedores ya requieren
+sesión autenticada; el modo fake se limita al desarrollo y las pruebas.
 
 ## Oferta aprobada
 
@@ -40,7 +40,7 @@ La configuración transaccional de planes y cuotas se implementa en F4.
 | LLM | OpenRouter `google/gemini-3.1-flash-lite` |
 | STT | OpenRouter `openai/whisper-large-v3-turbo` |
 | TTS | Edge TTS con cuatro voces permitidas; `speechSynthesis` como respaldo |
-| Datos e identidad | SQLite transaccional + Clerk, previstos para F2–F3 |
+| Datos e identidad | SQLite transaccional + Clerk; sesión base en F2, historial en F3 |
 
 Las pruebas normales usan fakes y no llaman servicios externos. No se guardan
 buffers WAV o MP3 en disco, base de datos, service worker ni logs.

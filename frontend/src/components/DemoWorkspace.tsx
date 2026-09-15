@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { VideoLab } from '../features/video/VideoLab';
 import { VideoLabProvider } from '../features/video/VideoLabContext';
 import { WritingStudio } from '../features/writing/WritingStudio';
+import { ProductAuthProvider, useProductSession } from '../shared/auth/ProductAuthProvider';
 import { ThemeProvider, useTheme } from '../shared/theme/ThemeProvider';
 
 const VoiceStudio = lazy(() =>
@@ -56,6 +57,21 @@ function initialModuleFromLocation(): ModuleId {
 }
 
 export function DemoWorkspace() {
+  return (
+    <ThemeProvider>
+      <ProductAuthProvider>
+        <AccountScopedWorkspace />
+      </ProductAuthProvider>
+    </ThemeProvider>
+  );
+}
+
+function AccountScopedWorkspace() {
+  const { sessionKey } = useProductSession();
+  return <Workspace key={sessionKey} />;
+}
+
+function Workspace() {
   const [activeId, setActiveId] = useState<ModuleId>('voice');
   const [hasResolvedInitialModule, setHasResolvedInitialModule] = useState(false);
   const isInitialModule = useRef(true);
@@ -89,6 +105,7 @@ export function DemoWorkspace() {
         </a>
         <div className="workspace-actions">
           <span className="alpha-badge">Prueba gratis</span>
+          <SessionControl />
           <ThemeModeToggle />
         </div>
       </header>
@@ -143,11 +160,20 @@ export function DemoWorkspace() {
   );
 
   return (
-    <ThemeProvider>
-      <div className="workspace-page">
-        {activeId === 'video' ? <VideoLabProvider>{workspace}</VideoLabProvider> : workspace}
-      </div>
-    </ThemeProvider>
+    <div className="workspace-page">
+      {activeId === 'video' ? <VideoLabProvider>{workspace}</VideoLabProvider> : workspace}
+    </div>
+  );
+}
+
+function SessionControl() {
+  const session = useProductSession();
+  if (!session.signOut) return <span className="session-chip">{session.label}</span>;
+  return (
+    <button className="session-chip session-button" onClick={() => void session.signOut?.()} type="button">
+      <span>{session.label}</span>
+      <span aria-hidden="true">Salir</span>
+    </button>
   );
 }
 

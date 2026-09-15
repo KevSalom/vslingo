@@ -11,6 +11,10 @@ services:
         value: 10.32.0
       - key: PUBLIC_API_URL
         value: https://api.vslingo.app
+      - key: PUBLIC_AUTH_MODE
+        value: clerk
+      - key: PUBLIC_CLERK_PUBLISHABLE_KEY
+        sync: false
     routes:
       - type: rewrite
         source: /presentacion

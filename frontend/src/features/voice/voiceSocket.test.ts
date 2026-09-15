@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveVoiceWebSocketUrl } from './voiceSocket';
+import { resolveTicketedVoiceWebSocketUrl, resolveVoiceWebSocketUrl } from './voiceSocket';
 
 describe('resolveVoiceWebSocketUrl', () => {
   it('maps http API base to ws path', () => {
@@ -25,5 +25,14 @@ describe('resolveVoiceWebSocketUrl', () => {
     expect(resolveVoiceWebSocketUrl('wss://api.example.com/api/voice/ws')).toBe(
       'wss://api.example.com/api/voice/ws',
     );
+  });
+
+  it('adds only the opaque one-use ticket to the websocket URL', () => {
+    expect(
+      resolveTicketedVoiceWebSocketUrl(
+        'wss://api.example.com/api/voice/ws',
+        'opaque ticket',
+      ),
+    ).toBe('wss://api.example.com/api/voice/ws?ticket=opaque+ticket');
   });
 });

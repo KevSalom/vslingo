@@ -10,7 +10,8 @@ uv run vslingo-api
 ```
 
 The API listens on `http://127.0.0.1:8000`; health is available at
-`GET /api/health`. Provider credentials are not required for startup or health.
+`GET /api/health`. Provider or identity credentials are not required locally:
+development uses an explicit fake bearer session and SQLite on disk.
 
 Copy `.env.example` to `.env` when you need local overrides:
 
@@ -25,14 +26,20 @@ fallback and needs no backend secret.
 
 ## Endpoints in the current increment
 
+- `GET /api/session`: current verified session.
+- `POST /api/session/logout`: revoke the session and its outstanding WS tickets.
+- `POST /api/session/ws-ticket`: issue an opaque, short-lived, one-use voice ticket.
+- `GET|PUT /api/preferences`: versioned preferences owned by the verified user.
 - `POST /api/writing/correct`: up to 1,000 characters; structured correction and Spanish explanations.
 - `POST /api/video/transcript`: normalized YouTube URL; ordered English transcript segments.
 - `POST /api/speech`: bounded Edge TTS for approved text and voice IDs.
-- `WS /api/voice/ws`: protocol v2, push-to-talk audio, conversation, feedback, and segmented speech.
+- `WS /api/voice/ws?ticket=…`: protocol v2 after Origin validation and atomic ticket consumption.
 - `GET /api/health`: content-free readiness information.
 
-The commercial deployment will require authenticated provider operations in F2.
-Normal tests use deterministic fakes and never contact external providers.
+Writing, transcript, speech and voice operations reject anonymous requests. Production
+must use `AUTH_MODE=clerk`; the backend verifies Clerk session tokens and never accepts
+a client-supplied user identifier. Normal tests use deterministic fakes and never
+contact external providers.
 
 ## Quality checks
 

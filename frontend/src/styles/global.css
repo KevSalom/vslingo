@@ -135,6 +135,14 @@ button:not(:disabled), a[href] { -webkit-tap-highlight-color: transparent; }
 .practice-intro h1:focus { outline: none; }
 ::selection { background: var(--t-selection-bg); color: var(--t-selection-fg); }
 
+.auth-gate { display: grid; width: min(100% - 2rem, 32rem); min-height: 100dvh; margin-inline: auto; place-content: center; justify-items: start; gap: 1rem; }
+.auth-gate-mark { display: grid; width: 2.75rem; height: 2.75rem; place-items: center; border-radius: .85rem; background: var(--t-primary-subtle); color: var(--t-primary-light); font-weight: 750; }
+.auth-gate-kicker { margin: 0; color: var(--t-primary-light); font-size: .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.auth-gate h1 { margin: 0; font-size: clamp(2rem, 7vw, 3.4rem); letter-spacing: -.055em; line-height: 1; }
+.auth-gate p:not(.auth-gate-kicker) { max-width: 38ch; margin: 0; color: var(--t-muted-strong); line-height: 1.6; }
+.primary-action { min-height: 2.75rem; border: 0; border-radius: .8rem; background: var(--t-primary); color: var(--t-primary-fg); font-weight: 700; padding: .7rem 1.1rem; cursor: pointer; }
+.primary-action:hover { background: var(--t-primary-hover); }
+
 .font-display, h1, .landing-title { font-family: var(--font-sora); }
 .font-mono { font-family: var(--font-jetbrains-mono); }
 
@@ -1830,6 +1838,15 @@ h1,
   color: var(--t-primary-light); font-family: var(--font-outfit); font-size: .78rem;
   font-weight: 700; letter-spacing: 0; padding-inline: .8rem; text-transform: none;
 }
+.session-chip {
+  display: inline-flex; min-height: 2rem; max-width: 13rem; align-items: center; gap: .55rem;
+  overflow: hidden; border: 1px solid var(--t-border); border-radius: 999px;
+  background: var(--t-panel); color: var(--t-muted-strong); font-size: .78rem;
+  font-weight: 650; padding-inline: .75rem; text-overflow: ellipsis; white-space: nowrap;
+}
+.session-button { cursor: pointer; }
+.session-button:hover { border-color: var(--t-primary); color: var(--t-primary-hover); }
+.session-button span:last-child { color: var(--t-primary-light); font-size: .72rem; }
 .module-nav {
   display: flex; justify-content: center; gap: .4rem; border-bottom: 0;
   background: var(--t-panel); padding: .65rem clamp(1rem, 4vw, 2rem);

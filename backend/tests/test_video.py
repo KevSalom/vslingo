@@ -17,6 +17,7 @@ from app.providers.fakes import FakeTranscriptProvider
 from app.providers.youtube_transcript import YouTubeTranscriptProvider
 from app.services.video import VideoService
 
+AUTH_HEADERS = {"Authorization": "Bearer dev-session-token"}
 VIDEO_ID = "aircAruvnKk"
 VIDEO_URL = f"https://www.youtube.com/watch?v={VIDEO_ID}"
 RESULT = TranscriptResult(
@@ -45,7 +46,7 @@ def _client_for(
         Settings(_env_file=None, environment="test"),
         video_service=VideoService(provider),
     )
-    return TestClient(app), provider
+    return TestClient(app, headers=AUTH_HEADERS), provider
 
 
 def test_video_endpoint_returns_typed_english_segments() -> None:
@@ -129,7 +130,7 @@ def test_transport_connection_failures_never_escape_as_private_http_500() -> Non
         Settings(_env_file=None, environment="test"),
         video_service=VideoService(provider),
     )
-    client = TestClient(app, raise_server_exceptions=False)
+    client = TestClient(app, headers=AUTH_HEADERS, raise_server_exceptions=False)
 
     response = client.post("/api/video/transcript", json={"url": VIDEO_URL})
 

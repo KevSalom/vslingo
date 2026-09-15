@@ -1,5 +1,7 @@
 """FastAPI application factory and development entrypoint."""
 
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from typing import Final
 
 import uvicorn
@@ -10,6 +12,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from app import __version__
+from app.api.session import authentication_error_response, build_session_router
 from app.api.speech import (
     build_speech_router,
     handle_speech_validation_error,
@@ -20,10 +23,14 @@ from app.api.writing import build_writing_router
 from app.api.writing import (
     handle_request_validation_error as handle_writing_validation_error,
 )
+from app.core.auth import AuthenticationError, Authenticator, build_authenticator
 from app.core.config import Settings
 from app.core.protection import ConnectionLimiter, ProviderGate, ProviderGates, RequestLimiter
 from app.domain.ports import LanguageModelPort, SpeechToTextPort, VoiceFeedbackPort
 from app.domain.speech import SpeechProvider
+from app.persistence.database import Database
+from app.persistence.identity import IdentityRepository
+from app.persistence.ws_tickets import WebSocketTicketRepository
 from app.providers.edge_speech import EdgeTTSSynthesizer
 from app.providers.openrouter_chat import OpenRouterChatLanguageModel
 from app.providers.openrouter_feedback import OpenRouterVoiceFeedbackProvider
@@ -63,6 +70,8 @@ def create_app(
     stt_provider: SpeechToTextPort | None = None,
     llm_provider: LanguageModelPort | None = None,
     feedback_provider: VoiceFeedbackPort | None = None,
+    database: Database | None = None,
+    authenticator: Authenticator | None = None,
 ) -> FastAPI:
     """Build an isolated FastAPI application with explicit dependencies."""
 
@@ -121,36 +130,91 @@ def create_app(
     runtime_feedback_provider = feedback_provider or OpenRouterVoiceFeedbackProvider(
         runtime_settings
     )
+    database_path = (
+        ":memory:"
+        if runtime_settings.environment.lower() == "test"
+        else runtime_settings.database_path
+    )
+    runtime_database = database or Database(
+        database_path,
+        busy_timeout_ms=runtime_settings.sqlite_busy_timeout_ms,
+    )
+    identity_repository = IdentityRepository(runtime_database)
+    ws_ticket_repository = WebSocketTicketRepository(
+        runtime_database,
+        ttl_seconds=runtime_settings.ws_ticket_ttl_seconds,
+    )
+    runtime_authenticator = authenticator or build_authenticator(runtime_settings)
 
-    application = FastAPI(title=SERVICE_NAME, version=__version__)
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        runtime_database.migrate()
+        try:
+            yield
+        finally:
+            runtime_database.close()
+
+    application = FastAPI(title=SERVICE_NAME, version=__version__, lifespan=lifespan)
     application.state.settings = runtime_settings
     application.state.request_limiter = request_limiter
     application.state.connection_limiter = connection_limiter
     application.state.provider_gates = provider_gates
+    application.state.database = runtime_database
+    application.state.identity_repository = identity_repository
+    application.state.ws_ticket_repository = ws_ticket_repository
+    application.state.authenticator = runtime_authenticator
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[runtime_settings.normalized_frontend_origin],
         allow_credentials=False,
-        allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Content-Type"],
+        allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
     )
 
     @application.middleware("http")
-    async def protect_api_requests(request: Request, call_next: object) -> Response:
+    async def protect_api_requests(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
         """Rate-limit costly direct API calls and apply neutral API response headers."""
+
+        response: Response | None
+        protected_request = (request.method, request.url.path) in {
+            ("GET", "/api/session"),
+            ("POST", "/api/session/logout"),
+            ("POST", "/api/session/ws-ticket"),
+            ("GET", "/api/preferences"),
+            ("PUT", "/api/preferences"),
+            ("POST", "/api/writing/correct"),
+            ("POST", "/api/video/transcript"),
+            ("POST", "/api/speech"),
+        }
+        if protected_request:
+            try:
+                identity = await runtime_authenticator.authenticate(request)
+            except AuthenticationError:
+                response = authentication_error_response()
+            else:
+                identity_repository.ensure_user(identity.user_id)
+                request.state.auth_identity = identity
+                response = None
+        else:
+            response = None
 
         is_costly = request.method == "POST" and request.url.path in {
             "/api/writing/correct",
             "/api/video/transcript",
             "/api/speech",
         }
-        if is_costly:
+        if response is not None:
+            pass
+        elif is_costly:
             peer_ip = request.client.host if request.client is not None else "unknown"
             decision = request_limiter.check_http(
                 peer_ip, speech=request.url.path == "/api/speech"
             )
             if not decision.allowed:
-                response: Response = JSONResponse(
+                response = JSONResponse(
                     status_code=429,
                     content={
                         "error": {
@@ -165,9 +229,9 @@ def create_app(
                     headers={"Retry-After": str(decision.retry_after_seconds)},
                 )
             else:
-                response = await call_next(request)  # type: ignore[operator]
+                response = await call_next(request)
         else:
-            response = await call_next(request)  # type: ignore[operator]
+            response = await call_next(request)
 
         if request.url.path.startswith("/api/"):
             response.headers["X-Content-Type-Options"] = "nosniff"
@@ -193,6 +257,15 @@ def create_app(
     application.include_router(build_video_router(runtime_video_service))
     application.include_router(build_speech_router(runtime_speech_service))
     application.include_router(
+        build_session_router(
+            auth_mode=runtime_settings.auth_mode,
+            authenticator=runtime_authenticator,
+            identities=identity_repository,
+            tickets=ws_ticket_repository,
+            allowed_voices=runtime_settings.edge_tts_allowed_voices,
+        )
+    )
+    application.include_router(
         build_voice_router(
             runtime_stt_provider,
             llm_provider=runtime_llm_provider,
@@ -201,6 +274,7 @@ def create_app(
             settings=runtime_settings,
             gates=provider_gates,
             connection_limiter=connection_limiter,
+            ticket_repository=ws_ticket_repository,
         )
     )
 

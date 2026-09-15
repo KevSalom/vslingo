@@ -9,12 +9,12 @@ Este es el único documento para el estado mutable de implementación. Debe actu
 ## Estado actual
 
 - **Roadmap actual:** MVP comercial Inglés al Grano `F0`–`F8`; la Alpha `T01`–`T10` queda como baseline histórico completado.
-- **Fase actual:** `F1 — UI y voz simple` completada el 2026-09-15.
-- **Próximo incremento:** `F2 — Identidad y SQLite`.
+- **Fase actual:** `F2 — Identidad y SQLite` completada el 2026-09-15.
+- **Próximo incremento:** `F3 — Historial completo`.
 - **Rama de trabajo:** `codex/ingles-al-grano-mvp`, creada desde `main` en `aa26cab8ac10345a2c596febe78a0ad10c7df5c1` (`feat: add global stylesheet with Tailwind integration and multi-theme design tokens`).
-- **Completado:** F0 adoptó el plan y aisló la rama; F1 entregó la marca Inglés al Grano, navegación pública estable, UI móvil/escritorio, voz PTT simple, Edge TTS con cuatro voces y fallback del navegador, sin VAD ni AWS en el recorrido activo.
-- **Pendiente:** F2–F7; F8 permanece posterior al lanzamiento y sujeto al cierre de condiciones comerciales.
-- **Bloqueos:** ninguno para iniciar F2 con fakes. Clerk real será necesario para su gate externo; OpenRouter/PayPal, Meta y dispositivos físicos se requieren en fases posteriores o en sus validaciones live.
+- **Completado:** F0 adoptó el plan y aisló la rama; F1 entregó producto/UI/voz simple; F2 añadió identidad Clerk/fake, SQLite migrado, aislamiento por usuario, sesión/logout y tickets WebSocket de un solo uso.
+- **Pendiente:** F3–F7; F8 permanece posterior al lanzamiento y sujeto al cierre de condiciones comerciales.
+- **Bloqueos:** ninguno para iniciar F3 con fakes. La configuración y validación de un tenant Clerk real sigue siendo un gate externo del fundador; OpenRouter/PayPal, Meta y dispositivos físicos se requieren en fases posteriores o en sus validaciones live.
 
 ## Evidencia de F0
 
@@ -39,6 +39,19 @@ Este es el único documento para el estado mutable de implementación. Debe actu
 - E2E del build actualizado: **7/7 en Chrome** y **7/7 en Edge**. Cubren landing y navegación, transcripción y notas de Videos, controles PTT/voz de Hablar y limpieza de borrador en Escribir. El explorador de notas volvió a ser accesible como drawer también en escritorio. El proyecto Playwright `chromium` administrado no se ejecutó porque su binario continúa sin instalarse; no afecta estas dos matrices del sistema.
 - Verificación renderizada con Chrome: landing revisada a 320 y 1440 px; Hablar, Escribir y Videos a 390 px, con Hablar tanto claro como oscuro. No hubo desbordamiento horizontal en 320/390 px; navegación, selectores, CTA y control PTT permanecieron visibles. Los pares de texto principales, secundarios, CTA, diffs y acentos activos se midieron con el contrast checker WCAG; el acento textual derivado alcanza AA en fondos suaves.
 - No se hicieron llamadas live a proveedores, ni se certificaron micrófono o audio en dispositivos físicos. La emulación visual no sustituye el gate móvil real de F7. Auth, persistencia, cuotas y pagos pertenecen a F2–F6.
+
+## Evidencia de F2
+
+- El backend integra el SDK oficial de Clerk con verificación de `session_token`, clave JWT local, partes autorizadas y extracción exclusiva de `sub`/`sid` verificados. `AUTH_MODE=fake` funciona sin secretos sólo en desarrollo/pruebas y se rechaza fuera de esos entornos.
+- Todas las operaciones de proveedor (Writing, Video, Speech y emisión de ticket Voice) requieren bearer válido. El usuario se deriva de la sesión; parámetros o IDs enviados por el cliente no cambian la identidad efectiva. Logout revoca la sesión y todos sus tickets pendientes.
+- SQLite aplica migraciones monotónicas para `users`, `preferences`, `trial_grants` y `ws_tickets`, con foreign keys, WAL, busy timeout, transacciones inmediatas y cierre durante el lifespan. Una prueba reabre el archivo y confirma persistencia; las suites usan memoria para no dejar artefactos.
+- Preferencias usan versión optimista y consultas filtradas por Clerk ID autenticado. La suite prueba que el usuario A no modifica ni lee las preferencias de B.
+- Voice obtiene por REST autenticado un ticket aleatorio breve. Sólo se guarda SHA-256, se consume atómicamente una vez, expira en el límite exacto y nunca coloca el token Clerk ni un ID de usuario en la URL WebSocket. `Origin` se valida antes de aceptar.
+- El frontend integra `@clerk/react`: gate de inicio de sesión, cuenta/logout y token de la sesión activa. En fake muestra claramente «Sesión local». Cambiar de cuenta desmonta el workspace y limpia borradores/cachés anónimos o de la cuenta anterior antes de montar la nueva; cerrar sesión desmonta primero para cancelar audio y callbacks.
+- Configuración documentada para desarrollo, frontend estático y backend de producción. Render exige la clave pública; Dokploy exige Clerk servidor y monta SQLite bajo `/data` con una sola réplica/worker. No se añadieron valores secretos al repositorio.
+- Backend: lock válido, Ruff y mypy estricto en verde; **149 tests pytest** pasaron. Se conserva una advertencia de deprecación Starlette/TestClient.
+- Frontend: Astro check con **0 errores y 0 warnings** (5 hints heredados de `ScriptProcessorNode`), **129 tests Vitest** pasaron y el build generó seis rutas. E2E: **7/7 Chrome** y **7/7 Edge**.
+- No se creó ni configuró un tenant Clerk, no se usaron credenciales reales y no se hicieron llamadas live. El adaptador Clerk se cubrió con estados firmados simulados; la vuelta real desde correo/Google pertenece al gate externo de configuración.
 
 ## Inventario y riesgos considerados en F1 (histórico)
 

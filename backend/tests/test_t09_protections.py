@@ -16,6 +16,8 @@ from app.main import create_app
 from app.providers.fakes import FakeSpeechToText
 from app.voice.session import VoiceSession
 
+AUTH_HEADERS = {"Authorization": "Bearer dev-session-token"}
+
 
 class QuietLanguageModel:
     """Deterministic LLM fake that produces no provider content."""
@@ -67,7 +69,7 @@ def test_settings_rejects_non_origin_and_insecure_production_origin() -> None:
 
 def test_api_sets_restrictive_cors_security_headers_and_rate_limits_by_socket_ip() -> None:
     app = create_app(settings())
-    client = TestClient(app)
+    client = TestClient(app, headers=AUTH_HEADERS)
 
     preflight = client.options(
         "/api/speech",
@@ -79,7 +81,7 @@ def test_api_sets_restrictive_cors_security_headers_and_rate_limits_by_socket_ip
     )
     assert preflight.status_code == 200
     assert preflight.headers["access-control-allow-origin"] == "http://localhost:4321"
-    assert preflight.headers["access-control-allow-methods"] == "GET, POST, OPTIONS"
+    assert preflight.headers["access-control-allow-methods"] == "GET, POST, PUT, OPTIONS"
 
     health = client.get("/api/health")
     assert health.headers["x-content-type-options"] == "nosniff"
@@ -103,7 +105,7 @@ def test_api_sets_restrictive_cors_security_headers_and_rate_limits_by_socket_ip
 
 
 def test_ws_rejects_wrong_or_missing_origin_before_accepting() -> None:
-    client = TestClient(create_app(settings()))
+    client = TestClient(create_app(settings()), headers=AUTH_HEADERS)
 
     for headers in ({}, {"origin": "https://attacker.example"}):
         with (
@@ -113,8 +115,9 @@ def test_ws_rejects_wrong_or_missing_origin_before_accepting() -> None:
             pass
         assert denied.value.status_code == 403
 
+    ticket = client.post("/api/session/ws-ticket").json()["ticket"]
     with client.websocket_connect(
-        "/api/voice/ws", headers={"origin": "http://localhost:4321"}
+        f"/api/voice/ws?ticket={ticket}", headers={"origin": "http://localhost:4321"}
     ) as websocket:
         websocket.send_json({"type": "session.start", "protocol_version": 2})
         assert websocket.receive_json()["type"] == "session.ready"

@@ -1,5 +1,8 @@
 """Typed application settings with safe local defaults and bounded protections."""
 
+from pathlib import Path
+from typing import Literal
+
 from pydantic import AliasChoices, AnyHttpUrl, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -20,6 +23,14 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("APP_ENV", "environment"),
     )
     frontend_origin: AnyHttpUrl = Field(default=AnyHttpUrl("http://localhost:4321"))
+
+    auth_mode: Literal["fake", "clerk"] = "fake"
+    clerk_secret_key: SecretStr | None = None
+    clerk_jwt_key: SecretStr | None = None
+    clerk_authorized_parties: tuple[str, ...] = ()
+    database_path: Path = Path("data/ingles-al-grano.db")
+    sqlite_busy_timeout_ms: int = Field(default=5_000, ge=100, le=60_000)
+    ws_ticket_ttl_seconds: int = Field(default=30, ge=5, le=120)
 
     openrouter_api_key: SecretStr | None = None
     openrouter_stt_model: str = "openai/whisper-large-v3-turbo"
@@ -52,8 +63,8 @@ class Settings(BaseSettings):
     max_concurrent_video: int = Field(default=4, ge=1, le=100)
 
     @model_validator(mode="after")
-    def validate_frontend_origin(self) -> "Settings":
-        """Allow exactly one canonical browser origin, never a path, list, or wildcard."""
+    def validate_runtime_security(self) -> "Settings":
+        """Validate origins, auth modes and provider limits as one runtime contract."""
 
         origin = self.frontend_origin
         if origin.path not in {"", "/"} or origin.query is not None or origin.fragment is not None:
@@ -70,6 +81,19 @@ class Settings(BaseSettings):
             raise ValueError("EDGE_TTS_VOICE must be included in EDGE_TTS_ALLOWED_VOICES.")
         if self.environment.lower() not in {"development", "test"} and origin.scheme != "https":
             raise ValueError("FRONTEND_ORIGIN must use https outside development and test.")
+        if self.environment.lower() not in {"development", "test"} and self.auth_mode == "fake":
+            raise ValueError("AUTH_MODE=fake is allowed only in development and test.")
+        if not self.clerk_authorized_parties:
+            self.clerk_authorized_parties = (self.normalized_frontend_origin,)
+        if any(
+            party != self.normalized_frontend_origin
+            for party in self.clerk_authorized_parties
+        ):
+            raise ValueError(
+                "CLERK_AUTHORIZED_PARTIES must contain only the configured frontend origin."
+            )
+        if self.auth_mode == "clerk" and not self.clerk_configured:
+            raise ValueError("Clerk mode requires CLERK_SECRET_KEY and CLERK_JWT_KEY.")
         return self
 
     @property
@@ -97,6 +121,14 @@ class Settings(BaseSettings):
         """Return whether the Edge voice identifier is configured."""
 
         return bool(self.edge_tts_voice.strip())
+
+    @property
+    def clerk_configured(self) -> bool:
+        """Return whether both verification and revocation credentials are present."""
+
+        return self._secret_is_set(self.clerk_secret_key) and self._secret_is_set(
+            self.clerk_jwt_key
+        )
 
     @staticmethod
     def _secret_is_set(secret: SecretStr | None) -> bool:

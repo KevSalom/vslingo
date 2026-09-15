@@ -50,6 +50,14 @@ APP_ENV=production
 FRONTEND_ORIGIN=https://tu-frontend-subdomain.pages.dev  # O el dominio exacto de tu frontend en Render/Vercel
 PORT=8000
 
+# Sesiones verificadas y SQLite persistente
+AUTH_MODE=clerk
+CLERK_SECRET_KEY=
+CLERK_JWT_KEY=
+DATABASE_PATH=/data/ingles-al-grano.db
+SQLITE_BUSY_TIMEOUT_MS=5000
+WS_TICKET_TTL_SECONDS=30
+
 # Proveedor OpenRouter (Whisper STT y LLM)
 OPENROUTER_API_KEY=sk-or-v1-tu-clave-aqui
 OPENROUTER_STT_MODEL=openai/whisper-large-v3-turbo
@@ -66,6 +74,10 @@ MAX_SPEECH_REQUESTS_PER_MINUTE=10
 MAX_WS_CONNECTIONS=20
 MAX_WS_CONNECTIONS_PER_IP=2
 ```
+
+Monta un volumen persistente exactamente en `/data` antes del primer despliegue y
+mantén una sola réplica/worker. No copies sólo el archivo `.db` mientras WAL está
+activo; el runbook de backup/restauración completo se cierra en F7.
 
 ---
 
