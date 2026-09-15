@@ -4,6 +4,13 @@ import { VideoLab } from '../features/video/VideoLab';
 import { VideoLabProvider } from '../features/video/VideoLabContext';
 import { WritingStudio } from '../features/writing/WritingStudio';
 import { ProductAuthProvider, useProductSession } from '../shared/auth/ProductAuthProvider';
+import {
+  loadAccountPreferences,
+  resetAccountPreferences,
+  updateAccountPreferences,
+} from '../shared/auth/preferencesClient';
+import { saveSpeechVoice } from '../shared/speech/storage';
+import { EDGE_VOICES } from '../shared/speech/voiceCatalog';
 import { ThemeProvider, useTheme } from '../shared/theme/ThemeProvider';
 
 const VoiceStudio = lazy(() =>
@@ -67,7 +74,32 @@ export function DemoWorkspace() {
 }
 
 function AccountScopedWorkspace() {
-  const { sessionKey } = useProductSession();
+  const { mode, sessionKey } = useProductSession();
+  const { setThemeId } = useTheme();
+  const [preferencesReady, setPreferencesReady] = useState(mode === 'fake');
+
+  useEffect(() => {
+    if (mode === 'fake') return;
+    let active = true;
+    setPreferencesReady(false);
+    resetAccountPreferences();
+    void loadAccountPreferences()
+      .then((preferences) => {
+        if (!active) return;
+        setThemeId(preferences.theme);
+        const voice = EDGE_VOICES.find((candidate) => candidate.id === preferences.speech_voice);
+        if (voice) saveSpeechVoice(voice.id);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setPreferencesReady(true);
+      });
+    return () => { active = false; };
+  }, [mode, sessionKey, setThemeId]);
+
+  if (!preferencesReady) {
+    return <main aria-live="polite" className="auth-gate">Cargando tus preferencias…</main>;
+  }
   return <Workspace key={sessionKey} />;
 }
 
@@ -207,7 +239,8 @@ function ModuleGlyph({ module }: { module: ModuleId }) {
 }
 
 function ThemeModeToggle() {
-  const { themeId, toggleTheme } = useTheme();
+  const { mode } = useProductSession();
+  const { themeId, setThemeId } = useTheme();
   const isLight = themeId === 'light';
   const label = isLight ? 'Activar modo oscuro' : 'Activar modo claro';
 
@@ -215,7 +248,11 @@ function ThemeModeToggle() {
     <button
       aria-label={label}
       className="workspace-icon-button"
-      onClick={toggleTheme}
+      onClick={() => {
+        const next = isLight ? 'dark' : 'light';
+        setThemeId(next);
+        if (mode === 'clerk') void updateAccountPreferences({ theme: next });
+      }}
       title={label}
       type="button"
     >

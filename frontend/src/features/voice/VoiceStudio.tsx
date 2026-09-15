@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SpeechVoiceControl } from '../../shared/speech/SpeechVoiceControl';
+import { updateAccountPreferences } from '../../shared/auth/preferencesClient';
+import {
+  createVoiceConversation,
+  deleteVoiceConversation,
+  getVoiceConversation,
+  listVoiceConversations,
+  saveVoiceFeedback,
+  saveVoiceTurn,
+  type VoiceConversationEntry,
+} from '../../shared/history/historyClient';
 import {
   loadSpeechProvider,
   loadSpeechVoice,
@@ -60,6 +70,7 @@ export function VoiceStudio() {
   const [isFeedbackPending, setIsFeedbackPending] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState<VoiceFeedback | null>(null);
   const [feedbackErrorMsg, setFeedbackErrorMsg] = useState<string | null>(null);
+  const [savedConversations, setSavedConversations] = useState<VoiceConversationEntry[] | null>(null);
 
   const socketRef = useRef<VoiceSocketClient | null>(null);
   const recorderRef = useRef<AudioRecorder | null>(null);
@@ -74,6 +85,8 @@ export function VoiceStudio() {
   const configuredScenarioRef = useRef<ScenarioType | null>(null);
   const captureOwnerRef = useRef<'ptt' | null>(null);
   const speechVoiceRef = useRef<EdgeVoiceId>(speechVoice);
+  const conversationRef = useRef<Promise<{ id: string } | null> | null>(null);
+  const persistedTurnsRef = useRef<Map<string, Promise<{ id: string }>>>(new Map());
 
   const currentTurnIdRef = useRef<string | null>(null);
   const generationRef = useRef(0);
@@ -399,6 +412,11 @@ export function VoiceStudio() {
             saveVoicePreferences(msg.scenario);
             saveSpeechProvider(msg.speech_provider);
             if (scenarioChanged) {
+              conversationRef.current = createVoiceConversation(msg.scenario).catch(() => {
+                setErrorMessage('La práctica funciona, pero el historial no está disponible.');
+                return null;
+              });
+              persistedTurnsRef.current.clear();
               setTurnHistory([]);
               setUserTranscript('');
               userTranscriptRef.current = '';
@@ -449,6 +467,20 @@ export function VoiceStudio() {
             });
             setUserTranscript('');
             userTranscriptRef.current = '';
+            if (conversationRef.current) {
+              const persisted = conversationRef.current.then((conversation) => {
+                if (!conversation) throw new Error('History unavailable');
+                return saveVoiceTurn(conversation.id, {
+                  operation_id: msg.turn_id,
+                  user_text: currentUserText,
+                  assistant_text: msg.text,
+                });
+              });
+              persistedTurnsRef.current.set(msg.turn_id, persisted);
+              void persisted.catch(() => {
+                setErrorMessage('La respuesta sigue visible, pero no pudo guardarse en el historial.');
+              });
+            }
             break;
 
           case 'assistant.segment': {
@@ -510,6 +542,11 @@ export function VoiceStudio() {
             setTurnHistory((prev) =>
               prev.map((t) => (t.turnId === msg.turn_id ? { ...t, feedback: msg.feedback } : t))
             );
+            void persistedTurnsRef.current.get(msg.turn_id)?.then((turn) =>
+              saveVoiceFeedback(turn.id, msg.feedback),
+            ).catch(() => {
+              setFeedbackErrorMsg('El feedback está visible, pero no pudo sincronizarse.');
+            });
             break;
 
           case 'response.cancelled':
@@ -535,6 +572,16 @@ export function VoiceStudio() {
               setIsAssistantStreaming(false);
               setIsFeedbackPending(false);
               setErrorMessage('La conversación no está disponible.');
+            } else if (msg.code === 'history_not_found') {
+              setIsAssistantStreaming(false);
+              setIsFeedbackPending(false);
+              setErrorMessage('Esta conversación ya no existe o pertenece a otra cuenta.');
+              handleServerError(msg);
+            } else if (msg.code === 'history_unavailable') {
+              setIsAssistantStreaming(false);
+              setIsFeedbackPending(false);
+              setErrorMessage('No pudimos recuperar el historial. Inténtalo de nuevo.');
+              handleServerError(msg);
             } else if (msg.code === 'speech_unavailable') {
               startBrowserFallback(msg.generation ?? generationRef.current, msg.segment_index ?? 0);
             } else if (msg.code === 'provider_busy') {
@@ -550,7 +597,14 @@ export function VoiceStudio() {
         }
       });
 
-      await client.connect();
+      if (!conversationRef.current) {
+        conversationRef.current = createVoiceConversation(scenarioRef.current).catch(() => {
+          setErrorMessage('La práctica funciona, pero el historial no está disponible.');
+          return null;
+        });
+      }
+      const conversation = await conversationRef.current;
+      await client.connect(conversation?.id);
     } catch (err) {
       console.error('Connection failed:', err);
       setErrorMessage('No se pudo conectar con el servicio de voz.');
@@ -565,6 +619,8 @@ export function VoiceStudio() {
     socketRef.current = null;
     client?.disconnect();
     cleanupLocalResources();
+    conversationRef.current = null;
+    persistedTurnsRef.current.clear();
     setState('idle');
     setInputState('idle');
   };
@@ -575,8 +631,11 @@ export function VoiceStudio() {
   };
 
   const handleServerError = (msg: ErrorMessage) => {
-    setErrorMessage(`Error [${msg.code}]: ${msg.message}`);
+    if (msg.code !== 'history_not_found' && msg.code !== 'history_unavailable') {
+      setErrorMessage(`Error [${msg.code}]: ${msg.message}`);
+    }
     if (msg.fatal) {
+      conversationRef.current = null;
       setState('error');
       setInputState('input_error');
       const client = socketRef.current;
@@ -620,6 +679,9 @@ export function VoiceStudio() {
 
   const handleSpeechVoiceChange = (newVoice: EdgeVoiceId) => {
     applyConfiguration(scenarioRef.current, speechProviderRef.current, newVoice);
+    void updateAccountPreferences({ speech_voice: newVoice }).catch(() => {
+      setErrorMessage('La voz cambió en este dispositivo, pero no pudo sincronizarse.');
+    });
   };
 
   const startRecording = useCallback(async (tapMode = false) => {
@@ -777,6 +839,63 @@ export function VoiceStudio() {
       <h2 className="sr-only" id="voice-title">
         Hablar
       </h2>
+
+      <div className="history-toolbar">
+        <button
+          className="writing-btn writing-btn-ghost writing-btn-sm"
+          onClick={() => {
+            if (savedConversations) {
+              setSavedConversations(null);
+              return;
+            }
+            void listVoiceConversations().then(setSavedConversations).catch(() => {
+              setErrorMessage('No se pudo cargar el historial de conversaciones.');
+            });
+          }}
+          type="button"
+        >
+          {savedConversations ? 'Ocultar historial' : 'Ver historial'}
+        </button>
+      </div>
+      {savedConversations ? (
+        <ul className="history-list" aria-label="Historial de conversaciones">
+          {savedConversations.length ? savedConversations.map((conversation) => (
+            <li key={conversation.id}>
+              <button
+                onClick={() => void getVoiceConversation(conversation.id).then((reopened) => {
+                  conversationRef.current = Promise.resolve({ id: reopened.id });
+                  if (reopened.scenario in SCENARIO_LABELS) {
+                    const restoredScenario = reopened.scenario as ScenarioType;
+                    scenarioRef.current = restoredScenario;
+                    configuredScenarioRef.current = restoredScenario;
+                    setScenario(restoredScenario);
+                  }
+                  setTurnHistory((reopened.turns ?? []).map((turn) => ({
+                    turnId: turn.operation_id,
+                    userText: turn.user_text,
+                    assistantText: turn.assistant_text,
+                    ...(turn.feedback ? { feedback: turn.feedback } : {}),
+                  })));
+                  setSavedConversations(null);
+                }).catch(() => setErrorMessage('No se pudo reabrir la conversación.'))}
+                type="button"
+              >
+                <strong>{conversation.title}</strong>
+                <span>{new Date(conversation.updated_at).toLocaleDateString('es')}</span>
+              </button>
+              <button
+                aria-label={`Eliminar ${conversation.title}`}
+                onClick={() => void deleteVoiceConversation(conversation.id).then(() => {
+                  setSavedConversations((current) => current?.filter((item) => item.id !== conversation.id) ?? []);
+                }).catch(() => setErrorMessage('No se pudo eliminar la conversación.'))}
+                type="button"
+              >
+                Eliminar
+              </button>
+            </li>
+          )) : <li className="history-empty">Aún no hay conversaciones guardadas.</li>}
+        </ul>
+      ) : null}
 
       <div className="voice-split">
         <div className="voice-pane voice-pane-control">

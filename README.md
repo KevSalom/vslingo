@@ -15,9 +15,9 @@ El estado verificable está en [docs/progress.md](docs/progress.md).
 
 | Módulo | Recorrido actual |
 |---|---|
-| **Hablar** | Tema libre por defecto, push-to-talk, respuesta corta, mejora prioritaria, Edge TTS y respaldo de voz del navegador |
-| **Escribir** | Texto de hasta 1.000 caracteres, corrección estructurada, diff y explicación en español |
-| **Videos** | Video, transcripción sincronizada, biblioteca sencilla y notas locales durante F1 |
+| **Hablar** | Tema libre por defecto, push-to-talk, respuesta corta, mejora prioritaria e historial que se puede continuar |
+| **Escribir** | Texto de hasta 1.000 caracteres, corrección estructurada, diff e historial automático |
+| **Videos** | Video, transcripción sincronizada, biblioteca sencilla y notas versionadas |
 
 La landing está en `/`. Las rutas estables de práctica son `/app`,
 `/app/hablar`, `/app/escribir` y `/app/videos`. `/demo` permanece como alias
@@ -40,7 +40,7 @@ La configuración transaccional de planes y cuotas se implementa en F4.
 | LLM | OpenRouter `google/gemini-3.1-flash-lite` |
 | STT | OpenRouter `openai/whisper-large-v3-turbo` |
 | TTS | Edge TTS con cuatro voces permitidas; `speechSynthesis` como respaldo |
-| Datos e identidad | SQLite transaccional + Clerk; sesión base en F2, historial en F3 |
+| Datos e identidad | SQLite transaccional + Clerk; contenido y preferencias aislados por cuenta |
 
 Las pruebas normales usan fakes y no llaman servicios externos. No se guardan
 buffers WAV o MP3 en disco, base de datos, service worker ni logs.
@@ -106,6 +106,6 @@ uv run vslingo-smoke edge-tts
 
 ## Despliegue
 
-Las guías están en [deploy/README.md](deploy/README.md). F1 es un prototipo
-funcional con fakes; no autoriza despliegue, compra ni ejecución de proveedores
-live. El lanzamiento comercial requiere completar los gates F2–F7 del plan.
+Las guías están en [deploy/README.md](deploy/README.md). El entorno actual sigue
+usando fakes por defecto y no autoriza compras ni llamadas live. El lanzamiento
+comercial requiere completar los gates F4–F7 del plan.

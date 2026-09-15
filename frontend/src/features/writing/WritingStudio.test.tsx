@@ -120,6 +120,24 @@ describe('WritingStudio', () => {
     expect(editor).toHaveValue('Please review this deployment note.');
   });
 
+  it('keeps the correction visible when automatic history persistence fails', async () => {
+    const user = userEvent.setup();
+    render(
+      <WritingStudio
+        correctText={vi.fn().mockResolvedValue(MULTIPLE_CORRECTIONS)}
+        saveResult={vi.fn().mockRejectedValue(new Error('offline'))}
+      />,
+    );
+    await user.type(
+      screen.getByRole('textbox', { name: 'Tu texto en inglés' }),
+      MULTIPLE_CORRECTIONS.original_text,
+    );
+    await user.click(screen.getByRole('button', { name: 'Revisar texto' }));
+
+    expect(await screen.findByText(MULTIPLE_CORRECTIONS.corrected_text)).toBeInTheDocument();
+    expect(await screen.findByText(/El resultado sigue disponible/)).toBeInTheDocument();
+  });
+
   it('explains when a submitted text needs no changes', async () => {
     const user = userEvent.setup();
     const text = 'The deployment completed successfully.';

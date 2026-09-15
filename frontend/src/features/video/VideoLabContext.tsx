@@ -11,6 +11,12 @@ import {
 
 import type { TranscriptViewMode, VideoLibraryItem, VideoNote } from './types';
 import {
+  deleteNoteHistory,
+  HistoryRequestError,
+  saveNoteHistory,
+  updateNoteHistory,
+} from '../../shared/history/historyClient';
+import {
   addVideoNote,
   addVideoToLibrary,
   EMPTY_VIDEO_STATE,
@@ -28,6 +34,7 @@ type OpenVideoHandler = (item: VideoLibraryItem) => void;
 
 type VideoLabContextValue = {
   storageReady: boolean;
+  syncMessage: string | null;
   state: VideoState;
   setViewMode: (viewMode: TranscriptViewMode) => void;
   saveLibraryItem: (item: VideoLibraryItem) => string | null;
@@ -46,6 +53,7 @@ const VideoLabContext = createContext<VideoLabContextValue | null>(null);
 
 export function VideoLabProvider({ children }: { children: ReactNode }) {
   const [storageReady, setStorageReady] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [state, setState] = useState<VideoState>(EMPTY_VIDEO_STATE);
   const stateRef = useRef(state);
   const openVideoRef = useRef<OpenVideoHandler | null>(null);
@@ -96,13 +104,62 @@ export function VideoLabProvider({ children }: { children: ReactNode }) {
       id: string,
       patch: Pick<VideoNote, 'title' | 'text'> & { timestamp?: number },
     ) => {
+      const existing = stateRef.current.notes.find((note) => note.id === id);
       setState((current) => updateVideoNote(current, id, patch));
+      if (existing?.version === undefined) return;
+      setSyncMessage('Guardando cambios…');
+      void updateNoteHistory(id, { ...patch, version: existing.version })
+        .then((saved) => {
+          setState((current) => updateVideoNote(current, id, {
+            title: saved.title,
+            text: saved.text,
+            ...(saved.timestamp !== null ? { timestamp: saved.timestamp } : {}),
+            version: saved.version,
+          }));
+          setSyncMessage('Nota guardada en tu cuenta.');
+        })
+        .catch((error: unknown) => {
+          if (error instanceof HistoryRequestError && error.code === 'note_conflict') {
+            const copyId = createConflictCopyId();
+            void saveNoteHistory({
+              client_id: copyId,
+              title: conflictCopyTitle(patch.title),
+              text: patch.text,
+              ...(patch.timestamp !== undefined ? { timestamp: patch.timestamp } : {}),
+            }).then((saved) => {
+              setState((current) => {
+                const withoutOriginal = removeVideoNote(current, id);
+                return addVideoNote(withoutOriginal, {
+                  id: saved.id,
+                  title: saved.title,
+                  text: saved.text,
+                  createdAt: saved.created_at,
+                  ...(saved.timestamp !== null ? { timestamp: saved.timestamp } : {}),
+                  version: saved.version,
+                }) ?? withoutOriginal;
+              });
+              setSyncMessage('Había cambios en otro dispositivo. Guardamos tu versión como una copia separada.');
+            }).catch(() => {
+              setSyncMessage('Había cambios en otro dispositivo. Tu versión sigue guardada localmente.');
+            });
+            return;
+          }
+          setSyncMessage(
+            'No se pudieron sincronizar los cambios. La copia local sigue disponible.',
+          );
+        });
     },
     [],
   );
 
   const deleteNote = useCallback((id: string) => {
+    const existing = stateRef.current.notes.find((note) => note.id === id);
     setState((current) => removeVideoNote(current, id));
+    if (existing?.version === undefined) return;
+    setSyncMessage('Eliminando nota…');
+    void deleteNoteHistory(id)
+      .then(() => setSyncMessage('Nota eliminada.'))
+      .catch(() => setSyncMessage('La nota se quitó de este dispositivo, pero no de tu cuenta.'));
   }, []);
 
   const registerOpenVideo = useCallback((handler: OpenVideoHandler | null) => {
@@ -116,6 +173,7 @@ export function VideoLabProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       storageReady,
+      syncMessage,
       state,
       setViewMode,
       saveLibraryItem,
@@ -128,6 +186,7 @@ export function VideoLabProvider({ children }: { children: ReactNode }) {
     }),
     [
       storageReady,
+      syncMessage,
       state,
       setViewMode,
       saveLibraryItem,
@@ -143,6 +202,18 @@ export function VideoLabProvider({ children }: { children: ReactNode }) {
   return (
     <VideoLabContext.Provider value={value}>{children}</VideoLabContext.Provider>
   );
+}
+
+function createConflictCopyId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return `note-${crypto.randomUUID()}`;
+  }
+  return `note-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function conflictCopyTitle(title: string): string {
+  const suffix = ' (copia)';
+  return `${title.slice(0, 200 - suffix.length).trimEnd()}${suffix}`;
 }
 
 export function useVideoLab(): VideoLabContextValue {

@@ -52,16 +52,17 @@ export function addVideoNote(
   state: VideoState,
   note: VideoNote,
 ): VideoState | null {
-  if (state.notes.length >= MAX_NOTES) {
+  const remaining = state.notes.filter((saved) => saved.id !== note.id);
+  if (remaining.length >= MAX_NOTES) {
     return null;
   }
-  return { ...state, notes: [note, ...state.notes] };
+  return { ...state, notes: [note, ...remaining] };
 }
 
 export function updateVideoNote(
   state: VideoState,
   id: string,
-  patch: Pick<VideoNote, 'title' | 'text'> & { timestamp?: number },
+  patch: Pick<VideoNote, 'title' | 'text'> & { timestamp?: number; version?: number },
 ): VideoState {
   return {
     ...state,
@@ -74,6 +75,7 @@ export function updateVideoNote(
             ...(patch.timestamp !== undefined
               ? { timestamp: patch.timestamp }
               : {}),
+            ...(patch.version !== undefined ? { version: patch.version } : {}),
           }
         : note,
     ),

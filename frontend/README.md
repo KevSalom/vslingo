@@ -43,6 +43,11 @@ JWT verification keys belong only in the backend. The React island then shows Cl
 sign-in, derives the bearer token from the active session and revokes the backend
 session before signing out.
 
+Writing results, explicitly saved videos, versioned notes, complete voice turns and
+account theme/voice preferences synchronize through authenticated history endpoints.
+Each module exposes loading, saved, failed and empty states; opening a saved result does
+not repeat the provider operation.
+
 The static landing is available at `/`. The stable practice routes are `/app`,
 `/app/hablar`, `/app/escribir`, and `/app/videos`; `/demo` remains a temporary
 alias for links from the historical Alpha. Voice uses push-to-talk in a secure

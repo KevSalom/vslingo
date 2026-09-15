@@ -347,6 +347,43 @@ async def test_stale_response_cancel_does_not_cancel_current_generation(
 
 
 @pytest.mark.asyncio
+async def test_resumed_history_survives_matching_scenario_configuration(
+    fake_stt: FakeSpeechToText,
+) -> None:
+    from app.voice.session import VoiceSession
+
+    class StubWebSocket:
+        async def close(self, code: int = 1000) -> None:
+            del code
+
+    session = VoiceSession(
+        StubWebSocket(),  # type: ignore[arg-type]
+        fake_stt,
+        history_loader=lambda _conversation_id: (
+            "daily_standup",
+            [("I shipped the API.", "Great. What is next?")],
+        ),
+    )
+    try:
+        await session._handle_text(
+            '{"type":"session.start","protocol_version":2,"conversation_id":"chat-a"}'
+        )
+        await session.outbound_queue.get()
+        session.outbound_queue.task_done()
+        await session._handle_text(
+            '{"type":"session.config","scenario":"daily_standup",'
+            '"speech_provider":"edge_tts","speech_voice":"en-US-AriaNeural"}'
+        )
+
+        assert [message.content for message in session.history.get_messages()] == [
+            "I shipped the API.",
+            "Great. What is next?",
+        ]
+    finally:
+        await session._cleanup()
+
+
+@pytest.mark.asyncio
 async def test_active_turn_configuration_is_cancelled_then_applied(
     fake_stt: FakeSpeechToText,
 ) -> None:

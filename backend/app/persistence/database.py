@@ -84,6 +84,14 @@ class Database:
         with self._lock:
             return cast(sqlite3.Row | None, self._connect().execute(sql, parameters).fetchone())
 
+    def query_all(self, sql: str, parameters: tuple[Any, ...] = ()) -> list[sqlite3.Row]:
+        """Return rows under the connection lock without exposing the connection."""
+
+        self._ensure_migrated()
+        with self._lock:
+            rows = self._connect().execute(sql, parameters).fetchall()
+            return cast(list[sqlite3.Row], rows)
+
     def applied_migrations(self) -> tuple[int, ...]:
         """Return applied versions in stable order."""
 

@@ -79,6 +79,21 @@ vi.mock('./voiceSocket', () => ({
   },
 }));
 
+vi.mock('../../shared/history/historyClient', () => ({
+  createVoiceConversation: vi.fn(async () => ({ id: 'conversation-test' })),
+  listVoiceConversations: vi.fn(async () => []),
+  getVoiceConversation: vi.fn(async () => ({ id: 'conversation-test', turns: [] })),
+  deleteVoiceConversation: vi.fn(async () => undefined),
+  saveVoiceTurn: vi.fn(async () => ({ id: 'turn-test' })),
+  saveVoiceFeedback: vi.fn(async () => undefined),
+}));
+
+vi.mock('../../shared/auth/preferencesClient', () => ({
+  updateAccountPreferences: vi.fn(async () => ({
+    theme: 'light', speech_voice: 'en-US-AriaNeural', version: 1,
+  })),
+}));
+
 vi.mock('./audioCapture', () => ({
   AudioRecorder: class {
     start = mocks.recorderStart;

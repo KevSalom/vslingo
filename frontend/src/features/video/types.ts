@@ -45,6 +45,7 @@ export type VideoNote = {
   text: string;
   createdAt: string;
   timestamp?: number;
+  version?: number;
 };
 
 const VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
@@ -92,10 +93,15 @@ export function isVideoNote(value: unknown): value is VideoNote {
   ) {
     return false;
   }
-  if (value.timestamp === undefined) {
-    return true;
+  if (
+    value.version !== undefined &&
+    (typeof value.version !== 'number' ||
+      !Number.isInteger(value.version) ||
+      value.version < 0)
+  ) {
+    return false;
   }
-  return isFiniteNonNegative(value.timestamp);
+  return value.timestamp === undefined || isFiniteNonNegative(value.timestamp);
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

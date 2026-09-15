@@ -23,6 +23,8 @@ export type ErrorCodeType =
   | 'internal_error'
   | 'feedback_unavailable'
   | 'conversation_unavailable'
+  | 'history_unavailable'
+  | 'history_not_found'
   | 'speech_unavailable';
 
 export type CorrectionCategoryType = 'grammar' | 'vocabulary' | 'clarity' | 'tone';
@@ -51,6 +53,7 @@ export type VoiceFeedback = {
 export type SessionStartMessage = {
   type: 'session.start';
   protocol_version: 2;
+  conversation_id?: string;
 };
 
 export type SessionConfigMessage = {
@@ -266,6 +269,8 @@ const ERROR_CODES: ReadonlySet<ErrorCodeType> = new Set([
   'internal_error',
   'feedback_unavailable',
   'conversation_unavailable',
+  'history_unavailable',
+  'history_not_found',
   'speech_unavailable',
 ]);
 

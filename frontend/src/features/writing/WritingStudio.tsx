@@ -9,6 +9,12 @@ import {
 import { SpeechVoiceControl } from '../../shared/speech/SpeechVoiceControl';
 import { useSpeechPlayer } from '../../shared/speech/useSpeechPlayer';
 import {
+  deleteWritingHistory,
+  listWritingHistory,
+  saveWritingHistory,
+  type WritingHistoryEntry,
+} from '../../shared/history/historyClient';
+import {
   MAX_CORRECTION_TEXT_LENGTH,
   type CorrectionCategory,
   type CorrectionResponse,
@@ -22,6 +28,8 @@ import {
 
 type WritingStudioProps = {
   correctText?: (text: string) => Promise<CorrectionResponse>;
+  saveResult?: (result: CorrectionResponse) => Promise<unknown>;
+  loadHistory?: () => Promise<WritingHistoryEntry[]>;
 };
 
 const CATEGORY_META: Record<
@@ -36,6 +44,8 @@ const CATEGORY_META: Record<
 
 export function WritingStudio({
   correctText = correctWriting,
+  saveResult,
+  loadHistory = listWritingHistory,
 }: WritingStudioProps) {
   const [draft, setDraft] = useState('');
   const [result, setResult] = useState<CorrectionResponse | null>(null);
@@ -43,6 +53,8 @@ export function WritingStudio({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [history, setHistory] = useState<WritingHistoryEntry[] | null>(null);
   const skipNextPersistence = useRef(false);
 
   const speechPlayer = useSpeechPlayer();
@@ -76,7 +88,18 @@ export function WritingStudio({
     setCopied(false);
     speechPlayer.stop();
     try {
-      setResult(await correctText(draft));
+      const corrected = await correctText(draft);
+      setResult(corrected);
+      setSaveStatus('Guardando en tu historial…');
+      try {
+        const persist = saveResult ?? (
+          correctText === correctWriting ? saveWritingHistory : async () => undefined
+        );
+        await persist(corrected);
+        setSaveStatus('Guardado en tu historial.');
+      } catch {
+        setSaveStatus('No se pudo guardar. El resultado sigue disponible en pantalla.');
+      }
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -99,6 +122,7 @@ export function WritingStudio({
     setDraft(value);
     setError(null);
     setCopied(false);
+    setSaveStatus(null);
     if (result && value !== result.original_text) {
       speechPlayer.stop();
       setResult(null);
@@ -125,6 +149,7 @@ export function WritingStudio({
     setResult(null);
     setError(null);
     setCopied(false);
+    setSaveStatus(null);
   };
 
   const handleToggleSpeech = () => {
@@ -143,6 +168,44 @@ export function WritingStudio({
       <h2 className="sr-only" id="writing-title">
         Escribir
       </h2>
+
+      <div className="history-toolbar">
+        <button
+          className="writing-btn writing-btn-ghost writing-btn-sm"
+          onClick={() => {
+            if (history) {
+              setHistory(null);
+              return;
+            }
+            void loadHistory().then(setHistory).catch(() => setSaveStatus('No se pudo cargar el historial.'));
+          }}
+          type="button"
+        >
+          {history ? 'Ocultar historial' : 'Ver historial'}
+        </button>
+        {saveStatus ? <span aria-live="polite">{saveStatus}</span> : null}
+      </div>
+      {history ? (
+        <ul className="history-list" aria-label="Historial de escritura">
+          {history.length ? history.map((entry) => (
+            <li key={entry.id}>
+              <button onClick={() => { setDraft(entry.original_text); setResult(entry); }} type="button">
+                <strong>{entry.corrected_text.slice(0, 80)}</strong>
+                <span>{new Date(entry.created_at).toLocaleDateString('es')}</span>
+              </button>
+              <button
+                aria-label={`Eliminar corrección ${entry.corrected_text.slice(0, 40)}`}
+                onClick={() => void deleteWritingHistory(entry.id).then(() => {
+                  setHistory((current) => current?.filter((item) => item.id !== entry.id) ?? []);
+                }).catch(() => setSaveStatus('No se pudo eliminar la corrección.'))}
+                type="button"
+              >
+                Eliminar
+              </button>
+            </li>
+          )) : <li className="history-empty">Aún no hay correcciones guardadas.</li>}
+        </ul>
+      ) : null}
 
       <div
         className={

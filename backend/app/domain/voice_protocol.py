@@ -15,6 +15,7 @@ class BaseVoiceMessage(BaseModel):
 class SessionStartMessage(BaseVoiceMessage):
     type: Literal["session.start"] = "session.start"
     protocol_version: Literal[2] = 2
+    conversation_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 ScenarioType = Literal["daily_standup", "system_design", "salary_negotiation", "free"]
@@ -209,6 +210,8 @@ ErrorCodeType = Literal[
     "internal_error",
     "feedback_unavailable",
     "conversation_unavailable",
+    "history_unavailable",
+    "history_not_found",
     "speech_unavailable",
 ]
 

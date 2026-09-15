@@ -81,7 +81,9 @@ def test_api_sets_restrictive_cors_security_headers_and_rate_limits_by_socket_ip
     )
     assert preflight.status_code == 200
     assert preflight.headers["access-control-allow-origin"] == "http://localhost:4321"
-    assert preflight.headers["access-control-allow-methods"] == "GET, POST, PUT, OPTIONS"
+    assert preflight.headers["access-control-allow-methods"] == (
+        "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    )
 
     health = client.get("/api/health")
     assert health.headers["x-content-type-options"] == "nosniff"

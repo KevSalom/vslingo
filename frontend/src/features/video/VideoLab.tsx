@@ -14,6 +14,18 @@ import {
   SAMPLE_VIDEO_URL,
 } from './fixture';
 import { FixturePlayer } from './FixturePlayer';
+import {
+  deleteNoteHistory,
+  deleteVideoHistory,
+  listNoteHistory,
+  listVideoHistory,
+  saveNoteHistory,
+  saveVideoHistory,
+  updateNoteHistory,
+  HistoryRequestError,
+  type SavedVideoEntry,
+  type SavedNoteEntry,
+} from '../../shared/history/historyClient';
 import { findActiveSegmentIndex, formatTimestamp } from './sync';
 import type {
   TranscriptResponse,
@@ -51,13 +63,16 @@ type NoteDraftModal = {
   title: string;
   text: string;
   timestamp?: number;
+  remoteId?: string;
+  version?: number;
+  conflictCopy?: boolean;
 };
 
 export function VideoLab({
   loadTranscript = fetchVideoTranscript,
   PlayerComponent = YouTubePlayer,
 }: VideoLabProps) {
-  const { state: videoState, setViewMode, saveLibraryItem, saveNote, registerOpenVideo } =
+  const { state: videoState, syncMessage, setViewMode, saveLibraryItem, saveNote, registerOpenVideo } =
     useVideoLab();
   const [url, setUrl] = useState('');
   const [currentUrl, setCurrentUrl] = useState('');
@@ -79,6 +94,8 @@ export function VideoLab({
   const scrollAnimRef = useRef<number>(0);
   const videoPanelRef = useRef<HTMLDivElement>(null);
   const [videoPanelHeight, setVideoPanelHeight] = useState(0);
+  const [remoteHistory, setRemoteHistory] = useState<SavedVideoEntry[] | null>(null);
+  const [remoteNotes, setRemoteNotes] = useState<SavedNoteEntry[] | null>(null);
 
   const openTranscript = useCallback(
     (transcript: TranscriptResponse, nextUrl: string, title?: string) => {
@@ -251,7 +268,13 @@ export function VideoLab({
     if (message) {
       setStatus(message);
     } else {
-      setStatus('Video guardado en este navegador.');
+      setStatus('Guardando video en tu cuenta…');
+      void saveVideoHistory(item.title, item.url, result)
+        .then((saved) => {
+          setRemoteHistory((current) => current ? [saved, ...current.filter((video) => video.id !== saved.id)] : current);
+          setStatus('Video guardado en tu cuenta.');
+        })
+        .catch(() => setStatus('No se pudo sincronizar. El video sigue disponible en este navegador.'));
     }
     setSaveVideoOpen(false);
   };
@@ -263,6 +286,34 @@ export function VideoLab({
     const title = noteDraft.title.trim();
     const text = noteDraft.text.trim();
     if (!title || !text) {
+      return;
+    }
+    if (noteDraft.remoteId !== undefined && noteDraft.version !== undefined) {
+      setStatus('Guardando cambios…');
+      void updateNoteHistory(noteDraft.remoteId, {
+        title,
+        text,
+        ...(noteDraft.timestamp !== undefined ? { timestamp: noteDraft.timestamp } : {}),
+        version: noteDraft.version,
+      })
+        .then((saved) => {
+          setRemoteNotes((current) => current?.map((note) => note.id === saved.id ? saved : note) ?? []);
+          setStatus('Nota guardada en tu cuenta.');
+          setNoteDraft(null);
+        })
+        .catch((cause: unknown) => {
+          if (cause instanceof HistoryRequestError && cause.code === 'note_conflict') {
+            setNoteDraft((current) => current ? {
+              title: conflictCopyTitle(current.title),
+              text: current.text,
+              ...(current.timestamp !== undefined ? { timestamp: current.timestamp } : {}),
+              conflictCopy: true,
+            } : null);
+            setStatus('La nota cambió en otro dispositivo. Puedes guardar tu versión como una copia separada o cancelar para conservar la versión de la cuenta.');
+          } else {
+            setStatus('No se pudieron guardar los cambios. Inténtalo de nuevo.');
+          }
+        });
       return;
     }
     const note: VideoNote = {
@@ -278,7 +329,23 @@ export function VideoLab({
     if (message) {
       setStatus(message);
     } else {
-      setStatus('Nota guardada en este navegador.');
+      setStatus('Guardando nota en tu cuenta…');
+      void saveNoteHistory({
+        client_id: note.id,
+        title: note.title,
+        text: note.text,
+        ...(note.timestamp !== undefined ? { timestamp: note.timestamp } : {}),
+      })
+        .then((saved) => {
+          setRemoteNotes((current) => current ? [saved, ...current] : current);
+          saveNote({
+            ...note,
+            id: saved.id,
+            version: saved.version,
+          });
+          setStatus('Nota guardada en tu cuenta.');
+        })
+        .catch(() => setStatus('No se pudo sincronizar. La nota sigue disponible en este navegador.'));
     }
     setNoteDraft(null);
   };
@@ -300,6 +367,80 @@ export function VideoLab({
       <h2 className="sr-only" id="video-lab-title">
         Videos
       </h2>
+
+      <div className="history-toolbar">
+        <button
+          className="writing-btn writing-btn-ghost writing-btn-sm"
+          onClick={() => {
+            if (remoteHistory) {
+              setRemoteHistory(null);
+              setRemoteNotes(null);
+              return;
+            }
+            void Promise.all([listVideoHistory(), listNoteHistory()])
+              .then(([videos, notes]) => {
+                setRemoteHistory(videos);
+                setRemoteNotes(notes);
+              })
+              .catch(() => setStatus('No se pudo cargar el historial.'));
+          }}
+          type="button"
+        >
+          {remoteHistory ? 'Ocultar historial' : 'Ver historial'}
+        </button>
+      </div>
+      {remoteHistory ? (
+        <ul className="history-list" aria-label="Historial de videos">
+          {remoteHistory.length ? remoteHistory.map((video) => (
+            <li key={video.id}>
+              <button onClick={() => openTranscript(video, video.url, video.title)} type="button">
+                <strong>{video.title}</strong>
+                <span>Reabrir</span>
+              </button>
+              <button
+                aria-label={`Eliminar ${video.title}`}
+                onClick={() => void deleteVideoHistory(video.id).then(() => {
+                  setRemoteHistory((current) => current?.filter((item) => item.id !== video.id) ?? []);
+                }).catch(() => setStatus('No se pudo eliminar el video.'))}
+                type="button"
+              >
+                Eliminar
+              </button>
+            </li>
+          )) : <li className="history-empty">Aún no hay videos guardados.</li>}
+        </ul>
+      ) : null}
+      {remoteNotes ? (
+        <ul className="history-list" aria-label="Historial de notas">
+          {remoteNotes.length ? remoteNotes.map((note) => (
+            <li key={note.id}>
+              <button
+                className="history-note"
+                onClick={() => setNoteDraft({
+                  title: note.title,
+                  text: note.text,
+                  ...(note.timestamp !== null ? { timestamp: note.timestamp } : {}),
+                  remoteId: note.id,
+                  version: note.version,
+                })}
+                type="button"
+              >
+                <strong>{note.title}</strong>
+                <span>{note.text} · Editar</span>
+              </button>
+              <button
+                aria-label={`Eliminar nota ${note.title}`}
+                onClick={() => void deleteNoteHistory(note.id).then(() => {
+                  setRemoteNotes((current) => current?.filter((item) => item.id !== note.id) ?? []);
+                }).catch(() => setStatus('No se pudo eliminar la nota.'))}
+                type="button"
+              >
+                Eliminar
+              </button>
+            </li>
+          )) : <li className="history-empty">Aún no hay notas guardadas.</li>}
+        </ul>
+      ) : null}
 
       <form
         aria-busy={isLoading}
@@ -372,12 +513,12 @@ export function VideoLab({
           {error}
         </div>
       ) : null}
-      {status ? (
+      {status || syncMessage ? (
         <p
           aria-live="polite"
           className="video-url-status"
         >
-          {status}
+          {status ?? syncMessage}
         </p>
       ) : null}
 
@@ -580,11 +721,13 @@ export function VideoLab({
       {noteDraft ? (
         <VsCodeModal
           confirmDisabled={!noteDraft.title.trim() || !noteDraft.text.trim()}
-          confirmLabel="Guardar nota"
-          description="La nota no depende de ningún video guardado."
+          confirmLabel={noteDraft.conflictCopy ? 'Guardar como copia' : 'Guardar nota'}
+          description={noteDraft.conflictCopy
+            ? 'La versión más reciente permanece intacta. Guarda este texto como otra nota para conservar ambas.'
+            : 'La nota no depende de ningún video guardado.'}
           onCancel={() => setNoteDraft(null)}
           onConfirm={handleConfirmSaveNote}
-          title="Guardar frase como nota"
+          title={noteDraft.remoteId ? 'Editar nota' : 'Guardar frase como nota'}
         >
           <label className="vsc-field-label" htmlFor="video-phrase-title">
             Nombre
@@ -663,6 +806,11 @@ function createLocalId(prefix: string): string {
     return `${prefix}-${crypto.randomUUID()}`;
   }
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function conflictCopyTitle(title: string): string {
+  const suffix = ' (copia)';
+  return `${title.slice(0, 200 - suffix.length).trimEnd()}${suffix}`;
 }
 
 function CopyIcon() {

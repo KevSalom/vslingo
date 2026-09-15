@@ -9,12 +9,12 @@ Este es el único documento para el estado mutable de implementación. Debe actu
 ## Estado actual
 
 - **Roadmap actual:** MVP comercial Inglés al Grano `F0`–`F8`; la Alpha `T01`–`T10` queda como baseline histórico completado.
-- **Fase actual:** `F2 — Identidad y SQLite` completada el 2026-09-15.
-- **Próximo incremento:** `F3 — Historial completo`.
+- **Fase actual:** `F3 — Historial completo` completada el 2026-09-15.
+- **Próximo incremento:** `F4 — Cuotas y costes`.
 - **Rama de trabajo:** `codex/ingles-al-grano-mvp`, creada desde `main` en `aa26cab8ac10345a2c596febe78a0ad10c7df5c1` (`feat: add global stylesheet with Tailwind integration and multi-theme design tokens`).
-- **Completado:** F0 adoptó el plan y aisló la rama; F1 entregó producto/UI/voz simple; F2 añadió identidad Clerk/fake, SQLite migrado, aislamiento por usuario, sesión/logout y tickets WebSocket de un solo uso.
-- **Pendiente:** F3–F7; F8 permanece posterior al lanzamiento y sujeto al cierre de condiciones comerciales.
-- **Bloqueos:** ninguno para iniciar F3 con fakes. La configuración y validación de un tenant Clerk real sigue siendo un gate externo del fundador; OpenRouter/PayPal, Meta y dispositivos físicos se requieren en fases posteriores o en sus validaciones live.
+- **Completado:** F0 adoptó el plan y aisló la rama; F1 entregó producto/UI/voz simple; F2 añadió identidad y SQLite; F3 incorporó historial sincronizado de escritura, videos, notas y voz, además de preferencias de cuenta.
+- **Pendiente:** F4–F7; F8 permanece posterior al lanzamiento y sujeto al cierre de condiciones comerciales.
+- **Bloqueos:** ninguno para iniciar F4 con fakes. La configuración y validación de un tenant Clerk real sigue siendo un gate externo del fundador; OpenRouter/PayPal, Meta y dispositivos físicos se requieren en fases posteriores o en sus validaciones live.
 
 ## Evidencia de F0
 
@@ -52,6 +52,19 @@ Este es el único documento para el estado mutable de implementación. Debe actu
 - Backend: lock válido, Ruff y mypy estricto en verde; **149 tests pytest** pasaron. Se conserva una advertencia de deprecación Starlette/TestClient.
 - Frontend: Astro check con **0 errores y 0 warnings** (5 hints heredados de `ScriptProcessorNode`), **129 tests Vitest** pasaron y el build generó seis rutas. E2E: **7/7 Chrome** y **7/7 Edge**.
 - No se creó ni configuró un tenant Clerk, no se usaron credenciales reales y no se hicieron llamadas live. El adaptador Clerk se cubrió con estados firmados simulados; la vuelta real desde correo/Google pertenece al gate externo de configuración.
+
+## Evidencia de F3
+
+- La migración `0002_study_history.sql` añade escrituras, videos guardados, notas versionadas, conflictos preservados, conversaciones y turnos. Todas las relaciones se filtran por el usuario autenticado y la suite prueba que un usuario B no puede leer ni reanudar contenido de A.
+- Escribir guarda cada corrección terminada con `operation_id` idempotente, muestra pendiente/éxito/fallo y permite listar, reabrir sin nueva corrección y borrar.
+- Videos conserva de forma explícita la transcripción ya obtenida para reabrirla sin consultar de nuevo al proveedor. Las notas se autoguardan con ID estable, versión optimista y estado visible; un conflicto 409 preserva la versión remitida en `note_conflicts` en vez de sobrescribirla silenciosamente.
+- Hablar crea una conversación por práctica, persiste sólo pares completos y adjunta feedback tardío al turno existente. Se puede listar, reabrir, continuar o borrar; al continuar el servidor carga como máximo los últimos seis pares completos y conserva el escenario. Un callback tardío no recrea una conversación borrada.
+- Los tickets WebSocket enlazan la reanudación al dueño verificado: enviar el ID de una conversación ajena produce un error fatal tipado. El protocolo compartido admite `conversation_id` opcional y entrega el error antes del cierre de política.
+- Tema y voz se cargan desde las preferencias de cuenta al montar el workspace y los cambios se sincronizan; cambiar de cuenta sigue desmontando y limpiando el estado local anterior. No se importa ninguna base ni `localStorage` de productos anteriores.
+- El esquema y una prueba explícita confirman que no existen columnas WAV, MP3 ni blobs de audio. Sólo se persisten texto, feedback estructurado y metadatos necesarios.
+- Backend completo: Ruff y mypy estricto en verde; **157 tests pytest** pasaron. Se conserva una advertencia de deprecación Starlette/TestClient.
+- Frontend completo: Astro check con **0 errores y 0 warnings** (5 hints heredados de `ScriptProcessorNode`), **133 tests Vitest** pasaron y el build estático generó seis rutas. E2E: **7/7 Chrome** y **7/7 Edge**.
+- No se hicieron llamadas live, no se probó un segundo dispositivo físico ni se configuró Clerk real. El comportamiento multiusuario/multisesión se verificó con identidades, archivos SQLite y estados simulados independientes.
 
 ## Inventario y riesgos considerados en F1 (histórico)
 

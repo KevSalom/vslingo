@@ -7,6 +7,7 @@ from fastapi import APIRouter, Response, WebSocket
 from app.core.config import Settings
 from app.core.protection import ConnectionLimiter, ProviderGates
 from app.domain.ports import LanguageModelPort, SpeechToTextPort, VoiceFeedbackPort
+from app.persistence.study import StudyRepository
 from app.persistence.ws_tickets import WebSocketTicketRepository
 from app.services.speech import SpeechService
 from app.voice.session import VoiceSession
@@ -55,6 +56,7 @@ def build_voice_router(
     gates: ProviderGates | None = None,
     connection_limiter: ConnectionLimiter | None = None,
     ticket_repository: WebSocketTicketRepository | None = None,
+    study_repository: StudyRepository | None = None,
 ) -> APIRouter:
     """Construct router with admission checks that run before WebSocket accept."""
 
@@ -101,6 +103,13 @@ def build_voice_router(
                 speech_service=speech_service,
                 settings=runtime_settings,
                 gates=gates,
+                history_loader=(
+                    lambda conversation_id: study_repository.load_voice_context(
+                        consumed_ticket.user_id, conversation_id
+                    )
+                )
+                if study_repository is not None
+                else None,
             )
             await session.run()
         finally:

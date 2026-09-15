@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 import struct
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Sequence
 from time import monotonic
 from uuid import uuid4
 
@@ -30,6 +30,7 @@ from app.voice.accumulator import SentenceAccumulator
 from app.voice.tts_queue import TTSConsumer, TTSSegmentItem
 
 logger = logging.getLogger(__name__)
+HistoryLoader = Callable[[str], tuple[ScenarioType, Sequence[tuple[str, str]]]]
 
 # WAV header constants for 16kHz Mono 16-bit PCM
 WAV_FORMAT_PCM = 1
@@ -92,6 +93,7 @@ class VoiceSession:
         *,
         settings: Settings | None = None,
         gates: ProviderGates | None = None,
+        history_loader: HistoryLoader | None = None,
         clock: Callable[[], float] = monotonic,
     ) -> None:
         self.websocket = websocket
@@ -101,6 +103,7 @@ class VoiceSession:
         self.speech_service = speech_service
         self.settings = settings or Settings()
         self.gates = gates
+        self.history_loader = history_loader
         self._clock = clock
 
         self.session_id = str(uuid4())
@@ -214,6 +217,31 @@ class VoiceSession:
 
         if not self.started:
             if parsed_msg.type == "session.start":
+                if parsed_msg.conversation_id is not None:
+                    if self.history_loader is None:
+                        await self._send_error(
+                            code="history_unavailable",
+                            message="No se pudo reabrir esta conversación.",
+                            retryable=True,
+                            fatal=True,
+                        )
+                        return
+                    try:
+                        restored_scenario, restored = self.history_loader(
+                            parsed_msg.conversation_id
+                        )
+                    except LookupError:
+                        await self._send_error(
+                            code="history_not_found",
+                            message="No se encontró esta conversación.",
+                            retryable=False,
+                            fatal=True,
+                        )
+                        return
+                    self.scenario = restored_scenario
+                    self.active_scenario = restored_scenario
+                    for user_text, assistant_text in restored:
+                        self.history.add_completed_turn(user_text, assistant_text)
                 self.started = True
                 self.session_limit_task = asyncio.create_task(self._enforce_session_limit())
                 await self._enqueue_message({
@@ -942,6 +970,10 @@ class VoiceSession:
         await self._enqueue_message(err_payload)
         if fatal:
             self.ended = True
+            try:
+                await asyncio.wait_for(self.outbound_queue.join(), timeout=1.0)
+            except TimeoutError:
+                logger.warning("fatal_event_flush_timed_out error_code=%s", code)
             await self.websocket.close(code=1008)
 
     async def _enqueue_message(self, msg: dict[str, object]) -> None:

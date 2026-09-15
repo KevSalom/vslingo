@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from app import __version__
+from app.api.history import build_history_router
 from app.api.session import authentication_error_response, build_session_router
 from app.api.speech import (
     build_speech_router,
@@ -30,6 +31,7 @@ from app.domain.ports import LanguageModelPort, SpeechToTextPort, VoiceFeedbackP
 from app.domain.speech import SpeechProvider
 from app.persistence.database import Database
 from app.persistence.identity import IdentityRepository
+from app.persistence.study import StudyRepository
 from app.persistence.ws_tickets import WebSocketTicketRepository
 from app.providers.edge_speech import EdgeTTSSynthesizer
 from app.providers.openrouter_chat import OpenRouterChatLanguageModel
@@ -140,6 +142,7 @@ def create_app(
         busy_timeout_ms=runtime_settings.sqlite_busy_timeout_ms,
     )
     identity_repository = IdentityRepository(runtime_database)
+    study_repository = StudyRepository(runtime_database)
     ws_ticket_repository = WebSocketTicketRepository(
         runtime_database,
         ttl_seconds=runtime_settings.ws_ticket_ttl_seconds,
@@ -161,13 +164,14 @@ def create_app(
     application.state.provider_gates = provider_gates
     application.state.database = runtime_database
     application.state.identity_repository = identity_repository
+    application.state.study_repository = study_repository
     application.state.ws_ticket_repository = ws_ticket_repository
     application.state.authenticator = runtime_authenticator
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[runtime_settings.normalized_frontend_origin],
         allow_credentials=False,
-        allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type"],
     )
 
@@ -179,7 +183,10 @@ def create_app(
         """Rate-limit costly direct API calls and apply neutral API response headers."""
 
         response: Response | None
-        protected_request = (request.method, request.url.path) in {
+        protected_request = request.url.path.startswith("/api/history/") or (
+            request.method,
+            request.url.path,
+        ) in {
             ("GET", "/api/session"),
             ("POST", "/api/session/logout"),
             ("POST", "/api/session/ws-ticket"),
@@ -247,6 +254,17 @@ def create_app(
             return video_validation_error_response()
         if request.url.path.startswith("/api/speech"):
             return await handle_speech_validation_error(request, error)
+        if request.url.path.startswith("/api/history/"):
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "error": {
+                        "code": "invalid_history_request",
+                        "message": "Los datos del historial no son válidos.",
+                        "retryable": False,
+                    }
+                },
+            )
         return await handle_writing_validation_error(request, error)
 
     application.add_exception_handler(
@@ -256,6 +274,7 @@ def create_app(
     application.include_router(build_writing_router(runtime_correction_service))
     application.include_router(build_video_router(runtime_video_service))
     application.include_router(build_speech_router(runtime_speech_service))
+    application.include_router(build_history_router(study_repository))
     application.include_router(
         build_session_router(
             auth_mode=runtime_settings.auth_mode,
@@ -275,6 +294,7 @@ def create_app(
             gates=provider_gates,
             connection_limiter=connection_limiter,
             ticket_repository=ws_ticket_repository,
+            study_repository=study_repository,
         )
     )
 

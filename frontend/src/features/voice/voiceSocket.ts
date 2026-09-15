@@ -42,7 +42,7 @@ export class VoiceSocketClient {
 
   constructor(private url: string = resolveVoiceWebSocketUrl()) {}
 
-  async connect(): Promise<void> {
+  async connect(conversationId?: string): Promise<void> {
     const ticket = await issueWebSocketTicket();
     return new Promise((resolve, reject) => {
       try {
@@ -55,7 +55,11 @@ export class VoiceSocketClient {
 
         this.socket.onopen = () => {
           this.notifyStatus(true);
-          this.sendMessage({ type: 'session.start', protocol_version: 2 });
+          this.sendMessage({
+            type: 'session.start',
+            protocol_version: 2,
+            ...(conversationId ? { conversation_id: conversationId } : {}),
+          });
           resolve();
         };
 

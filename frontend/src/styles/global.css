@@ -1874,6 +1874,30 @@ h1,
   color: var(--t-muted); font-family: var(--font-outfit); font-size: .82rem;
 }
 .workspace-panel strong { color: var(--t-foreground); font-weight: 700; }
+.history-toolbar {
+  display: flex; min-height: 2.5rem; align-items: center; justify-content: space-between;
+  gap: .75rem; margin-bottom: .75rem; color: var(--t-muted); font-size: .82rem;
+}
+.history-list {
+  display: grid; gap: .5rem; margin: 0 0 1rem; padding: .7rem;
+  border: 1px solid var(--t-border); border-radius: 1rem; background: var(--t-panel);
+  list-style: none;
+}
+.history-list li:not(.history-empty) { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .35rem; }
+.history-list button {
+  display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 1rem;
+  border: 0; border-radius: .7rem; background: transparent; color: var(--t-foreground);
+  padding: .7rem; text-align: left; cursor: pointer;
+}
+.history-list li > button:last-child:not(:first-child) {
+  width: auto; color: var(--t-diff-removed-text); font-size: .75rem; font-weight: 650;
+}
+.history-list button:hover { background: var(--t-surface-recessed); }
+.history-list button strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-list button span, .history-empty { color: var(--t-muted); font-size: .78rem; }
+.history-empty { padding: .7rem; }
+.history-note { display: grid; min-width: 0; gap: .25rem; padding: .7rem; }
+.history-note span { overflow: hidden; color: var(--t-muted); font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
 
 .voice-studio,
 .writing-studio,

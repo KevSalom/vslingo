@@ -30,6 +30,11 @@ fallback and needs no backend secret.
 - `POST /api/session/logout`: revoke the session and its outstanding WS tickets.
 - `POST /api/session/ws-ticket`: issue an opaque, short-lived, one-use voice ticket.
 - `GET|PUT /api/preferences`: versioned preferences owned by the verified user.
+- `GET|POST|DELETE /api/history/writings`: automatic writing history.
+- `GET|POST|DELETE /api/history/videos`: explicitly saved transcripts.
+- `GET|POST|PUT|DELETE /api/history/notes`: versioned notes with conflict preservation.
+- `GET|POST|DELETE /api/history/conversations`: voice conversations and completed turns.
+- `PATCH /api/history/turns/{turn_id}/feedback`: attach late feedback without recreating deleted content.
 - `POST /api/writing/correct`: up to 1,000 characters; structured correction and Spanish explanations.
 - `POST /api/video/transcript`: normalized YouTube URL; ordered English transcript segments.
 - `POST /api/speech`: bounded Edge TTS for approved text and voice IDs.
@@ -40,6 +45,9 @@ Writing, transcript, speech and voice operations reject anonymous requests. Prod
 must use `AUTH_MODE=clerk`; the backend verifies Clerk session tokens and never accepts
 a client-supplied user identifier. Normal tests use deterministic fakes and never
 contact external providers.
+
+Study history stores text and structured feedback only. Voice reconnection can restore
+at most the last six complete user/assistant pairs; WAV and MP3 payloads are never stored.
 
 ## Quality checks
 
