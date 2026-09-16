@@ -57,7 +57,7 @@ const MODULES: readonly WorkspaceModule[] = [
     id: 'account',
     label: 'Cuenta',
     eyebrow: 'Tu cuenta',
-    description: 'Consulta el saldo de tu prueba y tus preferencias.',
+    description: 'Consulta tu plan, saldo y próxima renovación.',
     slug: 'cuenta',
   },
 ];

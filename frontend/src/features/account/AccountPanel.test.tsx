@@ -1,10 +1,13 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AccountPanel } from './AccountPanel';
 
-const { loadAccountQuotaMock } = vi.hoisted(() => ({
+const { cancelBillingSubscriptionMock, loadAccountQuotaMock, loadBillingAccountMock } = vi.hoisted(() => ({
+  cancelBillingSubscriptionMock: vi.fn(),
   loadAccountQuotaMock: vi.fn(),
+  loadBillingAccountMock: vi.fn(),
 }));
 
 vi.mock('../../shared/usage/usageClient', () => ({
@@ -14,6 +17,12 @@ vi.mock('../../shared/usage/usageClient', () => ({
       super(message);
     }
   },
+}));
+
+vi.mock('./billingClient', () => ({
+  cancelBillingSubscription: cancelBillingSubscriptionMock,
+  loadBillingAccount: loadBillingAccountMock,
+  startBillingCheckout: vi.fn(),
 }));
 
 const QUOTA = {
@@ -29,7 +38,19 @@ const QUOTA = {
     remaining: { voice_seconds: 540, voice_turns: 28, writings: 9, videos: 3 },
 };
 
+const TRIAL_BILLING = {
+  mode: 'fake',
+  offer: { plan_code: 'monthly_v1', price_minor: 299, currency: 'USD' },
+  subscription: null,
+  pending_checkout: null,
+};
+
 describe('AccountPanel', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    loadBillingAccountMock.mockResolvedValue(TRIAL_BILLING);
+  });
+
   it('shows both voice constraints and the remaining account balances', async () => {
     loadAccountQuotaMock.mockResolvedValueOnce(QUOTA);
     render(<AccountPanel />);
@@ -51,5 +72,34 @@ describe('AccountPanel', () => {
 
     expect(await screen.findByText(/tu historial sigue disponible/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Activar plan' })).toBeInTheDocument();
+  });
+
+  it('requires confirmation and explains that cancellation preserves paid access', async () => {
+    const user = userEvent.setup();
+    const activeBilling = {
+      ...TRIAL_BILLING,
+      subscription: {
+        id: 'subscription-a',
+        status: 'active',
+        auto_renew: true,
+        access_ends_at: '2026-10-15T00:00:00.000Z',
+        can_cancel: true,
+      },
+    };
+    loadAccountQuotaMock.mockResolvedValueOnce({ ...QUOTA, source: 'monthly' });
+    loadBillingAccountMock.mockResolvedValueOnce(activeBilling);
+    cancelBillingSubscriptionMock.mockResolvedValueOnce({
+      ...activeBilling,
+      subscription: { ...activeBilling.subscription, status: 'cancelled', auto_renew: false, can_cancel: false },
+    });
+    render(<AccountPanel />);
+
+    await user.click(await screen.findByRole('button', { name: 'Cancelar renovación' }));
+    expect(screen.getByText(/seguirá activo hasta su fecha final/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Confirmar cancelación' }));
+
+    expect(await screen.findByText(/conservas el acceso/i)).toBeInTheDocument();
+    expect(cancelBillingSubscriptionMock).toHaveBeenCalledOnce();
   });
 });

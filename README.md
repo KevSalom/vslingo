@@ -110,4 +110,5 @@ uv run vslingo-smoke edge-tts
 
 Las guías están en [deploy/README.md](deploy/README.md). El entorno actual sigue
 usando fakes por defecto y no autoriza compras ni llamadas live. El lanzamiento
-comercial requiere completar los gates F5–F7 del plan.
+comercial requiere completar los gates F6–F7 y validar PayPal Sandbox/Live con
+la configuración autorizada del fundador.

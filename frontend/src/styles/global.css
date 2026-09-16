@@ -1901,10 +1901,37 @@ h1,
 
 .account-panel { display: grid; gap: 1rem; }
 .account-state,
+.account-notice,
+.account-action-message,
+.billing-card,
 .account-plan-card,
 .quota-card,
 .account-help { border: 1px solid var(--t-border); border-radius: 1rem; background: var(--t-panel); padding: 1rem; }
 .account-state { display: flex; align-items: center; justify-content: space-between; gap: 1rem; color: var(--t-muted-strong); }
+.account-state p { margin: 0; line-height: 1.5; }
+.account-notice { display: grid; gap: .25rem; border-color: var(--t-border-accent); background: var(--t-primary-subtle); }
+.account-notice span { color: var(--t-muted-strong); font-size: .86rem; line-height: 1.5; }
+.account-action-message { margin: 0; color: var(--t-muted-strong); line-height: 1.5; }
+.billing-card { display: grid; gap: 1rem; overflow: hidden; padding: 0; }
+.billing-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1.1rem; }
+.billing-summary h2 { margin: .25rem 0 0; font-size: 1.25rem; letter-spacing: -.025em; }
+.billing-summary p,
+.billing-status-row p,
+.billing-confirm p { margin: .4rem 0 0; color: var(--t-muted-strong); font-size: .86rem; line-height: 1.5; }
+.billing-price { display: flex; flex-shrink: 0; align-items: baseline; gap: .2rem; color: var(--t-primary-light); font-size: 1.7rem; }
+.billing-price span { color: var(--t-muted); font-size: .78rem; font-weight: 600; }
+.billing-status-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-top: 1px solid var(--t-border); background: var(--t-surface-recessed); padding: 1rem 1.1rem; }
+.billing-status { display: inline-flex; min-height: 1.6rem; align-items: center; border-radius: 999px; background: var(--t-primary-subtle); color: var(--t-primary-light); font-size: .75rem; font-weight: 750; padding: .2rem .65rem; }
+.billing-status-active { background: var(--t-diff-added-bg); color: var(--t-diff-added-text); }
+.billing-status-suspended,
+.billing-status-expired { background: var(--t-warning-subtle-bg); color: var(--t-warning-text); }
+.billing-status-cancelled { background: var(--t-surface-raised); color: var(--t-muted-strong); }
+.billing-card .writing-btn { display: inline-flex; align-items: center; justify-content: center; border-color: var(--t-border-strong); background: var(--t-panel); color: var(--t-foreground); text-decoration: none; }
+.billing-card .writing-btn-primary { border-color: var(--t-primary); background: var(--t-primary); color: var(--t-primary-fg); }
+.billing-confirm { display: grid; gap: .85rem; border-top: 1px solid var(--t-border); background: var(--t-warning-subtle-bg); padding: 1rem 1.1rem; }
+.billing-confirm p { margin: 0; color: var(--t-warning-text); }
+.billing-confirm > div { display: flex; flex-wrap: wrap; gap: .6rem; }
+.billing-card .writing-btn-danger { border-color: var(--t-diff-removed); color: var(--t-diff-removed-text); }
 .account-plan-card { display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: var(--t-primary-subtle); }
 .account-plan-card h2 { margin: .2rem 0 0; font-size: 1.2rem; }
 .account-plan-card > span,
@@ -2098,6 +2125,10 @@ h1,
   .module-nav-button { min-width: 0; min-height: 2.85rem; gap: .35rem; padding-inline: .45rem; }
   .module-nav-button svg { width: 1.05rem; height: 1.05rem; }
   .account-plan-card { flex-wrap: wrap; }
+  .billing-summary,
+  .billing-status-row { align-items: stretch; flex-direction: column; }
+  .billing-price { font-size: 1.5rem; }
+  .billing-status-row .writing-btn { width: 100%; }
   .quota-grid { grid-template-columns: 1fr; }
   .practice-intro,
   .practice-content { width: min(100% - 1.25rem, 58rem); }

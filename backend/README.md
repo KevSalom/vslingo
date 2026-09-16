@@ -28,6 +28,10 @@ fallback and needs no backend secret.
 
 - `GET /api/plan`: public typed offer, price, usage and content limits.
 - `GET /api/account/quota`: authenticated period snapshot and available balance.
+- `GET /api/account/billing`: authenticated offer, checkout and subscription state.
+- `POST /api/billing/checkout`: recover or create one idempotent PayPal subscription attempt.
+- `POST /api/billing/cancel`: stop future renewals while preserving the paid period.
+- `POST /api/billing/webhooks/paypal`: signature-verified PayPal event ingestion.
 - `GET /api/session`: current verified session.
 - `POST /api/session/logout`: revoke the session and its outstanding WS tickets.
 - `POST /api/session/ws-ticket`: issue an opaque, short-lived, one-use voice ticket.
@@ -57,6 +61,19 @@ quarantined for reconciliation, and provider cost is stored in integer micro-dol
 The usage ledger contains only financial/consumption metadata; replay payloads remain
 in a separate result table. A trial grant is unique per verified account and never
 reactivates after its access period ends.
+
+Billing uses `BILLING_MODE=fake` only in development/tests. Sandbox and live modes
+require their own PayPal client, webhook, plan and merchant IDs. Browser return URLs
+never activate access: only a verified `PAYMENT.SALE.COMPLETED` event or provider
+reconciliation creates a monthly period. Webhook IDs and transaction IDs are unique,
+and checkout retries reuse a stable `PayPal-Request-Id`. Run the one-shot reconciler
+from a scheduler or operator shell with:
+
+```powershell
+uv run vslingo-billing-reconcile
+```
+
+The normal test suite uses the deterministic fake gateway and never performs a charge.
 
 ## Quality checks
 

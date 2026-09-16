@@ -9,12 +9,12 @@ Este es el único documento para el estado mutable de implementación. Debe actu
 ## Estado actual
 
 - **Roadmap actual:** MVP comercial Inglés al Grano `F0`–`F8`; la Alpha `T01`–`T10` queda como baseline histórico completado.
-- **Fase actual:** `F4 — Cuotas y costes` completada el 2026-09-16.
-- **Próximo incremento:** `F5 — PayPal y Cuenta`.
+- **Fase actual:** `F5 — PayPal y Cuenta` completada el 2026-09-16.
+- **Próximo incremento:** `F6 — Medición y operación`.
 - **Rama de trabajo:** `codex/ingles-al-grano-mvp`, creada desde `main` en `aa26cab8ac10345a2c596febe78a0ad10c7df5c1` (`feat: add global stylesheet with Tailwind integration and multi-theme design tokens`).
-- **Completado:** F0 adoptó el plan y aisló la rama; F1 entregó producto/UI/voz simple; F2 añadió identidad y SQLite; F3 incorporó historial sincronizado; F4 añadió oferta tipada, prueba única, cuotas transaccionales, costes y saldo de Cuenta.
-- **Pendiente:** F5–F7; F8 permanece posterior al lanzamiento y sujeto al cierre de condiciones comerciales.
-- **Bloqueos:** ninguno para iniciar F5 con adaptadores falsos. La validación PayPal Sandbox/Live, un tenant Clerk real, OpenRouter live, Meta y dispositivos físicos siguen siendo gates externos del fundador en sus fases correspondientes.
+- **Completado:** F0 adoptó el plan y aisló la rama; F1 entregó producto/UI/voz simple; F2 añadió identidad y SQLite; F3 incorporó historial sincronizado; F4 añadió oferta tipada, prueba única, cuotas transaccionales, costes y saldo; F5 incorporó suscripciones PayPal, webhook/conciliación, periodos pagados, cancelación y devoluciones.
+- **Pendiente:** F6–F7; F8 permanece posterior al lanzamiento y sujeto al cierre de condiciones comerciales.
+- **Bloqueos:** ninguno para iniciar F6 con Meta desactivado y adaptadores falsos. La validación PayPal Sandbox/Live con cuenta real, un tenant Clerk real, OpenRouter live, Meta y dispositivos físicos siguen siendo gates externos del fundador en sus fases correspondientes.
 
 ## Evidencia de F0
 
@@ -78,6 +78,19 @@ Este es el único documento para el estado mutable de implementación. Debe actu
 - Backend completo: Ruff y mypy estricto en verde; **171 tests pytest** pasaron. Se conserva una advertencia de deprecación Starlette/TestClient.
 - Frontend completo: Astro check con **0 errores y 0 warnings** (5 hints heredados de `ScriptProcessorNode`), **135 tests Vitest** pasaron y el build estático generó siete rutas. E2E: **9/9 Chrome** y **9/9 Edge**, incluidos Cuenta, teclado, modo oscuro y zoom/reflow.
 - No se hicieron llamadas live ni se midió coste real de OpenRouter/Edge/YouTube; tampoco se certificaron micrófono o audio en dispositivos físicos. Esos gates permanecen explícitos para F7 y la validación económica previa a publicidad.
+
+## Evidencia de F5
+
+- La migración `0004_billing.sql` añade intentos, suscripciones, pagos, eventos PayPal y ajustes auditables. Índices parciales impiden más de un checkout abierto o suscripción renovable por usuario; `event_id` y `transaction_id` únicos hacen idempotentes webhooks y cobros.
+- El adaptador falso es el predeterminado sólo en desarrollo/pruebas. `paypal_sandbox` y `paypal_live` exigen cliente, secreto, webhook, plan y merchant completos y usan hosts PayPal separados. La suite verifica con HTTP simulado el host Sandbox y el `PayPal-Request-Id` estable, sin credenciales ni cobros reales.
+- Checkout autenticado recupera el intento pendiente y nunca concede acceso por retorno del navegador. Sólo `PAYMENT.SALE.COMPLETED` con firma, entorno, merchant, importe y moneda verificados crea un periodo mensual; eventos duplicados y pagos atrasados convergen sin reemplazar un periodo posterior.
+- `POST /api/billing/webhooks/paypal` verifica la firma con el gateway configurado y guarda únicamente el evento normalizado mínimo. Eventos desconocidos se ignoran; los que llegan antes que su suscripción/pago quedan `uncertain` para reintento, y los inválidos quedan rechazados con código auditable.
+- El conciliador `uv run vslingo-billing-reconcile` recupera intentos con la misma clave idempotente, consulta estado/transacciones y reprocesa eventos inciertos. La suite demuestra que concede el periodo aunque el comprador nunca vuelva al navegador.
+- Cancelar renovación sólo se confirma en UI tras éxito del proveedor y conserva el periodo pagado. Impago/suspensión no concede cuota. Reembolso o reversión total termina sólo el periodo financiado si todavía está activo; una devolución parcial conserva acceso y crea revisión manual auditable.
+- Cuenta muestra oferta de US$2,99, estado, fecha de acceso, saldo y checkout pendiente. El retorno de PayPal muestra «confirmando» sin activar nada; la cancelación usa confirmación en dos pasos y explica antes de actuar que el acceso pagado se conserva.
+- Backend completo: lock válido, Ruff y mypy estricto en verde; **180 tests pytest** pasaron. Se conserva una advertencia de deprecación Starlette/TestClient.
+- Frontend completo: Astro check con **0 errores y 0 warnings** (5 hints heredados de `ScriptProcessorNode`), **136 tests Vitest** pasaron y el build generó siete rutas. E2E de Chrome completó **9/9**; Edge completó los ocho recorridos no afectados y, tras corregir una aserción de foco dependiente del navegador, Cuenta pasó **2/2** en la repetición dirigida.
+- Revisión renderizada: Cuenta mantiene la paleta English Corrector, jerarquía clara y CTA convencional; el caso móvil a 320 px con texto al 200% y el modo oscuro permanecen sin desbordamiento. No se ejecutaron PayPal Sandbox/Live ni compras reales: requieren configuración y autorización del fundador y continúan como gate externo de F7.
 
 ## Inventario y riesgos considerados en F1 (histórico)
 

@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from app import __version__
+from app.api.billing import build_billing_router
 from app.api.history import build_history_router
 from app.api.session import authentication_error_response, build_session_router
 from app.api.speech import (
@@ -25,12 +26,16 @@ from app.api.writing import build_writing_router
 from app.api.writing import (
     handle_request_validation_error as handle_writing_validation_error,
 )
+from app.billing.fake import FakeBillingGateway
+from app.billing.gateway import BillingGateway
+from app.billing.paypal import build_billing_gateway
 from app.core.auth import AuthenticationError, Authenticator, build_authenticator
 from app.core.config import Settings
 from app.core.product import ProductConfig
 from app.core.protection import ConnectionLimiter, ProviderGate, ProviderGates, RequestLimiter
 from app.domain.ports import LanguageModelPort, SpeechToTextPort, VoiceFeedbackPort
 from app.domain.speech import SpeechProvider
+from app.persistence.billing import BillingRepository
 from app.persistence.database import Database
 from app.persistence.identity import IdentityRepository
 from app.persistence.study import StudyRepository
@@ -43,6 +48,7 @@ from app.providers.openrouter_stt import OpenRouterSpeechToTextProvider
 from app.providers.openrouter_writing import OpenRouterCorrectionProvider
 from app.providers.readiness import get_provider_readiness
 from app.providers.youtube_transcript import YouTubeTranscriptProvider
+from app.services.billing import BillingService
 from app.services.correction import CorrectionService
 from app.services.speech import SpeechService
 from app.services.video import VideoService
@@ -77,6 +83,7 @@ def create_app(
     feedback_provider: VoiceFeedbackPort | None = None,
     database: Database | None = None,
     authenticator: Authenticator | None = None,
+    billing_gateway: BillingGateway | None = None,
 ) -> FastAPI:
     """Build an isolated FastAPI application with explicit dependencies."""
 
@@ -148,6 +155,18 @@ def create_app(
     study_repository = StudyRepository(runtime_database)
     product_config = ProductConfig.from_settings(runtime_settings)
     usage_repository = UsageRepository(runtime_database, product_config)
+    billing_repository = BillingRepository(runtime_database, product_config)
+    runtime_billing_gateway = billing_gateway or (
+        FakeBillingGateway()
+        if runtime_settings.billing_mode == "fake"
+        else build_billing_gateway(runtime_settings)
+    )
+    billing_service = BillingService(
+        billing_repository,
+        runtime_billing_gateway,
+        runtime_settings,
+        product_config,
+    )
     ws_ticket_repository = WebSocketTicketRepository(
         runtime_database,
         ttl_seconds=runtime_settings.ws_ticket_ttl_seconds,
@@ -173,6 +192,9 @@ def create_app(
     application.state.study_repository = study_repository
     application.state.product_config = product_config
     application.state.usage_repository = usage_repository
+    application.state.billing_repository = billing_repository
+    application.state.billing_gateway = runtime_billing_gateway
+    application.state.billing_service = billing_service
     application.state.ws_ticket_repository = ws_ticket_repository
     application.state.authenticator = runtime_authenticator
     application.add_middleware(
@@ -201,6 +223,9 @@ def create_app(
             ("GET", "/api/preferences"),
             ("PUT", "/api/preferences"),
             ("GET", "/api/account/quota"),
+            ("GET", "/api/account/billing"),
+            ("POST", "/api/billing/checkout"),
+            ("POST", "/api/billing/cancel"),
             ("POST", "/api/writing/correct"),
             ("POST", "/api/video/transcript"),
             ("POST", "/api/speech"),
@@ -281,6 +306,7 @@ def create_app(
         handle_request_validation_error,
     )
     application.include_router(build_usage_router(product_config, usage_repository))
+    application.include_router(build_billing_router(billing_service))
     application.include_router(build_writing_router(runtime_correction_service, usage_repository))
     application.include_router(build_video_router(runtime_video_service, usage_repository))
     application.include_router(build_speech_router(runtime_speech_service))

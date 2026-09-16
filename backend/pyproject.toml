@@ -20,6 +20,7 @@ dependencies = [
 
 [project.scripts]
 vslingo-api = "app.main:run"
+vslingo-billing-reconcile = "app.billing.reconcile:main"
 vslingo-smoke = "app.providers.smoke:main"
 
 [dependency-groups]

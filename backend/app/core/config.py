@@ -45,6 +45,19 @@ class Settings(BaseSettings):
     monthly_writings: int = Field(default=100, ge=1)
     monthly_videos: int = Field(default=20, ge=1)
 
+    billing_mode: Literal["fake", "paypal_sandbox", "paypal_live"] = "fake"
+    paypal_client_id: SecretStr | None = None
+    paypal_client_secret: SecretStr | None = None
+    paypal_webhook_id: str | None = Field(default=None, min_length=1, max_length=128)
+    paypal_plan_id: str | None = Field(default=None, min_length=1, max_length=128)
+    paypal_merchant_id: str | None = Field(default=None, min_length=1, max_length=128)
+    billing_return_url: AnyHttpUrl = Field(
+        default=AnyHttpUrl("http://localhost:4321/app/cuenta?billing=return")
+    )
+    billing_cancel_url: AnyHttpUrl = Field(
+        default=AnyHttpUrl("http://localhost:4321/app/cuenta?billing=cancelled")
+    )
+
     openrouter_api_key: SecretStr | None = None
     openrouter_stt_model: str = "openai/whisper-large-v3-turbo"
     openrouter_llm_model: str = "google/gemini-3.1-flash-lite"
@@ -107,6 +120,18 @@ class Settings(BaseSettings):
             )
         if self.auth_mode == "clerk" and not self.clerk_configured:
             raise ValueError("Clerk mode requires CLERK_SECRET_KEY and CLERK_JWT_KEY.")
+        if self.billing_mode != "fake" and not self.paypal_configured:
+            raise ValueError(
+                "PayPal billing requires client, webhook, plan and merchant configuration."
+            )
+        if self.environment.lower() not in {"development", "test"} and self.billing_mode == "fake":
+            raise ValueError("BILLING_MODE=fake is allowed only in development and test.")
+        frontend_target = (origin.scheme, origin.host, origin.port)
+        if any(
+            (url.scheme, url.host, url.port) != frontend_target
+            for url in (self.billing_return_url, self.billing_cancel_url)
+        ):
+            raise ValueError("Billing return and cancel URLs must use FRONTEND_ORIGIN.")
         return self
 
     @property
@@ -141,6 +166,18 @@ class Settings(BaseSettings):
 
         return self._secret_is_set(self.clerk_secret_key) and self._secret_is_set(
             self.clerk_jwt_key
+        )
+
+    @property
+    def paypal_configured(self) -> bool:
+        """Return whether the selected PayPal environment has its complete binding."""
+
+        return (
+            self._secret_is_set(self.paypal_client_id)
+            and self._secret_is_set(self.paypal_client_secret)
+            and bool(self.paypal_webhook_id and self.paypal_webhook_id.strip())
+            and bool(self.paypal_plan_id and self.paypal_plan_id.strip())
+            and bool(self.paypal_merchant_id and self.paypal_merchant_id.strip())
         )
 
     @staticmethod

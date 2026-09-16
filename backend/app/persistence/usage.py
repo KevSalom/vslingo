@@ -364,6 +364,12 @@ class UsageRepository:
             )
 
     def _ensure_period(self, connection: Connection, user_id: str) -> Row:
+        connection.execute(
+            """UPDATE usage_periods SET status = 'ended'
+            WHERE user_id = ? AND status = 'active' AND ends_at IS NOT NULL
+            AND ends_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')""",
+            (user_id,),
+        )
         period = connection.execute(
             "SELECT * FROM usage_periods WHERE user_id = ? AND status = 'active'",
             (user_id,),
