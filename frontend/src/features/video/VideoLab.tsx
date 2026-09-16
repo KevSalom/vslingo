@@ -27,6 +27,7 @@ import {
   type SavedNoteEntry,
 } from '../../shared/history/historyClient';
 import { findActiveSegmentIndex, formatTimestamp } from './sync';
+import { markPracticeCompleted } from '../../shared/pwa/installPrompt';
 import type {
   TranscriptResponse,
   VideoLibraryItem,
@@ -141,6 +142,7 @@ export function VideoLab({
         if (generation === requestGenerationRef.current) {
           transcriptOperationsRef.current.delete(nextUrl);
           openTranscript(transcript, nextUrl, title);
+          markPracticeCompleted();
         }
       } catch (cause) {
         if (

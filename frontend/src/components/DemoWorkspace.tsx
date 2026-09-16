@@ -13,6 +13,7 @@ import {
 import { saveSpeechVoice } from '../shared/speech/storage';
 import { EDGE_VOICES } from '../shared/speech/voiceCatalog';
 import { MarketingConsent, ROUTE_CHANGE_EVENT } from '../shared/marketing/MarketingConsent';
+import { PwaInstallPrompt } from '../shared/pwa/PwaInstallPrompt';
 import { ThemeProvider, useTheme } from '../shared/theme/ThemeProvider';
 import { loadPublicPlan, type PublicPlan } from '../shared/usage/usageClient';
 
@@ -115,6 +116,7 @@ function AccountScopedWorkspace() {
     <>
       <Workspace key={sessionKey} />
       <MarketingConsent authenticated />
+      <PwaInstallPrompt />
     </>
   );
 }

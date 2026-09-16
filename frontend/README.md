@@ -58,6 +58,17 @@ alias for links from the historical Alpha. Voice uses push-to-talk in a secure
 context (HTTPS or localhost), Edge TTS, and browser speech synthesis as the
 text-preserving fallback.
 
+## PWA y conexión
+
+La app publica manifest, icono y una pantalla offline mínima. El service worker no
+intercepta `/api/`, audio, video ni escrituras, y no usa sincronización en segundo
+plano: una práctica o compra fallida nunca se reenvía sin que el usuario lo sepa. Al
+recuperar conexión se ofrece recargar explícitamente para revalidar sesión y saldo.
+
+El aviso de instalación del navegador sólo se muestra después de completar una
+práctica y puede descartarse. Instalar no convierte los ejercicios en offline; voz,
+correcciones, transcripciones, cuenta y pagos continúan necesitando internet.
+
 ## URL de sitio para producción
 
 Antes de un build de despliegue, definir `SITE_URL` con la URL pública HTTPS final (por ejemplo, en la configuración de Render). Astro usa esta variable para construir los enlaces canonical y Open Graph. En desarrollo local se usa `http://localhost:4321` solo como origen local.

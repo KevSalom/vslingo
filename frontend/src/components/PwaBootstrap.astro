@@ -1,0 +1,37 @@
+<aside class="network-notice" hidden id="network-notice" role="status">
+  <span id="network-notice-text"></span>
+  <button hidden id="network-reload" type="button">Actualizar sesión y saldo</button>
+</aside>
+
+<script is:inline>
+  (function () {
+    var notice = document.getElementById('network-notice');
+    var text = document.getElementById('network-notice-text');
+    var reload = document.getElementById('network-reload');
+    var wasOffline = !navigator.onLine;
+    if (!notice || !text || !reload) return;
+    function render() {
+      if (!navigator.onLine) {
+        wasOffline = true;
+        notice.hidden = false;
+        reload.hidden = true;
+        text.textContent = 'Sin conexión. Voz, correcciones y pagos necesitan internet.';
+      } else if (wasOffline) {
+        notice.hidden = false;
+        reload.hidden = false;
+        text.textContent = 'La conexión volvió. Actualiza para revalidar tu sesión y saldo.';
+      } else {
+        notice.hidden = true;
+      }
+    }
+    window.addEventListener('online', render);
+    window.addEventListener('offline', render);
+    reload.addEventListener('click', function () { location.reload(); });
+    render();
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+      });
+    }
+  })();
+</script>

@@ -1,6 +1,8 @@
 ---
 import SiteFonts from '../components/SiteFonts.astro';
 import MarketingConsentStatic from '../components/MarketingConsentStatic.astro';
+import PwaBootstrap from '../components/PwaBootstrap.astro';
+import PwaHead from '../components/PwaHead.astro';
 import '../styles/global.css';
 
 const title = 'Inglés al Grano | Practica el inglés que ya sabes';
@@ -43,6 +45,7 @@ const waveform = [22, 38, 58, 34, 78, 46, 70, 32, 62, 89, 49, 30, 66, 44, 81, 51
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={image} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <PwaHead />
     <script is:inline>
       (function () {
         var VALID = ['light', 'dark'];
@@ -58,6 +61,7 @@ const waveform = [22, 38, 58, 34, 78, 46, 70, 32, 62, 89, 49, 30, 66, 44, 81, 51
   </head>
   <body>
     <MarketingConsentStatic />
+    <PwaBootstrap />
     <div class="site-shell">
       <header class="site-container site-header">
         <a class="brand" href="#inicio" aria-label="Inglés al Grano, inicio">

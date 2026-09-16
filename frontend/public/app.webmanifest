@@ -1,0 +1,37 @@
+{
+  "id": "/app",
+  "name": "Inglés al Grano",
+  "short_name": "Inglés al Grano",
+  "description": "Practica inglés hablando, escribiendo y con videos.",
+  "lang": "es",
+  "start_url": "/app/hablar?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fafaf9",
+  "theme_color": "#ca6a43",
+  "icons": [
+    {
+      "src": "/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "Hablar", "url": "/app/hablar", "icons": [{ "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Escribir", "url": "/app/escribir", "icons": [{ "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Videos", "url": "/app/videos", "icons": [{ "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png" }] }
+  ]
+}

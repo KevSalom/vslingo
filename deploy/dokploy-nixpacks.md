@@ -77,7 +77,8 @@ MAX_WS_CONNECTIONS_PER_IP=2
 
 Monta un volumen persistente exactamente en `/data` antes del primer despliegue y
 mantén una sola réplica/worker. No copies sólo el archivo `.db` mientras WAL está
-activo; el runbook de backup/restauración completo se cierra en F7.
+activo; usa el procedimiento consistente del
+[`runbook de lanzamiento y recuperación`](launch-runbook.md).
 
 ---
 

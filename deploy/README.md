@@ -9,6 +9,7 @@ Este directorio contiene las guías, plantillas y runbooks para el despliegue de
 1. **[`dokploy-nixpacks.md`](dokploy-nixpacks.md):** Guía paso a paso para desplegar el backend FastAPI en un VPS con **Dokploy y Nixpacks** (PaaS self-hosted con SSL Traefik automático).
 2. **[`Caddyfile.example`](Caddyfile.example):** Configuración de Caddy reverse proxy si prefieres desplegar directamente sobre Debian/Ubuntu en VPS sin Dokploy.
 3. **[`vslingo-api.service.example`](vslingo-api.service.example):** Servicio `systemd` para ejecutar Uvicorn como demonio Linux en VPS tradicional.
+4. **[`launch-runbook.md`](launch-runbook.md):** Promoción de entornos, backup/restauración consistente, operación recurrente y gates manuales de lanzamiento.
 
 ---
 
@@ -29,3 +30,6 @@ Este directorio contiene las guías, plantillas y runbooks para el despliegue de
 * **VPS Linux Tradicional (Caddy + Systemd):** Consulta [`Caddyfile.example`](Caddyfile.example) y [`vslingo-api.service.example`](vslingo-api.service.example).
 * Producción requiere `AUTH_MODE=clerk`, un solo worker y `DATABASE_PATH` dentro de
   un volumen persistente. La aplicación activa foreign keys, WAL y busy timeout.
+* Antes de migrar o promover a producción, sigue el
+  [`runbook de lanzamiento y recuperación`](launch-runbook.md); no copies el archivo
+  SQLite directamente mientras WAL está activo.

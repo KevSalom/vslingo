@@ -8,6 +8,7 @@ import {
 
 import { SpeechVoiceControl } from '../../shared/speech/SpeechVoiceControl';
 import { useSpeechPlayer } from '../../shared/speech/useSpeechPlayer';
+import { markPracticeCompleted } from '../../shared/pwa/installPrompt';
 import {
   deleteWritingHistory,
   listWritingHistory,
@@ -96,6 +97,7 @@ export function WritingStudio({
         : await correctText(draft);
       pendingOperationId.current = null;
       setResult(corrected);
+      markPracticeCompleted();
       setSaveStatus('Guardando en tu historial…');
       try {
         const persist = saveResult ?? (

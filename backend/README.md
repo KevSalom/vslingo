@@ -91,6 +91,18 @@ uv run vslingo-marketing-dispatch
 uv run vslingo-operator-report
 ```
 
+SQLite puede mantener cambios en el archivo WAL, por lo que una copia directa del
+`.db` no es un backup consistente. Crea un destino nuevo mediante la API de backup y
+ensaya cada restauración en otro archivo, sin sustituir producción:
+
+```powershell
+uv run vslingo-db backup --output C:\backups\ingles-al-grano.db
+uv run vslingo-db restore-verify --backup C:\backups\ingles-al-grano.db --target C:\restore-check\ingles-al-grano.db
+```
+
+Ambos comandos validan integridad, claves foráneas, migraciones y tablas comerciales.
+El procedimiento operativo completo está en [`deploy/launch-runbook.md`](../deploy/launch-runbook.md).
+
 ## Quality checks
 
 ```powershell

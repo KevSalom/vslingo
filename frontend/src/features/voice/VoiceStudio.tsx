@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SpeechVoiceControl } from '../../shared/speech/SpeechVoiceControl';
 import { updateAccountPreferences } from '../../shared/auth/preferencesClient';
+import { markPracticeCompleted } from '../../shared/pwa/installPrompt';
 import {
   createVoiceConversation,
   deleteVoiceConversation,
@@ -467,6 +468,7 @@ export function VoiceStudio() {
             });
             setUserTranscript('');
             userTranscriptRef.current = '';
+            markPracticeCompleted();
             if (conversationRef.current) {
               const persisted = conversationRef.current.then((conversation) => {
                 if (!conversation) throw new Error('History unavailable');

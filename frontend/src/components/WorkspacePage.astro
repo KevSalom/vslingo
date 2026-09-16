@@ -1,5 +1,7 @@
 ---
 import SiteFonts from './SiteFonts.astro';
+import PwaBootstrap from './PwaBootstrap.astro';
+import PwaHead from './PwaHead.astro';
 import { DemoWorkspace } from './DemoWorkspace';
 import '../styles/global.css';
 
@@ -20,6 +22,7 @@ const { title = 'Practicar' } = Astro.props;
     <meta name="robots" content="noindex" />
     <title>{title} | Inglés al Grano</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <PwaHead />
     <SiteFonts />
     <script is:inline>
       (function () {
@@ -33,5 +36,6 @@ const { title = 'Practicar' } = Astro.props;
   </head>
   <body class="demo-page">
     <DemoWorkspace client:load />
+    <PwaBootstrap />
   </body>
 </html>

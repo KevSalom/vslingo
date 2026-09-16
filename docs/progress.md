@@ -9,11 +9,11 @@ Este es el único documento para el estado mutable de implementación. Debe actu
 ## Estado actual
 
 - **Roadmap actual:** MVP comercial Inglés al Grano `F0`–`F8`; la Alpha `T01`–`T10` queda como baseline histórico completado.
-- **Fase actual:** `F6 — Medición y operación` completada el 2026-09-16.
-- **Próximo incremento:** `F7 — PWA y lanzamiento`.
+- **Fase actual:** `F7 — PWA y lanzamiento` en progreso desde el 2026-09-16.
+- **Próximo incremento:** cerrar los gates externos de F7 antes de declarar la beta paga lista.
 - **Rama de trabajo:** `codex/ingles-al-grano-mvp`, creada desde `main` en `aa26cab8ac10345a2c596febe78a0ad10c7df5c1` (`feat: add global stylesheet with Tailwind integration and multi-theme design tokens`).
-- **Completado:** F0 adoptó el plan y aisló la rama; F1 entregó producto/UI/voz simple; F2 añadió identidad y SQLite; F3 incorporó historial sincronizado; F4 añadió oferta tipada, prueba única, cuotas transaccionales, costes y saldo; F5 incorporó suscripciones PayPal y periodos pagados; F6 añadió consentimiento, outbox Meta y operación agregada.
-- **Pendiente:** F7; F8 permanece posterior al lanzamiento y sujeto al cierre de condiciones comerciales.
+- **Completado:** F0 adoptó el plan y aisló la rama; F1 entregó producto/UI/voz simple; F2 añadió identidad y SQLite; F3 incorporó historial sincronizado; F4 añadió oferta tipada, prueba única, cuotas transaccionales, costes y saldo; F5 incorporó suscripciones PayPal y periodos pagados; F6 añadió consentimiento, outbox Meta y operación agregada. F7 ya tiene PWA segura, backup/restauración verificable y runbook, pero no ha cerrado sus gates reales.
+- **Pendiente:** F7 requiere validación física, identidad y pagos reales autorizados; F8 permanece posterior al lanzamiento y sujeto al cierre de condiciones comerciales.
 - **Bloqueos:** F7 puede avanzar en PWA, backups y runbooks, pero sus gates finales requieren configuración PayPal Sandbox/Live y Clerk real, OpenRouter autorizado, Meta Test Events si habrá publicidad, y pruebas en dispositivos físicos del fundador.
 
 ## Evidencia de F0
@@ -104,6 +104,15 @@ Este es el único documento para el estado mutable de implementación. Debe actu
 - Backend completo: lock válido, Ruff y mypy estricto en verde; **188 tests pytest** pasaron. Se conserva una advertencia de deprecación Starlette/TestClient.
 - Frontend completo: Astro check con **0 errores y 0 warnings** (5 hints heredados de `ScriptProcessorNode`), **139 tests Vitest** pasaron y el build generó siete rutas. Antes del nuevo caso de consentimiento, Chrome y Edge completaron **9/9**; después, la suite dirigida de Landing completó **3/3** en cada motor, incluido rechazo sin tracking.
 - No se configuró Meta, no se enviaron Test Events ni eventos live y no se añadió Pixel. Meta continúa desactivado hasta que el fundador suministre configuración protegida y autorice el ensayo de F7; CAPI nunca determina ingresos, que siguen viniendo del ledger PayPal.
+
+## Evidencia parcial de F7
+
+- La app expone manifest y shell PWA con pantalla offline honesta. El service worker sólo precachea recursos estáticos propios; excluye `/api/`, audio, video y métodos de escritura, no usa Background Sync ni `skipWaiting`, y evita reenvíos ocultos o cortes durante una grabación.
+- El aviso de instalación espera una práctica completada, puede descartarse y aclara que la práctica continúa requiriendo internet. Al recuperar conexión, la UI pide recargar explícitamente para revalidar sesión y saldo.
+- `uv run vslingo-db backup` usa la API de backup de SQLite incluso con WAL activo, rehúsa sobrescribir y valida integridad, claves foráneas, migraciones y tablas comerciales. `restore-verify` sólo restaura a un destino nuevo y repite las verificaciones.
+- [`deploy/launch-runbook.md`](../deploy/launch-runbook.md) documenta promoción, rollback sin pérdida de ledger, cifrado/retención por aprobar, restauración aislada, jobs operativos y una matriz de gates manuales.
+- Backend completo: lock válido, Ruff y mypy estricto en verde; **190 tests pytest** pasaron. Frontend completo: Astro check con **0 errores y 0 warnings** (5 hints heredados), **143 tests Vitest** pasaron y el build generó siete rutas. Chrome y Edge ejecutaron **11/11 recorridos E2E** cada uno, incluido registro del service worker y precarga de la pantalla offline; el proceso Playwright requirió interrupción manual después de imprimir todos los casos aprobados porque su servidor preview no terminó en Windows.
+- Esta evidencia automatizada no completa F7. Continúan pendientes PWA y micrófono en Chrome/Edge/Android/iPhone físicos, Clerk real por correo/Google, PayPal Sandbox y una compra Live mínima autorizada con cancelación/devolución, restauración cifrada en infraestructura real, y aprobación de dominio, soporte y textos legales.
 
 ## Inventario y riesgos considerados en F1 (histórico)
 
