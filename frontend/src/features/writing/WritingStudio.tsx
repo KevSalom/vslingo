@@ -19,7 +19,7 @@ import {
   type CorrectionCategory,
   type CorrectionResponse,
 } from './types';
-import { correctWriting } from './writingApi';
+import { correctWriting, WritingRequestError } from './writingApi';
 import {
   clearWritingState,
   loadWritingState,
@@ -28,7 +28,7 @@ import {
 
 type WritingStudioProps = {
   correctText?: (text: string) => Promise<CorrectionResponse>;
-  saveResult?: (result: CorrectionResponse) => Promise<unknown>;
+  saveResult?: (result: CorrectionResponse, operationId: string) => Promise<unknown>;
   loadHistory?: () => Promise<WritingHistoryEntry[]>;
 };
 
@@ -56,6 +56,7 @@ export function WritingStudio({
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [history, setHistory] = useState<WritingHistoryEntry[] | null>(null);
   const skipNextPersistence = useRef(false);
+  const pendingOperationId = useRef<string | null>(null);
 
   const speechPlayer = useSpeechPlayer();
 
@@ -88,19 +89,31 @@ export function WritingStudio({
     setCopied(false);
     speechPlayer.stop();
     try {
-      const corrected = await correctText(draft);
+      const operationId = pendingOperationId.current ?? createOperationId();
+      pendingOperationId.current = operationId;
+      const corrected = correctText === correctWriting
+        ? await correctWriting(draft, { operationId })
+        : await correctText(draft);
+      pendingOperationId.current = null;
       setResult(corrected);
       setSaveStatus('Guardando en tu historial…');
       try {
         const persist = saveResult ?? (
           correctText === correctWriting ? saveWritingHistory : async () => undefined
         );
-        await persist(corrected);
+        await persist(corrected, operationId);
         setSaveStatus('Guardado en tu historial.');
       } catch {
         setSaveStatus('No se pudo guardar. El resultado sigue disponible en pantalla.');
       }
     } catch (cause) {
+      if (!(cause instanceof WritingRequestError) || ![
+        'network_error',
+        'operation_in_progress',
+        'operation_uncertain',
+      ].includes(cause.code)) {
+        pendingOperationId.current = null;
+      }
       setError(
         cause instanceof Error
           ? cause.message
@@ -123,6 +136,7 @@ export function WritingStudio({
     setError(null);
     setCopied(false);
     setSaveStatus(null);
+    pendingOperationId.current = null;
     if (result && value !== result.original_text) {
       speechPlayer.stop();
       setResult(null);
@@ -403,4 +417,9 @@ export function WritingStudio({
       </div>
     </section>
   );
+}
+
+function createOperationId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  return `writing-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }

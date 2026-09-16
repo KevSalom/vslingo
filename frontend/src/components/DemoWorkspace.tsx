@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { VideoLab } from '../features/video/VideoLab';
 import { VideoLabProvider } from '../features/video/VideoLabContext';
 import { WritingStudio } from '../features/writing/WritingStudio';
+import { AccountPanel } from '../features/account/AccountPanel';
 import { ProductAuthProvider, useProductSession } from '../shared/auth/ProductAuthProvider';
 import {
   loadAccountPreferences,
@@ -12,6 +13,7 @@ import {
 import { saveSpeechVoice } from '../shared/speech/storage';
 import { EDGE_VOICES } from '../shared/speech/voiceCatalog';
 import { ThemeProvider, useTheme } from '../shared/theme/ThemeProvider';
+import { loadPublicPlan, type PublicPlan } from '../shared/usage/usageClient';
 
 const VoiceStudio = lazy(() =>
   import('../features/voice/VoiceStudio').then(({ VoiceStudio: Component }) => ({
@@ -19,7 +21,7 @@ const VoiceStudio = lazy(() =>
   })),
 );
 
-type ModuleId = 'voice' | 'writing' | 'video';
+type ModuleId = 'voice' | 'writing' | 'video' | 'account';
 
 type WorkspaceModule = {
   id: ModuleId;
@@ -51,14 +53,22 @@ const MODULES: readonly WorkspaceModule[] = [
     description: 'Sigue una transcripción, toma notas y vuelve al segundo exacto.',
     slug: 'videos',
   },
+  {
+    id: 'account',
+    label: 'Cuenta',
+    eyebrow: 'Tu cuenta',
+    description: 'Consulta el saldo de tu prueba y tus preferencias.',
+    slug: 'cuenta',
+  },
 ];
 
 function initialModuleFromLocation(): ModuleId {
   if (typeof window === 'undefined') return 'voice';
   if (window.location.pathname.endsWith('/escribir')) return 'writing';
   if (window.location.pathname.endsWith('/videos')) return 'video';
+  if (window.location.pathname.endsWith('/cuenta')) return 'account';
   const legacyId = window.location.hash.slice(1);
-  return legacyId === 'writing' || legacyId === 'video' || legacyId === 'voice'
+  return legacyId === 'writing' || legacyId === 'video' || legacyId === 'voice' || legacyId === 'account'
     ? legacyId
     : 'voice';
 }
@@ -181,12 +191,13 @@ function Workspace() {
               <VoiceStudio />
             </Suspense>
           ) : null}
+          {activeId === 'account' ? <AccountPanel /> : null}
         </section>
       </main>
 
       <footer className="workspace-panel" aria-live="polite">
         <strong>Tu prueba gratuita</strong>
-        <span>10 min de voz · 10 correcciones · 3 videos</span>
+        <PlanTrialSummary />
       </footer>
     </section>
   );
@@ -196,6 +207,31 @@ function Workspace() {
       {activeId === 'video' ? <VideoLabProvider>{workspace}</VideoLabProvider> : workspace}
     </div>
   );
+}
+
+function PlanTrialSummary() {
+  const [plan, setPlan] = useState<PublicPlan | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void loadPublicPlan()
+      .then((loaded) => { if (active) setPlan(loaded); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  const trial = plan?.trial;
+  return (
+    <span>
+      {trial
+        ? `${formatPlanMinutes(trial.voice_seconds)} min de voz · hasta ${trial.voice_turns} intervenciones · ${trial.writings} correcciones · ${trial.videos} videos`
+        : '10 min de voz · hasta 30 intervenciones · 10 correcciones · 3 videos'}
+    </span>
+  );
+}
+
+function formatPlanMinutes(seconds: number): number {
+  return Math.floor(seconds / 60);
 }
 
 function SessionControl() {
@@ -234,6 +270,9 @@ function ModuleGlyph({ module }: { module: ModuleId }) {
   }
   if (module === 'video') {
     return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><rect height="13" rx="1.5" stroke="currentColor" strokeWidth="1.6" width="17" x="3.5" y="5.5" /><path d="m10 9 5 3-5 3z" fill="currentColor" /></svg>;
+  }
+  if (module === 'account') {
+    return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.25" stroke="currentColor" strokeWidth="1.6" /><path d="M5.5 19c.8-3.2 3-5 6.5-5s5.7 1.8 6.5 5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" /></svg>;
   }
   return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M5 13.5v-3M8.5 16v-8M12 19V5M15.5 16v-8M19 13.5v-3" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" /></svg>;
 }

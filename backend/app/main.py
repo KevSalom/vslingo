@@ -18,6 +18,7 @@ from app.api.speech import (
     build_speech_router,
     handle_speech_validation_error,
 )
+from app.api.usage import build_usage_router
 from app.api.video import build_video_router, video_validation_error_response
 from app.api.voice import build_voice_router
 from app.api.writing import build_writing_router
@@ -26,12 +27,14 @@ from app.api.writing import (
 )
 from app.core.auth import AuthenticationError, Authenticator, build_authenticator
 from app.core.config import Settings
+from app.core.product import ProductConfig
 from app.core.protection import ConnectionLimiter, ProviderGate, ProviderGates, RequestLimiter
 from app.domain.ports import LanguageModelPort, SpeechToTextPort, VoiceFeedbackPort
 from app.domain.speech import SpeechProvider
 from app.persistence.database import Database
 from app.persistence.identity import IdentityRepository
 from app.persistence.study import StudyRepository
+from app.persistence.usage import UsageRepository
 from app.persistence.ws_tickets import WebSocketTicketRepository
 from app.providers.edge_speech import EdgeTTSSynthesizer
 from app.providers.openrouter_chat import OpenRouterChatLanguageModel
@@ -143,6 +146,8 @@ def create_app(
     )
     identity_repository = IdentityRepository(runtime_database)
     study_repository = StudyRepository(runtime_database)
+    product_config = ProductConfig.from_settings(runtime_settings)
+    usage_repository = UsageRepository(runtime_database, product_config)
     ws_ticket_repository = WebSocketTicketRepository(
         runtime_database,
         ttl_seconds=runtime_settings.ws_ticket_ttl_seconds,
@@ -152,6 +157,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         runtime_database.migrate()
+        usage_repository.reconcile_after_restart()
         try:
             yield
         finally:
@@ -165,6 +171,8 @@ def create_app(
     application.state.database = runtime_database
     application.state.identity_repository = identity_repository
     application.state.study_repository = study_repository
+    application.state.product_config = product_config
+    application.state.usage_repository = usage_repository
     application.state.ws_ticket_repository = ws_ticket_repository
     application.state.authenticator = runtime_authenticator
     application.add_middleware(
@@ -192,6 +200,7 @@ def create_app(
             ("POST", "/api/session/ws-ticket"),
             ("GET", "/api/preferences"),
             ("PUT", "/api/preferences"),
+            ("GET", "/api/account/quota"),
             ("POST", "/api/writing/correct"),
             ("POST", "/api/video/transcript"),
             ("POST", "/api/speech"),
@@ -271,8 +280,9 @@ def create_app(
         RequestValidationError,
         handle_request_validation_error,
     )
-    application.include_router(build_writing_router(runtime_correction_service))
-    application.include_router(build_video_router(runtime_video_service))
+    application.include_router(build_usage_router(product_config, usage_repository))
+    application.include_router(build_writing_router(runtime_correction_service, usage_repository))
+    application.include_router(build_video_router(runtime_video_service, usage_repository))
     application.include_router(build_speech_router(runtime_speech_service))
     application.include_router(build_history_router(study_repository))
     application.include_router(
@@ -295,6 +305,7 @@ def create_app(
             connection_limiter=connection_limiter,
             ticket_repository=ws_ticket_repository,
             study_repository=study_repository,
+            usage_repository=usage_repository,
         )
     )
 

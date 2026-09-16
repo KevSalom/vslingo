@@ -142,6 +142,54 @@ def test_voice_ws_full_ptt_turn_with_stream_and_feedback(client: TestClient) -> 
         done_event = next(e for e in events if e["type"] == "assistant.done")
         assert done_event["text"] == "".join(deltas)
 
+    quota = client.get("/api/account/quota").json()
+    assert quota["used"]["voice_seconds"] == 1
+    assert quota["used"]["voice_turns"] == 1
+
+
+def test_voice_quota_uses_wav_duration_not_declared_duration(
+    fake_stt: FakeSpeechToText,
+    fake_llm: FakeLanguageModel,
+    fake_feedback: FakeVoiceFeedback,
+) -> None:
+    limited = TestClient(
+        create_app(
+            Settings(_env_file=None, environment="test", trial_voice_seconds=1),
+            stt_provider=fake_stt,
+            llm_provider=fake_llm,
+            feedback_provider=fake_feedback,
+        ),
+        headers=AUTH_HEADERS,
+    )
+    wav_bytes = make_valid_wav_pcm_16k_mono(2_000)
+
+    with limited.websocket_connect(
+        voice_ws_path(limited), headers=VOICE_ORIGIN_HEADERS
+    ) as ws:
+        ws.send_json({"type": "session.start", "protocol_version": 2})
+        assert ws.receive_json()["type"] == "session.ready"
+        ws.send_json(
+            {"type": "speech.started", "turn_id": "spoofed-duration", "generation": 1}
+        )
+        ws.send_json(
+            {
+                "type": "utterance.begin",
+                "turn_id": "spoofed-duration",
+                "generation": 1,
+                "media_type": "audio/wav",
+                "byte_length": len(wav_bytes),
+                "duration_ms": 100,
+            }
+        )
+        ws.send_bytes(wav_bytes)
+        error = ws.receive_json()
+
+    assert error["type"] == "error"
+    assert error["code"] == "quota_exhausted"
+    quota = limited.get("/api/account/quota").json()
+    assert quota["used"]["voice_seconds"] == 0
+    assert quota["reserved"]["voice_seconds"] == 0
+
 
 def test_voice_ws_feedback_error_does_not_cancel_conversation(
     fake_stt: FakeSpeechToText,

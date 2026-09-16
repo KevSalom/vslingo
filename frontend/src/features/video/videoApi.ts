@@ -13,6 +13,7 @@ export type VideoApiOptions = {
   baseUrl?: string;
   fetcher?: typeof fetch;
   signal?: AbortSignal;
+  operationId?: string;
 };
 
 export class VideoRequestError extends Error {
@@ -44,7 +45,7 @@ export async function fetchVideoTranscript(
     response = await authenticatedFetch(fetcher, `${baseUrl}/api/video/transcript`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, operation_id: options.operationId ?? crypto.randomUUID() }),
       signal: options.signal,
     });
   } catch (cause) {
@@ -123,6 +124,11 @@ function isVideoErrorCode(value: unknown): value is VideoErrorCode {
       'provider_unavailable',
       'provider_busy',
       'rate_limited',
+      'quota_exhausted',
+      'access_expired',
+      'operation_in_progress',
+      'operation_uncertain',
+      'operation_released',
       'invalid_provider_response',
       'invalid_request',
     ].includes(value)

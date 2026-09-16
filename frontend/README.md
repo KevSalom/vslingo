@@ -48,8 +48,12 @@ account theme/voice preferences synchronize through authenticated history endpoi
 Each module exposes loading, saved, failed and empty states; opening a saved result does
 not repeat the provider operation.
 
+The landing and workspace summary read the public `/api/plan` contract at runtime while
+retaining coherent static fallback copy. `/app/cuenta` reads the authenticated quota
+snapshot and shows both voice constraints plus writing/video balances.
+
 The static landing is available at `/`. The stable practice routes are `/app`,
-`/app/hablar`, `/app/escribir`, and `/app/videos`; `/demo` remains a temporary
+`/app/hablar`, `/app/escribir`, `/app/videos`, and `/app/cuenta`; `/demo` remains a temporary
 alias for links from the historical Alpha. Voice uses push-to-talk in a secure
 context (HTTPS or localhost), Edge TTS, and browser speech synthesis as the
 text-preserving fallback.

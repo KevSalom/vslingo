@@ -18,9 +18,10 @@ El estado verificable está en [docs/progress.md](docs/progress.md).
 | **Hablar** | Tema libre por defecto, push-to-talk, respuesta corta, mejora prioritaria e historial que se puede continuar |
 | **Escribir** | Texto de hasta 1.000 caracteres, corrección estructurada, diff e historial automático |
 | **Videos** | Video, transcripción sincronizada, biblioteca sencilla y notas versionadas |
+| **Cuenta** | Saldo vigente de voz, intervenciones, correcciones y videos |
 
 La landing está en `/`. Las rutas estables de práctica son `/app`,
-`/app/hablar`, `/app/escribir` y `/app/videos`. `/demo` permanece como alias
+`/app/hablar`, `/app/escribir`, `/app/videos` y `/app/cuenta`. `/demo` permanece como alias
 temporal para enlaces históricos. Las operaciones de proveedores ya requieren
 sesión autenticada; el modo fake se limita al desarrollo y las pruebas.
 
@@ -29,7 +30,8 @@ sesión autenticada; el modo fake se limita al desarrollo y las pruebas.
 Un plan mensual de **US$2,99** y una prueba por cuenta verificada sin tarjeta.
 Los límites mensuales iniciales son 60 minutos de audio enviado por el alumno,
 hasta 180 intervenciones, 100 correcciones y 20 videos nuevos con transcripción.
-La configuración transaccional de planes y cuotas se implementa en F4.
+El servidor es la fuente tipada de esta oferta mediante `GET /api/plan`; cada periodo
+guarda un snapshot de límites y Cuenta muestra el saldo transaccional actual.
 
 ## Arquitectura
 
@@ -108,4 +110,4 @@ uv run vslingo-smoke edge-tts
 
 Las guías están en [deploy/README.md](deploy/README.md). El entorno actual sigue
 usando fakes por defecto y no autoriza compras ni llamadas live. El lanzamiento
-comercial requiere completar los gates F4–F7 del plan.
+comercial requiere completar los gates F5–F7 del plan.

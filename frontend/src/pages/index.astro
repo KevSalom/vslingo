@@ -8,6 +8,7 @@ const description =
 const site = Astro.site ?? new URL('http://localhost:4321');
 const canonical = new URL('/', site);
 const image = new URL('/og-vslingo.svg', site);
+const apiBaseUrl = import.meta.env.PUBLIC_API_URL?.trim() || 'http://127.0.0.1:8000';
 const structuredData = JSON.stringify({
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
@@ -83,7 +84,7 @@ const waveform = [22, 38, 58, 34, 78, 46, 70, 32, 62, 89, 49, 30, 66, 44, 81, 51
               <a class="cta" href="/app/hablar">Probar gratis</a>
               <a class="cta cta-secondary" href="/app">Entrar</a>
             </div>
-            <p class="note">Prueba única sin tarjeta · 10 minutos de voz · 10 correcciones · 3 videos</p>
+            <p class="note" data-plan="trial-summary">Prueba única sin tarjeta · 10 minutos de voz · 10 correcciones · 3 videos</p>
           </div>
           <div class="signature-frame" aria-label="Tres prácticas conectadas: voz, escritura y video">
             <div class="signature-stage" aria-hidden="true">
@@ -216,11 +217,11 @@ const waveform = [22, 38, 58, 34, 78, 46, 70, 32, 62, 89, 49, 30, 66, 44, 81, 51
             </div>
             <article class="price-card">
               <p class="price-name">Inglés al Grano</p>
-              <p class="price"><strong>US$2,99</strong><span>/mes</span></p>
+              <p class="price"><strong data-plan="price">US$2,99</strong><span>/mes</span></p>
               <ul class="price-list">
-                <li>60 minutos de tu voz, hasta 180 intervenciones</li>
-                <li>100 correcciones terminadas</li>
-                <li>20 videos nuevos con transcripción</li>
+                <li data-plan="monthly-voice">60 minutos de tu voz, hasta 180 intervenciones</li>
+                <li data-plan="monthly-writing">100 correcciones terminadas</li>
+                <li data-plan="monthly-video">20 videos nuevos con transcripción</li>
                 <li>Historial, notas y voces en inglés</li>
               </ul>
               <a class="cta price-cta" href="/app/hablar">Probar gratis</a>
@@ -255,7 +256,7 @@ const waveform = [22, 38, 58, 34, 78, 46, 70, 32, 62, 89, 49, 30, 66, 44, 81, 51
 
       <footer class="site-container site-footer">
         <span>Inglés al Grano · práctica intermedia sin rodeos</span>
-        <span><a href="/app">Entrar</a> · <a href="#precio">US$2,99/mes</a></span>
+        <span><a href="/app">Entrar</a> · <a data-plan="footer-price" href="#precio">US$2,99/mes</a></span>
       </footer>
     </div>
     <script is:inline>
@@ -275,6 +276,34 @@ const waveform = [22, 38, 58, 34, 78, 46, 70, 32, 62, 89, 49, 30, 66, 44, 81, 51
           updateLabel();
         });
         updateLabel();
+      })();
+    </script>
+    <script is:inline define:vars={{ apiBaseUrl }}>
+      (function () {
+        function setText(selector, text) {
+          var element = document.querySelector(selector);
+          if (element) element.textContent = text;
+        }
+        fetch(apiBaseUrl.replace(/\/$/, '') + '/api/plan')
+          .then(function (response) {
+            if (!response.ok) throw new Error('plan unavailable');
+            return response.json();
+          })
+          .then(function (plan) {
+            var price = 'US$' + (plan.price_minor / 100).toLocaleString('es', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            });
+            var trialMinutes = Math.floor(plan.trial.voice_seconds / 60);
+            var monthlyMinutes = Math.floor(plan.monthly.voice_seconds / 60);
+            setText('[data-plan="price"]', price);
+            setText('[data-plan="footer-price"]', price + '/mes');
+            setText('[data-plan="trial-summary"]', 'Prueba única sin tarjeta · ' + trialMinutes + ' minutos de voz · ' + plan.trial.writings + ' correcciones · ' + plan.trial.videos + ' videos');
+            setText('[data-plan="monthly-voice"]', monthlyMinutes + ' minutos de tu voz, hasta ' + plan.monthly.voice_turns + ' intervenciones');
+            setText('[data-plan="monthly-writing"]', plan.monthly.writings + ' correcciones terminadas');
+            setText('[data-plan="monthly-video"]', plan.monthly.videos + ' videos nuevos con transcripción');
+          })
+          .catch(function () {});
       })();
     </script>
   </body>

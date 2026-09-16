@@ -25,6 +25,10 @@ export type ErrorCodeType =
   | 'conversation_unavailable'
   | 'history_unavailable'
   | 'history_not_found'
+  | 'quota_exhausted'
+  | 'access_expired'
+  | 'operation_in_progress'
+  | 'operation_uncertain'
   | 'speech_unavailable';
 
 export type CorrectionCategoryType = 'grammar' | 'vocabulary' | 'clarity' | 'tone';
@@ -271,6 +275,10 @@ const ERROR_CODES: ReadonlySet<ErrorCodeType> = new Set([
   'conversation_unavailable',
   'history_unavailable',
   'history_not_found',
+  'quota_exhausted',
+  'access_expired',
+  'operation_in_progress',
+  'operation_uncertain',
   'speech_unavailable',
 ]);
 

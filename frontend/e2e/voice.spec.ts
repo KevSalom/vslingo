@@ -13,13 +13,17 @@ test.describe('Hablar E2E', () => {
 
     const scenarioSelect = page.getByRole('combobox', { name: /Escenario/i });
     await expect(scenarioSelect).toBeVisible();
-    await scenarioSelect.selectOption('system_design');
-    await expect(scenarioSelect).toHaveValue('system_design');
+    await expect.poll(async () => {
+      await scenarioSelect.selectOption('system_design');
+      return scenarioSelect.inputValue();
+    }).toBe('system_design');
 
     const voiceSelect = page.getByRole('combobox', { name: 'Voz' });
     await expect(voiceSelect).toBeVisible();
-    await voiceSelect.selectOption('en-GB-SoniaNeural');
-    await expect(voiceSelect).toHaveValue('en-GB-SoniaNeural');
+    await expect.poll(async () => {
+      await voiceSelect.selectOption('en-GB-SoniaNeural');
+      return voiceSelect.inputValue();
+    }).toBe('en-GB-SoniaNeural');
 
     // The human-first layout may use natural document scroll, but must never overflow sideways.
     await expect.poll(async () =>

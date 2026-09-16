@@ -23,6 +23,7 @@ describe('correctWriting', () => {
     const response = await correctWriting(RESULT.original_text, {
       baseUrl: 'https://api.test/',
       fetcher,
+      operationId: 'writing-op-a',
     });
 
     expect(response).toEqual(RESULT);
@@ -30,7 +31,10 @@ describe('correctWriting', () => {
     const [url, init] = fetcher.mock.calls[0];
     expect(url).toBe('https://api.test/api/writing/correct');
     expect(init?.method).toBe('POST');
-    expect(JSON.parse(String(init?.body))).toEqual({ text: RESULT.original_text });
+    expect(JSON.parse(String(init?.body))).toEqual({
+      text: RESULT.original_text,
+      operation_id: 'writing-op-a',
+    });
   });
 
   it('preserves typed server errors for actionable UI feedback', async () => {

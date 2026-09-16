@@ -582,6 +582,22 @@ export function VoiceStudio() {
               setIsFeedbackPending(false);
               setErrorMessage('No pudimos recuperar el historial. Inténtalo de nuevo.');
               handleServerError(msg);
+            } else if (msg.code === 'quota_exhausted' || msg.code === 'access_expired') {
+              setIsAssistantStreaming(false);
+              setIsFeedbackPending(false);
+              setErrorMessage(msg.code === 'access_expired'
+                ? 'Tu periodo de acceso terminó. Tu historial sigue disponible en Cuenta.'
+                : 'Ya usaste el saldo de voz o intervenciones de este periodo. Consulta Cuenta para ver el detalle.');
+              setState('ready');
+              setInputState(readyInputState());
+            } else if (msg.code === 'operation_in_progress' || msg.code === 'operation_uncertain') {
+              setIsAssistantStreaming(false);
+              setIsFeedbackPending(false);
+              setErrorMessage(msg.code === 'operation_in_progress'
+                ? 'Este turno todavía se está procesando.'
+                : 'No repetimos este turno porque su resultado es incierto. Tu saldo queda reservado para conciliación.');
+              setState('ready');
+              setInputState(readyInputState());
             } else if (msg.code === 'speech_unavailable') {
               startBrowserFallback(msg.generation ?? generationRef.current, msg.segment_index ?? 0);
             } else if (msg.code === 'provider_busy') {

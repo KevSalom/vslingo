@@ -33,7 +33,7 @@ import type {
   VideoNote,
 } from './types';
 import { deriveNoteTitle } from './types';
-import { fetchVideoTranscript } from './videoApi';
+import { fetchVideoTranscript, VideoRequestError } from './videoApi';
 import { VideoFileTree } from './VideoFileTree';
 import { useVideoLab } from './VideoLabContext';
 import { VsCodeModal } from './VsCodeModal';
@@ -49,6 +49,7 @@ type VideoPlayerComponent = ForwardRefExoticComponent<
 
 type TranscriptLoadOptions = {
   signal?: AbortSignal;
+  operationId?: string;
 };
 
 type VideoLabProps = {
@@ -91,6 +92,7 @@ export function VideoLab({
   const transcriptRef = useRef<HTMLDivElement>(null);
   const requestGenerationRef = useRef(0);
   const activeRequestRef = useRef<AbortController | null>(null);
+  const transcriptOperationsRef = useRef<Map<string, string>>(new Map());
   const scrollAnimRef = useRef<number>(0);
   const videoPanelRef = useRef<HTMLDivElement>(null);
   const [videoPanelHeight, setVideoPanelHeight] = useState(0);
@@ -126,14 +128,18 @@ export function VideoLab({
       activeRequestRef.current?.abort();
       const controller = new AbortController();
       activeRequestRef.current = controller;
+      const operationId = transcriptOperationsRef.current.get(nextUrl) ?? createLocalId('video-op');
+      transcriptOperationsRef.current.set(nextUrl, operationId);
       setIsLoading(true);
       setError(null);
       setStatus(null);
       try {
         const transcript = await loadTranscript(nextUrl, {
           signal: controller.signal,
+          operationId,
         });
         if (generation === requestGenerationRef.current) {
+          transcriptOperationsRef.current.delete(nextUrl);
           openTranscript(transcript, nextUrl, title);
         }
       } catch (cause) {
@@ -141,6 +147,12 @@ export function VideoLab({
           generation === requestGenerationRef.current &&
           !isAbortError(cause)
         ) {
+          if (
+            !(cause instanceof VideoRequestError) ||
+            !['network_error', 'operation_in_progress', 'operation_uncertain'].includes(cause.code)
+          ) {
+            transcriptOperationsRef.current.delete(nextUrl);
+          }
           setError(
             cause instanceof Error
               ? cause.message

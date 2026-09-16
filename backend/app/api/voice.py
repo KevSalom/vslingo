@@ -8,6 +8,7 @@ from app.core.config import Settings
 from app.core.protection import ConnectionLimiter, ProviderGates
 from app.domain.ports import LanguageModelPort, SpeechToTextPort, VoiceFeedbackPort
 from app.persistence.study import StudyRepository
+from app.persistence.usage import UsageRepository
 from app.persistence.ws_tickets import WebSocketTicketRepository
 from app.services.speech import SpeechService
 from app.voice.session import VoiceSession
@@ -57,11 +58,13 @@ def build_voice_router(
     connection_limiter: ConnectionLimiter | None = None,
     ticket_repository: WebSocketTicketRepository | None = None,
     study_repository: StudyRepository | None = None,
+    usage_repository: UsageRepository | None = None,
 ) -> APIRouter:
     """Construct router with admission checks that run before WebSocket accept."""
 
     router = APIRouter(prefix="/api/voice", tags=["voice"])
     runtime_settings = settings or Settings()
+    active_user_ids: set[str] = set()
 
     @router.websocket("/ws")
     async def voice_websocket(websocket: WebSocket) -> None:
@@ -85,6 +88,12 @@ def build_voice_router(
             )
             return
 
+        if consumed_ticket.user_id in active_user_ids:
+            await websocket.send_denial_response(
+                Response(status_code=403, headers=_DENIAL_HEADERS)
+            )
+            return
+
         peer_ip = websocket.client.host if websocket.client is not None else "unknown"
         admitted = connection_limiter is None or connection_limiter.try_open(peer_ip)
         if not admitted:
@@ -93,6 +102,7 @@ def build_voice_router(
             )
             return
 
+        active_user_ids.add(consumed_ticket.user_id)
         await websocket.accept()
         try:
             session = VoiceSession(
@@ -110,9 +120,13 @@ def build_voice_router(
                 )
                 if study_repository is not None
                 else None,
+                usage_repository=usage_repository,
+                study_repository=study_repository,
+                clerk_user_id=consumed_ticket.user_id,
             )
             await session.run()
         finally:
+            active_user_ids.discard(consumed_ticket.user_id)
             if connection_limiter is not None:
                 connection_limiter.release(peer_ip)
 

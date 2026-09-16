@@ -12,6 +12,7 @@ const DEFAULT_API_BASE_URL =
 export type WritingApiOptions = {
   baseUrl?: string;
   fetcher?: typeof fetch;
+  operationId?: string;
 };
 
 export class WritingRequestError extends Error {
@@ -43,7 +44,7 @@ export async function correctWriting(
     response = await authenticatedFetch(fetcher, `${baseUrl}/api/writing/correct`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, operation_id: options.operationId ?? crypto.randomUUID() }),
     });
   } catch (cause) {
     throw new WritingRequestError(
@@ -111,6 +112,11 @@ function isWritingErrorCode(value: unknown): value is WritingErrorCode {
       'provider_unavailable',
       'provider_busy',
       'rate_limited',
+      'quota_exhausted',
+      'access_expired',
+      'operation_in_progress',
+      'operation_uncertain',
+      'operation_released',
       'invalid_provider_response',
       'invalid_request',
     ].includes(value)

@@ -71,7 +71,7 @@ def test_sqlite_migrates_with_required_pragmas_and_persists_users(tmp_path: Path
     repository = IdentityRepository(first)
     created = repository.ensure_user("user_a")
 
-    assert first.applied_migrations() == (1, 2)
+    assert first.applied_migrations() == (1, 2, 3)
     assert first.pragma("foreign_keys") == 1
     assert str(first.pragma("journal_mode")).lower() == "wal"
     assert first.pragma("busy_timeout") == 5_000

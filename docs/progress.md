@@ -4,17 +4,17 @@
 
 Este es el único documento para el estado mutable de implementación. Debe actualizarse al cerrar cada incremento, sin convertir el roadmap estable en una lista de estados.
 
-Última actualización documental: 2026-09-15.
+Última actualización documental: 2026-09-16.
 
 ## Estado actual
 
 - **Roadmap actual:** MVP comercial Inglés al Grano `F0`–`F8`; la Alpha `T01`–`T10` queda como baseline histórico completado.
-- **Fase actual:** `F3 — Historial completo` completada el 2026-09-15.
-- **Próximo incremento:** `F4 — Cuotas y costes`.
+- **Fase actual:** `F4 — Cuotas y costes` completada el 2026-09-16.
+- **Próximo incremento:** `F5 — PayPal y Cuenta`.
 - **Rama de trabajo:** `codex/ingles-al-grano-mvp`, creada desde `main` en `aa26cab8ac10345a2c596febe78a0ad10c7df5c1` (`feat: add global stylesheet with Tailwind integration and multi-theme design tokens`).
-- **Completado:** F0 adoptó el plan y aisló la rama; F1 entregó producto/UI/voz simple; F2 añadió identidad y SQLite; F3 incorporó historial sincronizado de escritura, videos, notas y voz, además de preferencias de cuenta.
-- **Pendiente:** F4–F7; F8 permanece posterior al lanzamiento y sujeto al cierre de condiciones comerciales.
-- **Bloqueos:** ninguno para iniciar F4 con fakes. La configuración y validación de un tenant Clerk real sigue siendo un gate externo del fundador; OpenRouter/PayPal, Meta y dispositivos físicos se requieren en fases posteriores o en sus validaciones live.
+- **Completado:** F0 adoptó el plan y aisló la rama; F1 entregó producto/UI/voz simple; F2 añadió identidad y SQLite; F3 incorporó historial sincronizado; F4 añadió oferta tipada, prueba única, cuotas transaccionales, costes y saldo de Cuenta.
+- **Pendiente:** F5–F7; F8 permanece posterior al lanzamiento y sujeto al cierre de condiciones comerciales.
+- **Bloqueos:** ninguno para iniciar F5 con adaptadores falsos. La validación PayPal Sandbox/Live, un tenant Clerk real, OpenRouter live, Meta y dispositivos físicos siguen siendo gates externos del fundador en sus fases correspondientes.
 
 ## Evidencia de F0
 
@@ -65,6 +65,19 @@ Este es el único documento para el estado mutable de implementación. Debe actu
 - Backend completo: Ruff y mypy estricto en verde; **157 tests pytest** pasaron. Se conserva una advertencia de deprecación Starlette/TestClient.
 - Frontend completo: Astro check con **0 errores y 0 warnings** (5 hints heredados de `ScriptProcessorNode`), **133 tests Vitest** pasaron y el build estático generó seis rutas. E2E: **7/7 Chrome** y **7/7 Edge**.
 - No se hicieron llamadas live, no se probó un segundo dispositivo físico ni se configuró Clerk real. El comportamiento multiusuario/multisesión se verificó con identidades, archivos SQLite y estados simulados independientes.
+
+## Evidencia de F4
+
+- `ProductConfig` centraliza y valida versión, plan, moneda, precio, límites de prueba/mensuales y límites de contenido. `GET /api/plan` publica el contrato; landing y workspace lo consumen con fallback estático coherente, y cada `usage_period` conserva el snapshot concedido.
+- La prueba se concede una sola vez por cuenta persistida. Terminar el periodo no crea otra prueba; una configuración posterior más baja no reduce el saldo ya concedido. `GET /api/account/quota` devuelve límites, usado, reservado y restante.
+- Escritura, Video y Voz reservan atómicamente antes del proveedor y liquidan de forma idempotente. Dos operaciones concurrentes no consumen dos veces el último crédito; el mismo video por usuario se deduplica por ID de YouTube y reabrir historial no consume.
+- Voz calcula la duración desde el chunk PCM WAV validado en el servidor, reserva segundos más una intervención y limita a un socket activo por cuenta. No confía en `duration_ms` del cliente.
+- El ledger distingue `reserved`, `provider_started`, `result_persisted`, `succeeded`, `released` y `uncertain`. Al reiniciar liquida resultados persistidos, reconstruye turnos de voz ya guardados, libera llamadas nunca iniciadas y no repite automáticamente proveedores cuyo resultado es incierto.
+- Los costes de proveedor se acumulan en microdólares enteros incluso ante fallos/cancelaciones observables. El ledger de consumo no guarda texto de estudio: los payloads de replay idempotente están en una tabla separada y el contenido normal permanece en historial.
+- La nueva ruta `/app/cuenta` muestra saldo de tiempo de voz, intervenciones, correcciones y videos, con loading/error/reintento. La navegación conserva modo claro predeterminado y oscuro. La revisión renderizada cubrió 390 px y escritorio; una prueba a 320 px con texto al 200% detectó y corrigió el reflow de cabecera/navegación/tarjetas.
+- Backend completo: Ruff y mypy estricto en verde; **171 tests pytest** pasaron. Se conserva una advertencia de deprecación Starlette/TestClient.
+- Frontend completo: Astro check con **0 errores y 0 warnings** (5 hints heredados de `ScriptProcessorNode`), **135 tests Vitest** pasaron y el build estático generó siete rutas. E2E: **9/9 Chrome** y **9/9 Edge**, incluidos Cuenta, teclado, modo oscuro y zoom/reflow.
+- No se hicieron llamadas live ni se midió coste real de OpenRouter/Edge/YouTube; tampoco se certificaron micrófono o audio en dispositivos físicos. Esos gates permanecen explícitos para F7 y la validación económica previa a publicidad.
 
 ## Inventario y riesgos considerados en F1 (histórico)
 

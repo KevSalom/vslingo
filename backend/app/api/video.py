@@ -1,11 +1,14 @@
 """Typed HTTP contract for Video Lab transcripts."""
 
 from enum import StrEnum
+from uuid import uuid4
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.usage import quota_error_response
+from app.core.auth import AuthIdentity
 from app.core.protection import ProviderBusyError
 from app.domain.video import (
     MAX_VIDEO_URL_LENGTH,
@@ -13,6 +16,15 @@ from app.domain.video import (
     VideoInputError,
     VideoProviderError,
     VideoProviderErrorCode,
+    extract_youtube_video_id,
+)
+from app.persistence.usage import (
+    QuotaExhaustedError,
+    UsageAccessExpiredError,
+    UsageOperationInProgressError,
+    UsageOperationReleasedError,
+    UsageOperationUncertainError,
+    UsageRepository,
 )
 from app.services.video import VideoService
 
@@ -23,6 +35,7 @@ class TranscriptRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     url: str = Field(min_length=1, max_length=MAX_VIDEO_URL_LENGTH)
+    operation_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1, max_length=128)
 
 
 class VideoPublicErrorCode(StrEnum):
@@ -88,7 +101,7 @@ _PROVIDER_ERRORS: dict[VideoProviderErrorCode, ErrorMapping] = {
 }
 
 
-def build_video_router(service: VideoService) -> APIRouter:
+def build_video_router(service: VideoService, usage: UsageRepository) -> APIRouter:
     """Build an isolated Video router with an explicit service dependency."""
 
     router = APIRouter(prefix="/api/video", tags=["video"])
@@ -105,12 +118,43 @@ def build_video_router(service: VideoService) -> APIRouter:
         },
     )
     async def get_transcript(
-        request: TranscriptRequest,
+        request: Request,
+        payload: TranscriptRequest,
     ) -> TranscriptResult | JSONResponse:
         """Return navigable English captions and expose only safe failures."""
 
+        identity = getattr(request.state, "auth_identity", None)
+        if not isinstance(identity, AuthIdentity):
+            raise RuntimeError("Protected endpoint reached without authenticated state.")
         try:
-            return await service.transcript(request.url)
+            video_id = extract_youtube_video_id(payload.url)
+            reservation = usage.reserve(
+                identity.user_id,
+                payload.operation_id,
+                "video",
+                resource_key=video_id,
+            )
+            if reservation.result is not None:
+                return TranscriptResult.model_validate(reservation.result)
+            usage.mark_provider_started(identity.user_id, payload.operation_id)
+            result = await service.transcript(payload.url)
+            usage.persist_result(
+                identity.user_id,
+                payload.operation_id,
+                result.model_dump(mode="json"),
+                actual_primary=1,
+            )
+            usage.settle(identity.user_id, payload.operation_id)
+            return result
+        except (
+            QuotaExhaustedError,
+            UsageOperationInProgressError,
+            UsageOperationReleasedError,
+            UsageOperationUncertainError,
+            UsageAccessExpiredError,
+        ) as exc:
+            status_code, content = quota_error_response(exc)
+            return JSONResponse(status_code=status_code, content=content)
         except VideoInputError:
             return video_error_response(
                 422,
@@ -121,6 +165,7 @@ def build_video_router(service: VideoService) -> APIRouter:
                 ),
             )
         except ProviderBusyError:
+            usage.release(identity.user_id, payload.operation_id)
             return video_error_response(
                 503,
                 VideoErrorDetail(
@@ -133,6 +178,7 @@ def build_video_router(service: VideoService) -> APIRouter:
                 ),
             )
         except VideoProviderError as exc:
+            usage.release(identity.user_id, payload.operation_id)
             status_code, public_code, message, retryable = _PROVIDER_ERRORS[exc.code]
             return video_error_response(
                 status_code,

@@ -1899,6 +1899,26 @@ h1,
 .history-note { display: grid; min-width: 0; gap: .25rem; padding: .7rem; }
 .history-note span { overflow: hidden; color: var(--t-muted); font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
 
+.account-panel { display: grid; gap: 1rem; }
+.account-state,
+.account-plan-card,
+.quota-card,
+.account-help { border: 1px solid var(--t-border); border-radius: 1rem; background: var(--t-panel); padding: 1rem; }
+.account-state { display: flex; align-items: center; justify-content: space-between; gap: 1rem; color: var(--t-muted-strong); }
+.account-plan-card { display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: var(--t-primary-subtle); }
+.account-plan-card h2 { margin: .2rem 0 0; font-size: 1.2rem; }
+.account-plan-card > span,
+.quota-card span,
+.account-help { color: var(--t-muted); font-size: .82rem; }
+.account-kicker { color: var(--t-primary-light); font-size: .75rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.quota-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.quota-card { display: grid; gap: .8rem; }
+.quota-card h3 { margin: 0 0 .3rem; color: var(--t-muted-strong); font-size: .85rem; }
+.quota-card strong { display: block; font-size: 1.45rem; }
+.quota-progress { height: .45rem; overflow: hidden; border-radius: 999px; background: var(--t-surface-recessed); }
+.quota-progress span { display: block; height: 100%; border-radius: inherit; background: var(--t-primary); }
+.account-help { margin: 0; line-height: 1.55; }
+
 .voice-studio,
 .writing-studio,
 .video-lab { max-width: 58rem; color: var(--t-foreground); }
@@ -2065,13 +2085,20 @@ h1,
   .header-nav .text-link { display: none; }
   .theme-toggle { width: 2.5rem; height: 2.5rem; }
   .header-cta { min-height: 2.5rem; }
-  .workspace-topbar { min-height: 4.25rem; padding-inline: .75rem; }
+  .workspace-topbar { min-height: 4.25rem; flex-wrap: wrap; padding-inline: .75rem; }
   .workspace-topbar .brand { font-size: .95rem; }
   .workspace-topbar .brand-mark { width: 1.75rem; height: 1.75rem; }
+  .workspace-actions { max-width: 100%; margin-left: auto; }
+  .session-chip { min-width: 0; max-width: min(13rem, calc(100vw - 6rem)); }
   .alpha-badge { display: none; }
-  .module-nav { justify-content: stretch; padding: .5rem; }
-  .module-nav-button { flex: 1 1 0; min-height: 2.85rem; gap: .35rem; padding-inline: .45rem; }
+  .module-nav {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(5.5rem, 100%), 1fr));
+    justify-content: stretch; padding: .5rem;
+  }
+  .module-nav-button { min-width: 0; min-height: 2.85rem; gap: .35rem; padding-inline: .45rem; }
   .module-nav-button svg { width: 1.05rem; height: 1.05rem; }
+  .account-plan-card { flex-wrap: wrap; }
+  .quota-grid { grid-template-columns: 1fr; }
   .practice-intro,
   .practice-content { width: min(100% - 1.25rem, 58rem); }
   .practice-intro { padding-top: 1.35rem; }

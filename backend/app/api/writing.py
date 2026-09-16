@@ -1,11 +1,14 @@
 """Typed HTTP contract for Writing Studio."""
 
 from enum import StrEnum
+from uuid import uuid4
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.usage import quota_error_response
+from app.core.auth import AuthIdentity
 from app.core.protection import ProviderBusyError
 from app.domain.errors import IntegrationError, IntegrationErrorCode
 from app.domain.writing import (
@@ -13,6 +16,14 @@ from app.domain.writing import (
     CorrectionResult,
     WritingInputError,
     WritingInputErrorCode,
+)
+from app.persistence.usage import (
+    QuotaExhaustedError,
+    UsageAccessExpiredError,
+    UsageOperationInProgressError,
+    UsageOperationReleasedError,
+    UsageOperationUncertainError,
+    UsageRepository,
 )
 from app.services.correction import CorrectionService
 
@@ -23,6 +34,7 @@ class CorrectionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: str = Field(description="English sentence or short paragraph to correct.")
+    operation_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1, max_length=128)
 
 
 class WritingPublicErrorCode(StrEnum):
@@ -88,7 +100,7 @@ _INTEGRATION_ERRORS: dict[IntegrationErrorCode, ErrorMapping] = {
 }
 
 
-def build_writing_router(service: CorrectionService) -> APIRouter:
+def build_writing_router(service: CorrectionService, usage: UsageRepository) -> APIRouter:
     """Build an isolated Writing router with an explicit service dependency."""
 
     router = APIRouter(prefix="/api/writing", tags=["writing"])
@@ -105,15 +117,43 @@ def build_writing_router(service: CorrectionService) -> APIRouter:
         },
     )
     async def correct_writing(
-        request: CorrectionRequest,
+        request: Request,
+        payload: CorrectionRequest,
     ) -> CorrectionResult | JSONResponse:
         """Correct one English text and expose only normalized failures."""
 
+        identity = getattr(request.state, "auth_identity", None)
+        if not isinstance(identity, AuthIdentity):
+            raise RuntimeError("Protected endpoint reached without authenticated state.")
         try:
-            return await service.correct(request.text)
+            reservation = usage.reserve(identity.user_id, payload.operation_id, "writing")
+            if reservation.result is not None:
+                return CorrectionResult.model_validate(reservation.result)
+            usage.mark_provider_started(identity.user_id, payload.operation_id)
+            result = await service.correct(payload.text)
+            _record_provider_cost(usage, identity.user_id, payload.operation_id, service.provider)
+            usage.persist_result(
+                identity.user_id,
+                payload.operation_id,
+                result.model_dump(mode="json"),
+                actual_primary=1,
+            )
+            usage.settle(identity.user_id, payload.operation_id)
+            return result
+        except (
+            QuotaExhaustedError,
+            UsageOperationInProgressError,
+            UsageOperationReleasedError,
+            UsageOperationUncertainError,
+            UsageAccessExpiredError,
+        ) as exc:
+            status_code, content = quota_error_response(exc)
+            return JSONResponse(status_code=status_code, content=content)
         except WritingInputError as exc:
+            usage.release(identity.user_id, payload.operation_id)
             return _input_error_response(exc.code)
         except ProviderBusyError:
+            usage.release(identity.user_id, payload.operation_id)
             return _error_response(
                 503,
                 ErrorDetail(
@@ -123,9 +163,21 @@ def build_writing_router(service: CorrectionService) -> APIRouter:
                 ),
             )
         except IntegrationError as exc:
+            _record_provider_cost(usage, identity.user_id, payload.operation_id, service.provider)
+            usage.release(identity.user_id, payload.operation_id)
             return _integration_error_response(exc.code)
 
     return router
+
+
+def _record_provider_cost(
+    usage: UsageRepository, clerk_user_id: str, operation_id: str, provider: object
+) -> None:
+    consume = getattr(provider, "consume_usage", None)
+    provider_usage = consume() if callable(consume) else None
+    cost = getattr(provider_usage, "cost_usd", None)
+    if isinstance(cost, (int, float)):
+        usage.add_cost_usd(clerk_user_id, operation_id, float(cost))
 
 
 def _input_error_response(code: WritingInputErrorCode) -> JSONResponse:

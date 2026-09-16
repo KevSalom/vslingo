@@ -26,6 +26,8 @@ fallback and needs no backend secret.
 
 ## Endpoints in the current increment
 
+- `GET /api/plan`: public typed offer, price, usage and content limits.
+- `GET /api/account/quota`: authenticated period snapshot and available balance.
 - `GET /api/session`: current verified session.
 - `POST /api/session/logout`: revoke the session and its outstanding WS tickets.
 - `POST /api/session/ws-ticket`: issue an opaque, short-lived, one-use voice ticket.
@@ -48,6 +50,13 @@ contact external providers.
 
 Study history stores text and structured feedback only. Voice reconnection can restore
 at most the last six complete user/assistant pairs; WAV and MP3 payloads are never stored.
+
+Writing, video and voice reserve quota atomically before calling a provider. Results
+settle idempotently; known failures release capacity, uncertain external calls are
+quarantined for reconciliation, and provider cost is stored in integer micro-dollars.
+The usage ledger contains only financial/consumption metadata; replay payloads remain
+in a separate result table. A trial grant is unique per verified account and never
+reactivates after its access period ends.
 
 ## Quality checks
 

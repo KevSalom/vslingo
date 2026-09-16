@@ -23,6 +23,7 @@ describe('fetchVideoTranscript', () => {
       fetchVideoTranscript('https://youtu.be/aircAruvnKk', {
         baseUrl: 'https://api.test/',
         fetcher,
+        operationId: 'video-op-a',
         signal: controller.signal,
       }),
     ).resolves.toEqual(RESULT);
@@ -30,7 +31,10 @@ describe('fetchVideoTranscript', () => {
       'https://api.test/api/video/transcript',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ url: 'https://youtu.be/aircAruvnKk' }),
+        body: JSON.stringify({
+          url: 'https://youtu.be/aircAruvnKk',
+          operation_id: 'video-op-a',
+        }),
         signal: controller.signal,
       }),
     );

@@ -83,3 +83,35 @@ def test_voice_websocket_requires_and_consumes_rest_ticket_once(tmp_path: Path) 
     ):
         pass
     assert denied.value.status_code == 403
+
+
+def test_only_one_voice_socket_is_active_per_account(tmp_path: Path) -> None:
+    path = tmp_path / "one-socket.db"
+    client = TestClient(
+        create_app(
+            Settings(_env_file=None, environment="test", database_path=path),
+            database=Database(path),
+            stt_provider=FakeSpeechToText(),
+            llm_provider=FakeLanguageModel(),
+            feedback_provider=FakeVoiceFeedback(),
+        ),
+        headers={"Authorization": "Bearer dev-session-token"},
+    )
+    first = client.post("/api/session/ws-ticket").json()["ticket"]
+    second = client.post("/api/session/ws-ticket").json()["ticket"]
+
+    with client.websocket_connect(
+        f"/api/voice/ws?ticket={first}", headers={"origin": "http://localhost:4321"}
+    ) as websocket:
+        websocket.send_json({"type": "session.start", "protocol_version": 2})
+        assert websocket.receive_json()["type"] == "session.ready"
+        with (
+            pytest.raises(WebSocketDenialResponse) as denied,
+            client.websocket_connect(
+                f"/api/voice/ws?ticket={second}",
+                headers={"origin": "http://localhost:4321"},
+            ),
+        ):
+            pass
+
+    assert denied.value.status_code == 403

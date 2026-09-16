@@ -374,6 +374,25 @@ class StudyRepository:
         assert row is not None
         return _turn(row)
 
+    def update_feedback_by_operation(
+        self, clerk_user_id: str, operation_id: str, feedback: dict[str, Any]
+    ) -> dict[str, Any]:
+        with self._database.transaction(immediate=True) as connection:
+            user_id = _user_id(connection, clerk_user_id)
+            updated = connection.execute(
+                """UPDATE voice_turns SET feedback_json = ?
+                WHERE operation_id = ? AND user_id = ?""",
+                (json.dumps(feedback, ensure_ascii=False), operation_id, user_id),
+            )
+            if updated.rowcount != 1:
+                raise StudyNotFoundError
+            row = connection.execute(
+                "SELECT * FROM voice_turns WHERE operation_id = ? AND user_id = ?",
+                (operation_id, user_id),
+            ).fetchone()
+        assert row is not None
+        return _turn(row)
+
     def delete_conversation(self, clerk_user_id: str, conversation_id: str) -> None:
         self._delete_owned("voice_conversations", clerk_user_id, conversation_id)
 

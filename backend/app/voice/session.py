@@ -5,6 +5,7 @@ import json
 import logging
 import struct
 from collections.abc import AsyncIterator, Callable, Sequence
+from contextlib import suppress
 from time import monotonic
 from uuid import uuid4
 
@@ -24,6 +25,15 @@ from app.domain.voice_protocol import (
     SpeechProviderType,
     UtteranceBeginMessage,
     client_adapter,
+)
+from app.persistence.study import StudyNotFoundError, StudyRepository
+from app.persistence.usage import (
+    QuotaExhaustedError,
+    UsageAccessExpiredError,
+    UsageOperationInProgressError,
+    UsageOperationReleasedError,
+    UsageOperationUncertainError,
+    UsageRepository,
 )
 from app.prompts.voice import get_voice_system_prompt
 from app.voice.accumulator import SentenceAccumulator
@@ -80,6 +90,26 @@ def validate_wav_pcm_16k_mono(audio_bytes: bytes) -> bool:
     return fmt_found and data_found
 
 
+def wav_pcm_16k_mono_duration_seconds(audio_bytes: bytes) -> float | None:
+    """Derive trusted duration from the validated PCM data chunk, never client metadata."""
+
+    if not validate_wav_pcm_16k_mono(audio_bytes):
+        return None
+    offset = 12
+    while offset + 8 <= len(audio_bytes):
+        chunk_id = audio_bytes[offset : offset + 4]
+        chunk_size = struct.unpack("<I", audio_bytes[offset + 4 : offset + 8])[0]
+        chunk_end = offset + 8 + chunk_size
+        if chunk_end > len(audio_bytes):
+            return None
+        if chunk_id == b"data":
+            if chunk_size <= 0 or chunk_size % 2:
+                return None
+            return float(chunk_size) / (WAV_SAMPLE_RATE_16K * WAV_CHANNELS_MONO * 2)
+        offset = chunk_end + (chunk_size % 2)
+    return None
+
+
 class VoiceSession:
     """Manages actor-like lifecycle for a single WebSocket Voice connection."""
 
@@ -94,6 +124,9 @@ class VoiceSession:
         settings: Settings | None = None,
         gates: ProviderGates | None = None,
         history_loader: HistoryLoader | None = None,
+        usage_repository: UsageRepository | None = None,
+        study_repository: StudyRepository | None = None,
+        clerk_user_id: str | None = None,
         clock: Callable[[], float] = monotonic,
     ) -> None:
         self.websocket = websocket
@@ -104,6 +137,10 @@ class VoiceSession:
         self.settings = settings or Settings()
         self.gates = gates
         self.history_loader = history_loader
+        self.usage_repository = usage_repository
+        self.study_repository = study_repository
+        self.clerk_user_id = clerk_user_id
+        self.conversation_id: str | None = None
         self._clock = clock
 
         self.session_id = str(uuid4())
@@ -217,6 +254,7 @@ class VoiceSession:
 
         if not self.started:
             if parsed_msg.type == "session.start":
+                self.conversation_id = parsed_msg.conversation_id
                 if parsed_msg.conversation_id is not None:
                     if self.history_loader is None:
                         await self._send_error(
@@ -327,7 +365,10 @@ class VoiceSession:
 
             previous_generation = self.current_generation
             if previous_generation > 0:
+                previous_turn_id = self.active_turn_id
                 self._cancel_generation(previous_generation)
+                if previous_turn_id is not None:
+                    self._release_usage(previous_turn_id)
 
             self.current_generation = parsed_msg.generation
             self.active_turn_id = parsed_msg.turn_id
@@ -401,6 +442,7 @@ class VoiceSession:
                     self.active_stt_task.cancel()
                 self._cancel_generation(parsed_msg.generation)
                 self.active_turn_id = None
+                self._release_usage(parsed_msg.turn_id)
 
             if cancelled_turn not in self.cancelled_turns:
                 self.cancelled_turns.add(cancelled_turn)
@@ -473,7 +515,8 @@ class VoiceSession:
             )
             return
 
-        if not validate_wav_pcm_16k_mono(audio_bytes):
+        verified_duration = wav_pcm_16k_mono_duration_seconds(audio_bytes)
+        if verified_duration is None:
             await self._send_error(
                 code="invalid_audio",
                 message="El audio no es un WAV PCM 16kHz mono de 16 bits válido.",
@@ -483,6 +526,76 @@ class VoiceSession:
                 generation=begin.generation,
             )
             return
+        if verified_duration > self.settings.max_audio_seconds:
+            await self._send_error(
+                code="audio_too_large",
+                message="El audio supera el límite permitido para este turno.",
+                retryable=False,
+                fatal=False,
+                turn_id=begin.turn_id,
+                generation=begin.generation,
+            )
+            return
+
+        if self.usage_repository is not None and self.clerk_user_id is not None:
+            try:
+                reservation = self.usage_repository.reserve(
+                    self.clerk_user_id,
+                    begin.turn_id,
+                    "voice",
+                    primary=verified_duration,
+                    secondary=1,
+                )
+                if reservation.result is not None:
+                    await self._send_error(
+                        code="invalid_event",
+                        message="Este turno ya fue completado.",
+                        retryable=False,
+                        fatal=False,
+                        turn_id=begin.turn_id,
+                        generation=begin.generation,
+                    )
+                    return
+            except QuotaExhaustedError:
+                await self._send_error(
+                    code="quota_exhausted",
+                    message="No queda saldo suficiente de voz o intervenciones.",
+                    retryable=False,
+                    fatal=False,
+                    turn_id=begin.turn_id,
+                    generation=begin.generation,
+                )
+                return
+            except UsageAccessExpiredError:
+                await self._send_error(
+                    code="access_expired",
+                    message="Tu periodo de acceso terminó. Tu historial sigue disponible.",
+                    retryable=False,
+                    fatal=False,
+                    turn_id=begin.turn_id,
+                    generation=begin.generation,
+                )
+                return
+            except UsageOperationInProgressError:
+                await self._send_error(
+                    code="operation_in_progress",
+                    message="Este turno todavía está en curso.",
+                    retryable=True,
+                    fatal=False,
+                    turn_id=begin.turn_id,
+                    generation=begin.generation,
+                )
+                return
+            except (UsageOperationReleasedError, UsageOperationUncertainError):
+                await self._send_error(
+                    code="operation_uncertain",
+                    message="Este turno necesita conciliación antes de repetirse.",
+                    retryable=False,
+                    fatal=False,
+                    turn_id=begin.turn_id,
+                    generation=begin.generation,
+                )
+                return
 
         if self.active_stt_task and not self.active_stt_task.done():
             self.active_stt_task.cancel()
@@ -495,19 +608,28 @@ class VoiceSession:
             provider=None,
         )
         self.active_stt_task = asyncio.create_task(
-            self._process_stt(begin.turn_id, begin.generation, audio_bytes, begin.duration_ms)
+            self._process_stt(
+                begin.turn_id,
+                begin.generation,
+                audio_bytes,
+                verified_duration,
+            )
         )
 
     async def _process_stt(
-        self, turn_id: str, generation: int, audio_bytes: bytes, duration_ms: int
+        self, turn_id: str, generation: int, audio_bytes: bytes, duration_seconds: float
     ) -> None:
         try:
+            if self.usage_repository is not None and self.clerk_user_id is not None:
+                self.usage_repository.mark_provider_started(self.clerk_user_id, turn_id)
             if self.gates is None:
                 result = await self.stt_provider.transcribe(audio_bytes, media_type="audio/wav")
             else:
                 async with self.gates.stt.slot():
                     result = await self.stt_provider.transcribe(audio_bytes, media_type="audio/wav")
             if generation != self.current_generation:
+                self._record_cost(turn_id, result.cost_usd)
+                self._release_usage(turn_id)
                 return
 
             await self._emit_metric(
@@ -525,7 +647,7 @@ class VoiceSession:
                 "turn_id": turn_id,
                 "generation": generation,
                 "text": result.text,
-                "duration_seconds": round(duration_ms / 1000.0, 2),
+                "duration_seconds": round(duration_seconds, 3),
             })
 
             # Launch parallel conversation and feedback tasks if configured
@@ -551,8 +673,11 @@ class VoiceSession:
                 self.active_generation_tasks.append(fb_task)
 
         except asyncio.CancelledError:
-            pass
+            self._record_provider_cost(turn_id, self.llm_provider)
+            self._release_usage(turn_id)
         except ProviderBusyError:
+            self._record_provider_cost(turn_id, self.llm_provider)
+            self._release_usage(turn_id)
             if generation != self.current_generation:
                 return
             await self._send_error(
@@ -564,6 +689,7 @@ class VoiceSession:
                 generation=generation,
             )
         except IntegrationError as exc:
+            self._release_usage(turn_id)
             if generation != self.current_generation:
                 return
             code_map = {
@@ -587,6 +713,7 @@ class VoiceSession:
                 generation=generation,
             )
         except Exception:
+            self._release_usage(turn_id)
             if generation != self.current_generation:
                 return
             await self._send_error(
@@ -671,6 +798,32 @@ class VoiceSession:
                     )
                     segment_index += 1
 
+                if (
+                    self.study_repository is not None
+                    and self.clerk_user_id is not None
+                    and self.conversation_id is not None
+                ):
+                    self.study_repository.add_turn(
+                        self.clerk_user_id,
+                        self.conversation_id,
+                        {
+                            "operation_id": turn_id,
+                            "user_text": user_text,
+                            "assistant_text": full_assistant_text,
+                        },
+                    )
+                if self.usage_repository is not None and self.clerk_user_id is not None:
+                    self.usage_repository.persist_result(
+                        self.clerk_user_id,
+                        turn_id,
+                        {
+                            "user_text": user_text,
+                            "assistant_text": full_assistant_text,
+                        },
+                        actual_primary=self._reserved_voice_seconds(turn_id),
+                        actual_secondary=1,
+                    )
+                    self.usage_repository.settle(self.clerk_user_id, turn_id)
                 await self._enqueue_message({
                     "type": "assistant.done",
                     "turn_id": turn_id,
@@ -690,6 +843,7 @@ class VoiceSession:
                 self.history.add_completed_turn(user_text, full_assistant_text)
 
             else:
+                self._release_usage(turn_id)
                 await self._send_error(
                     code="conversation_unavailable",
                     message="La conversación no devolvió respuesta válida.",
@@ -699,8 +853,9 @@ class VoiceSession:
                     generation=generation,
                 )
         except asyncio.CancelledError:
-            pass
+            self._release_usage(turn_id)
         except ProviderBusyError:
+            self._release_usage(turn_id)
             if generation != self.current_generation:
                 return
             await self._send_error(
@@ -712,6 +867,8 @@ class VoiceSession:
                 generation=generation,
             )
         except Exception as exc:
+            self._record_provider_cost(turn_id, self.llm_provider)
+            self._release_usage(turn_id)
             if generation != self.current_generation:
                 return
             logger.warning("conversation_failed error_code=%s", safe_error_code(exc))
@@ -775,6 +932,11 @@ class VoiceSession:
                 "generation": generation,
                 "feedback": feedback.model_dump(),
             })
+            if self.study_repository is not None and self.clerk_user_id is not None:
+                with suppress(StudyNotFoundError):
+                    self.study_repository.update_feedback_by_operation(
+                        self.clerk_user_id, turn_id, feedback.model_dump()
+                    )
             feedback_usage = self._consume_provider_usage(self.feedback_provider)
             await self._emit_metric(
                 turn_id=turn_id,
@@ -786,8 +948,9 @@ class VoiceSession:
                 cost_usd=feedback_usage.cost_usd if feedback_usage else None,
             )
         except asyncio.CancelledError:
-            pass
+            self._record_provider_cost(turn_id, self.feedback_provider)
         except ProviderBusyError:
+            self._record_provider_cost(turn_id, self.feedback_provider)
             if generation != self.current_generation:
                 return
             await self._send_error(
@@ -799,6 +962,7 @@ class VoiceSession:
                 generation=generation,
             )
         except Exception as exc:
+            self._record_provider_cost(turn_id, self.feedback_provider)
             if generation != self.current_generation:
                 return
             logger.warning("feedback_failed error_code=%s", safe_error_code(exc))
@@ -853,6 +1017,11 @@ class VoiceSession:
         if cost_usd is not None:
             self.session_cost_usd += cost_usd
             self.session_cost_estimated = self.session_cost_estimated or estimated
+            if self.usage_repository is not None and self.clerk_user_id is not None:
+                with suppress(LookupError):
+                    self.usage_repository.add_cost_usd(
+                        self.clerk_user_id, turn_id, cost_usd
+                    )
         metric = MetricsStageMessage(
             turn_id=turn_id,
             generation=generation,
@@ -878,6 +1047,35 @@ class VoiceSession:
             cost_usd=cost_usd,
             estimated=estimated,
         )
+
+    def _release_usage(self, turn_id: str) -> None:
+        if self.usage_repository is None or self.clerk_user_id is None:
+            return
+        with suppress(LookupError, UsageOperationUncertainError):
+            self.usage_repository.release(self.clerk_user_id, turn_id)
+
+    def _record_cost(self, turn_id: str, cost_usd: float | None) -> None:
+        if (
+            cost_usd is None
+            or self.usage_repository is None
+            or self.clerk_user_id is None
+        ):
+            return
+        self.session_cost_usd += cost_usd
+        with suppress(LookupError):
+            self.usage_repository.add_cost_usd(self.clerk_user_id, turn_id, cost_usd)
+
+    def _record_provider_cost(self, turn_id: str, provider: object | None) -> None:
+        if provider is None:
+            return
+        usage = self._consume_provider_usage(provider)
+        if usage is not None:
+            self._record_cost(turn_id, usage.cost_usd)
+
+    def _reserved_voice_seconds(self, turn_id: str) -> float:
+        if self.usage_repository is None or self.clerk_user_id is None:
+            return 0
+        return self.usage_repository.reserved_primary(self.clerk_user_id, turn_id)
 
     async def _on_tts_ready(self, item: TTSSegmentItem) -> None:
         """Record timing for the first valid remote-audio segment."""
@@ -1016,6 +1214,8 @@ class VoiceSession:
         if self.active_stt_task and not self.active_stt_task.done():
             self.active_stt_task.cancel()
         self._cancel_generation(self.current_generation)
+        if self.active_turn_id is not None:
+            self._release_usage(self.active_turn_id)
         self.active_turn_id = None
         if self.writer_task and not self.writer_task.done():
             self.writer_task.cancel()

@@ -32,6 +32,19 @@ class Settings(BaseSettings):
     sqlite_busy_timeout_ms: int = Field(default=5_000, ge=100, le=60_000)
     ws_ticket_ttl_seconds: int = Field(default=30, ge=5, le=120)
 
+    product_config_version: int = Field(default=1, ge=1)
+    product_plan_code: str = Field(default="monthly_v1", min_length=1, max_length=64)
+    product_currency: Literal["USD"] = "USD"
+    product_price_minor: int = Field(default=299, ge=1)
+    trial_voice_seconds: int = Field(default=600, ge=1)
+    trial_voice_turns: int = Field(default=30, ge=1)
+    trial_writings: int = Field(default=10, ge=1)
+    trial_videos: int = Field(default=3, ge=1)
+    monthly_voice_seconds: int = Field(default=3_600, ge=1)
+    monthly_voice_turns: int = Field(default=180, ge=1)
+    monthly_writings: int = Field(default=100, ge=1)
+    monthly_videos: int = Field(default=20, ge=1)
+
     openrouter_api_key: SecretStr | None = None
     openrouter_stt_model: str = "openai/whisper-large-v3-turbo"
     openrouter_llm_model: str = "google/gemini-3.1-flash-lite"

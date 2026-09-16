@@ -212,6 +212,10 @@ ErrorCodeType = Literal[
     "conversation_unavailable",
     "history_unavailable",
     "history_not_found",
+    "quota_exhausted",
+    "access_expired",
+    "operation_in_progress",
+    "operation_uncertain",
     "speech_unavailable",
 ]
 
