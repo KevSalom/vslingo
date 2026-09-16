@@ -32,6 +32,9 @@ fallback and needs no backend secret.
 - `POST /api/billing/checkout`: recover or create one idempotent PayPal subscription attempt.
 - `POST /api/billing/cancel`: stop future renewals while preserving the paid period.
 - `POST /api/billing/webhooks/paypal`: signature-verified PayPal event ingestion.
+- `GET /api/marketing/config`: public consent policy and enabled state.
+- `POST /api/marketing/visitor-consent|page-view`: bounded anonymous consent/PageView ingestion.
+- `GET|PUT /api/account/marketing-consent`: authenticated, versioned measurement choice.
 - `GET /api/session`: current verified session.
 - `POST /api/session/logout`: revoke the session and its outstanding WS tickets.
 - `POST /api/session/ws-ticket`: issue an opaque, short-lived, one-use voice ticket.
@@ -74,6 +77,19 @@ uv run vslingo-billing-reconcile
 ```
 
 The normal test suite uses the deterministic fake gateway and never performs a charge.
+
+Meta delivery is independently disabled by default. `MARKETING_MODE=meta_test`
+requires a dataset, token and Test Events code; `meta_live` rejects a test code.
+Lead and Purchase are inserted in the same SQLite transactions as first registration
+and payment, but dispatch happens later and only with current consent. PageView accepts
+only public route names and real browser request metadata. The outbox never contains
+audio, study text, notes or feedback. Run delivery and the content-free aggregate
+operator report separately:
+
+```powershell
+uv run vslingo-marketing-dispatch
+uv run vslingo-operator-report
+```
 
 ## Quality checks
 

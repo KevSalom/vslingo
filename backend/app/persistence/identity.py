@@ -1,7 +1,8 @@
 """User and preference repositories whose public keys are authenticated Clerk IDs."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from sqlite3 import Row
+from sqlite3 import Connection, Row
 from uuid import uuid4
 
 from app.persistence.database import Database
@@ -28,8 +29,14 @@ class PreferenceConflictError(RuntimeError):
 class IdentityRepository:
     """Persist identity without accepting an internal user ID from clients."""
 
-    def __init__(self, database: Database) -> None:
+    def __init__(
+        self,
+        database: Database,
+        *,
+        on_user_created: Callable[[Connection, str], None] | None = None,
+    ) -> None:
         self._database = database
+        self._on_user_created = on_user_created
 
     def ensure_user(self, clerk_user_id: str) -> UserRecord:
         """Create a stable application user once for a verified Clerk subject."""
@@ -37,7 +44,7 @@ class IdentityRepository:
         if not clerk_user_id or len(clerk_user_id) > 255:
             raise ValueError("Invalid authenticated user identifier.")
         with self._database.transaction(immediate=True) as connection:
-            connection.execute(
+            inserted = connection.execute(
                 "INSERT OR IGNORE INTO users(id, clerk_user_id) VALUES (?, ?)",
                 (str(uuid4()), clerk_user_id),
             )
@@ -45,6 +52,8 @@ class IdentityRepository:
                 "SELECT id, clerk_user_id, created_at FROM users WHERE clerk_user_id = ?",
                 (clerk_user_id,),
             ).fetchone()
+            if row is not None and inserted.rowcount == 1 and self._on_user_created:
+                self._on_user_created(connection, str(row["id"]))
         if row is None:
             raise RuntimeError("Failed to persist authenticated user.")
         return _user_from_row(row)

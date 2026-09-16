@@ -58,6 +58,13 @@ class Settings(BaseSettings):
         default=AnyHttpUrl("http://localhost:4321/app/cuenta?billing=cancelled")
     )
 
+    marketing_mode: Literal["disabled", "fake", "meta_test", "meta_live"] = "disabled"
+    marketing_policy_version: str = Field(default="2026-09-16", min_length=1, max_length=32)
+    meta_dataset_id: str | None = Field(default=None, min_length=1, max_length=128)
+    meta_access_token: SecretStr | None = None
+    meta_graph_version: str = Field(default="v25.0", pattern=r"^v\d+\.\d+$")
+    meta_test_event_code: str | None = Field(default=None, min_length=1, max_length=128)
+
     openrouter_api_key: SecretStr | None = None
     openrouter_stt_model: str = "openai/whisper-large-v3-turbo"
     openrouter_llm_model: str = "google/gemini-3.1-flash-lite"
@@ -132,6 +139,17 @@ class Settings(BaseSettings):
             for url in (self.billing_return_url, self.billing_cancel_url)
         ):
             raise ValueError("Billing return and cancel URLs must use FRONTEND_ORIGIN.")
+        if self.marketing_mode in {"meta_test", "meta_live"} and not self.meta_configured:
+            raise ValueError("Meta marketing requires dataset ID and access token.")
+        if self.marketing_mode == "meta_test" and not self.meta_test_event_code:
+            raise ValueError("Meta test mode requires META_TEST_EVENT_CODE.")
+        if self.marketing_mode == "meta_live" and self.meta_test_event_code:
+            raise ValueError("Meta live mode cannot use META_TEST_EVENT_CODE.")
+        if (
+            self.environment.lower() not in {"development", "test"}
+            and self.marketing_mode == "fake"
+        ):
+            raise ValueError("MARKETING_MODE=fake is allowed only in development and test.")
         return self
 
     @property
@@ -178,6 +196,12 @@ class Settings(BaseSettings):
             and bool(self.paypal_webhook_id and self.paypal_webhook_id.strip())
             and bool(self.paypal_plan_id and self.paypal_plan_id.strip())
             and bool(self.paypal_merchant_id and self.paypal_merchant_id.strip())
+        )
+
+    @property
+    def meta_configured(self) -> bool:
+        return bool(self.meta_dataset_id and self.meta_dataset_id.strip()) and self._secret_is_set(
+            self.meta_access_token
         )
 
     @staticmethod

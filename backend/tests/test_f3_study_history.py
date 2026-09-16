@@ -32,7 +32,7 @@ def test_history_schema_contains_no_audio_payload_columns(tmp_path: Path) -> Non
     database = Database(tmp_path / "history.db")
     database.migrate()
 
-    assert database.applied_migrations() == (1, 2, 3, 4)
+    assert database.applied_migrations() == (1, 2, 3, 4, 5)
     schema = database.query_one(
         "SELECT group_concat(sql, ' ') AS sql FROM sqlite_master WHERE type = 'table'"
     )

@@ -1,0 +1,86 @@
+---
+const apiBaseUrl = import.meta.env.PUBLIC_API_URL?.trim() || 'http://127.0.0.1:8000';
+---
+
+<aside aria-label="Preferencia de medición" class="marketing-consent" hidden id="marketing-consent">
+  <div>
+    <strong>¿Nos ayudas a medir qué funciona?</strong>
+    <p>La medición es opcional. Nunca enviamos audio, textos, notas ni feedback.</p>
+    <p class="marketing-consent-error" hidden id="marketing-consent-error" role="alert"></p>
+  </div>
+  <div class="marketing-consent-actions">
+    <button data-marketing-choice="false" type="button">No, gracias</button>
+    <button class="marketing-consent-accept" data-marketing-choice="true" type="button">Permitir medición</button>
+  </div>
+</aside>
+
+<script is:inline define:vars={{ apiBaseUrl }}>
+  (function () {
+    var decisionKey = 'ingles-al-grano:marketing-consent';
+    var visitorKey = 'ingles-al-grano:visitor-id';
+    var banner = document.getElementById('marketing-consent');
+    var error = document.getElementById('marketing-consent-error');
+    var base = apiBaseUrl.replace(/\/$/, '');
+    if (!banner || !error) return;
+
+    function visitorId() {
+      var existing = localStorage.getItem(visitorKey);
+      if (existing) return existing;
+      var created = crypto.randomUUID();
+      localStorage.setItem(visitorKey, created);
+      return created;
+    }
+    async function saveVisitor(id, allowed) {
+      var response = await fetch(base + '/api/marketing/visitor-consent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visitor_id: id, analytics_allowed: allowed })
+      });
+      if (!response.ok) throw new Error('consent');
+    }
+    function pageView(id) {
+      return fetch(base + '/api/marketing/page-view', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visitor_id: id, event_id: crypto.randomUUID(), route: '/' })
+      });
+    }
+    fetch(base + '/api/marketing/config')
+      .then(function (response) { if (!response.ok) throw new Error('config'); return response.json(); })
+      .then(function (config) {
+        if (!config.enabled) return;
+        var saved = null;
+        try { saved = JSON.parse(localStorage.getItem(decisionKey) || 'null'); } catch (_) {}
+        if (saved && saved.policyVersion === config.policy_version && typeof saved.allowed === 'boolean') {
+          saveVisitor(visitorId(), saved.allowed).then(function () {
+            if (saved.allowed) return pageView(visitorId());
+          }).catch(function () {});
+          return;
+        }
+        banner.hidden = false;
+        banner.querySelectorAll('[data-marketing-choice]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            var allowed = button.getAttribute('data-marketing-choice') === 'true';
+            banner.querySelectorAll('button').forEach(function (item) { item.disabled = true; });
+            if (!allowed) {
+              localStorage.setItem(decisionKey, JSON.stringify({ allowed: false, policyVersion: config.policy_version }));
+              banner.hidden = true;
+            }
+            saveVisitor(visitorId(), allowed).then(function () {
+              if (allowed) {
+                localStorage.setItem(decisionKey, JSON.stringify({ allowed: true, policyVersion: config.policy_version }));
+                banner.hidden = true;
+                return pageView(visitorId());
+              }
+            }).catch(function () {
+              if (allowed) {
+                error.textContent = 'No pudimos guardar tu elección. No se enviará medición.';
+                error.hidden = false;
+                banner.querySelectorAll('button').forEach(function (item) { item.disabled = false; });
+              }
+            });
+          });
+        });
+      }).catch(function () {});
+  })();
+</script>

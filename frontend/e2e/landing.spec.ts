@@ -27,4 +27,29 @@ test.describe('Landing Page E2E', () => {
     await page.waitForURL('/app/hablar');
     await expect(page.locator('#voice-title')).toBeVisible();
   });
+
+  test('keeps optional measurement off after an explicit rejection', async ({ page }) => {
+    let consentBody = '';
+    let pageViews = 0;
+    await page.route('**/api/marketing/config', (route) => route.fulfill({
+      json: { enabled: true, policy_version: '2026-09-16' },
+    }));
+    await page.route('**/api/marketing/visitor-consent', async (route) => {
+      consentBody = route.request().postData() ?? '';
+      await route.fulfill({ json: { status: 'saved' } });
+    });
+    await page.route('**/api/marketing/page-view', async (route) => {
+      pageViews += 1;
+      await route.fulfill({ json: { status: 'queued' } });
+    });
+    await page.setViewportSize({ width: 320, height: 720 });
+    await page.goto('/');
+
+    await expect(page.getByLabel('Preferencia de medición')).toBeVisible();
+    await page.getByRole('button', { name: 'No, gracias' }).click();
+
+    await expect(page.getByLabel('Preferencia de medición')).toBeHidden();
+    expect(JSON.parse(consentBody)).toMatchObject({ analytics_allowed: false });
+    expect(pageViews).toBe(0);
+  });
 });

@@ -9,12 +9,12 @@ Este es el único documento para el estado mutable de implementación. Debe actu
 ## Estado actual
 
 - **Roadmap actual:** MVP comercial Inglés al Grano `F0`–`F8`; la Alpha `T01`–`T10` queda como baseline histórico completado.
-- **Fase actual:** `F5 — PayPal y Cuenta` completada el 2026-09-16.
-- **Próximo incremento:** `F6 — Medición y operación`.
+- **Fase actual:** `F6 — Medición y operación` completada el 2026-09-16.
+- **Próximo incremento:** `F7 — PWA y lanzamiento`.
 - **Rama de trabajo:** `codex/ingles-al-grano-mvp`, creada desde `main` en `aa26cab8ac10345a2c596febe78a0ad10c7df5c1` (`feat: add global stylesheet with Tailwind integration and multi-theme design tokens`).
-- **Completado:** F0 adoptó el plan y aisló la rama; F1 entregó producto/UI/voz simple; F2 añadió identidad y SQLite; F3 incorporó historial sincronizado; F4 añadió oferta tipada, prueba única, cuotas transaccionales, costes y saldo; F5 incorporó suscripciones PayPal, webhook/conciliación, periodos pagados, cancelación y devoluciones.
-- **Pendiente:** F6–F7; F8 permanece posterior al lanzamiento y sujeto al cierre de condiciones comerciales.
-- **Bloqueos:** ninguno para iniciar F6 con Meta desactivado y adaptadores falsos. La validación PayPal Sandbox/Live con cuenta real, un tenant Clerk real, OpenRouter live, Meta y dispositivos físicos siguen siendo gates externos del fundador en sus fases correspondientes.
+- **Completado:** F0 adoptó el plan y aisló la rama; F1 entregó producto/UI/voz simple; F2 añadió identidad y SQLite; F3 incorporó historial sincronizado; F4 añadió oferta tipada, prueba única, cuotas transaccionales, costes y saldo; F5 incorporó suscripciones PayPal y periodos pagados; F6 añadió consentimiento, outbox Meta y operación agregada.
+- **Pendiente:** F7; F8 permanece posterior al lanzamiento y sujeto al cierre de condiciones comerciales.
+- **Bloqueos:** F7 puede avanzar en PWA, backups y runbooks, pero sus gates finales requieren configuración PayPal Sandbox/Live y Clerk real, OpenRouter autorizado, Meta Test Events si habrá publicidad, y pruebas en dispositivos físicos del fundador.
 
 ## Evidencia de F0
 
@@ -91,6 +91,19 @@ Este es el único documento para el estado mutable de implementación. Debe actu
 - Backend completo: lock válido, Ruff y mypy estricto en verde; **180 tests pytest** pasaron. Se conserva una advertencia de deprecación Starlette/TestClient.
 - Frontend completo: Astro check con **0 errores y 0 warnings** (5 hints heredados de `ScriptProcessorNode`), **136 tests Vitest** pasaron y el build generó siete rutas. E2E de Chrome completó **9/9**; Edge completó los ocho recorridos no afectados y, tras corregir una aserción de foco dependiente del navegador, Cuenta pasó **2/2** en la repetición dirigida.
 - Revisión renderizada: Cuenta mantiene la paleta English Corrector, jerarquía clara y CTA convencional; el caso móvil a 320 px con texto al 200% y el modo oscuro permanecen sin desbordamiento. No se ejecutaron PayPal Sandbox/Live ni compras reales: requieren configuración y autorización del fundador y continúan como gate externo de F7.
+
+## Evidencia de F6
+
+- La migración `0005_marketing.sql` añade consentimiento por usuario y visitante, versión de política y outbox idempotente. Sólo admite `PageView`, `Lead` y `Purchase`; cada `event_id` es único y el dispatcher conserva ese ID en reintentos.
+- El primer registro verificado inserta Lead en la misma transacción que el usuario. Cada pago confirmado inserta Purchase en la transacción del ledger: la primera compra usa `website`, una renovación usa `system_generated`, y duplicar webhook/transacción no duplica el evento.
+- PageView nace en el navegador con UUID propio, sólo acepta siete rutas públicas exactas y recibe IP/agent únicamente de esa petición real. Queries, tokens, rutas privadas, audio, notas, textos de estudio y feedback no entran al payload; el endpoint público comparte la protección por IP.
+- El consentimiento es opcional, explícito y versionado. Rechazar o revocar impide que el dispatcher seleccione Lead/Purchase; PageView ni siquiera entra al outbox sin consentimiento vigente. Fallar al guardar una aceptación mantiene la medición apagada y deja el aviso visible.
+- La landing conserva HTML estático y usa un aviso pequeño, convencional y responsive. El workspace sincroniza la elección con la cuenta autenticada y sólo emite PageView tras aceptación. La prueba a 320 px en Chrome y Edge confirma que «No, gracias» oculta el aviso y produce cero PageView.
+- `MARKETING_MODE=disabled` es el predeterminado sin secretos ni entregas. `fake` queda restringido a desarrollo/pruebas; `meta_test` exige dataset/token/Test Events code y `meta_live` rechaza el código de pruebas. El contrato HTTP de Graph `v25.0`, `event_id`, `action_source` y test code se verificó con HTTP simulado.
+- `uv run vslingo-marketing-dispatch` entrega fuera del request de pago. Una caída Meta marca reintento exponencial sin retirar acceso ni cambiar el ID. `uv run vslingo-operator-report` muestra sólo totales de pagos, bruto, devoluciones, costes, ajustes manuales y estados del outbox.
+- Backend completo: lock válido, Ruff y mypy estricto en verde; **188 tests pytest** pasaron. Se conserva una advertencia de deprecación Starlette/TestClient.
+- Frontend completo: Astro check con **0 errores y 0 warnings** (5 hints heredados de `ScriptProcessorNode`), **139 tests Vitest** pasaron y el build generó siete rutas. Antes del nuevo caso de consentimiento, Chrome y Edge completaron **9/9**; después, la suite dirigida de Landing completó **3/3** en cada motor, incluido rechazo sin tracking.
+- No se configuró Meta, no se enviaron Test Events ni eventos live y no se añadió Pixel. Meta continúa desactivado hasta que el fundador suministre configuración protegida y autorice el ensayo de F7; CAPI nunca determina ingresos, que siguen viniendo del ledger PayPal.
 
 ## Inventario y riesgos considerados en F1 (histórico)
 

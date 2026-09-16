@@ -21,6 +21,8 @@ dependencies = [
 [project.scripts]
 vslingo-api = "app.main:run"
 vslingo-billing-reconcile = "app.billing.reconcile:main"
+vslingo-marketing-dispatch = "app.marketing.dispatch:main"
+vslingo-operator-report = "app.operations.report:main"
 vslingo-smoke = "app.providers.smoke:main"
 
 [dependency-groups]

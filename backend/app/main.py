@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from app import __version__
 from app.api.billing import build_billing_router
 from app.api.history import build_history_router
+from app.api.marketing import build_marketing_router
 from app.api.session import authentication_error_response, build_session_router
 from app.api.speech import (
     build_speech_router,
@@ -35,9 +36,13 @@ from app.core.product import ProductConfig
 from app.core.protection import ConnectionLimiter, ProviderGate, ProviderGates, RequestLimiter
 from app.domain.ports import LanguageModelPort, SpeechToTextPort, VoiceFeedbackPort
 from app.domain.speech import SpeechProvider
+from app.marketing.fake import FakeMarketingGateway
+from app.marketing.gateway import MarketingGateway
+from app.marketing.meta import MetaMarketingGateway
 from app.persistence.billing import BillingRepository
 from app.persistence.database import Database
 from app.persistence.identity import IdentityRepository
+from app.persistence.marketing import MarketingRepository
 from app.persistence.study import StudyRepository
 from app.persistence.usage import UsageRepository
 from app.persistence.ws_tickets import WebSocketTicketRepository
@@ -50,6 +55,7 @@ from app.providers.readiness import get_provider_readiness
 from app.providers.youtube_transcript import YouTubeTranscriptProvider
 from app.services.billing import BillingService
 from app.services.correction import CorrectionService
+from app.services.marketing import MarketingService
 from app.services.speech import SpeechService
 from app.services.video import VideoService
 
@@ -84,6 +90,7 @@ def create_app(
     database: Database | None = None,
     authenticator: Authenticator | None = None,
     billing_gateway: BillingGateway | None = None,
+    marketing_gateway: MarketingGateway | None = None,
 ) -> FastAPI:
     """Build an isolated FastAPI application with explicit dependencies."""
 
@@ -151,11 +158,20 @@ def create_app(
         database_path,
         busy_timeout_ms=runtime_settings.sqlite_busy_timeout_ms,
     )
-    identity_repository = IdentityRepository(runtime_database)
-    study_repository = StudyRepository(runtime_database)
     product_config = ProductConfig.from_settings(runtime_settings)
+    marketing_repository = MarketingRepository(
+        runtime_database,
+        policy_version=runtime_settings.marketing_policy_version,
+        frontend_origin=runtime_settings.normalized_frontend_origin,
+    )
+    identity_repository = IdentityRepository(
+        runtime_database, on_user_created=marketing_repository.enqueue_lead
+    )
+    study_repository = StudyRepository(runtime_database)
     usage_repository = UsageRepository(runtime_database, product_config)
-    billing_repository = BillingRepository(runtime_database, product_config)
+    billing_repository = BillingRepository(
+        runtime_database, product_config, marketing_repository
+    )
     runtime_billing_gateway = billing_gateway or (
         FakeBillingGateway()
         if runtime_settings.billing_mode == "fake"
@@ -166,6 +182,16 @@ def create_app(
         runtime_billing_gateway,
         runtime_settings,
         product_config,
+    )
+    runtime_marketing_gateway = marketing_gateway or (
+        None
+        if runtime_settings.marketing_mode == "disabled"
+        else FakeMarketingGateway()
+        if runtime_settings.marketing_mode == "fake"
+        else MetaMarketingGateway(runtime_settings)
+    )
+    marketing_service = MarketingService(
+        marketing_repository, runtime_settings, runtime_marketing_gateway
     )
     ws_ticket_repository = WebSocketTicketRepository(
         runtime_database,
@@ -195,6 +221,9 @@ def create_app(
     application.state.billing_repository = billing_repository
     application.state.billing_gateway = runtime_billing_gateway
     application.state.billing_service = billing_service
+    application.state.marketing_repository = marketing_repository
+    application.state.marketing_gateway = runtime_marketing_gateway
+    application.state.marketing_service = marketing_service
     application.state.ws_ticket_repository = ws_ticket_repository
     application.state.authenticator = runtime_authenticator
     application.add_middleware(
@@ -226,6 +255,8 @@ def create_app(
             ("GET", "/api/account/billing"),
             ("POST", "/api/billing/checkout"),
             ("POST", "/api/billing/cancel"),
+            ("GET", "/api/account/marketing-consent"),
+            ("PUT", "/api/account/marketing-consent"),
             ("POST", "/api/writing/correct"),
             ("POST", "/api/video/transcript"),
             ("POST", "/api/speech"),
@@ -246,6 +277,8 @@ def create_app(
             "/api/writing/correct",
             "/api/video/transcript",
             "/api/speech",
+            "/api/marketing/visitor-consent",
+            "/api/marketing/page-view",
         }
         if response is not None:
             pass
@@ -299,6 +332,19 @@ def create_app(
                     }
                 },
             )
+        if request.url.path.startswith("/api/marketing/") or request.url.path == (
+            "/api/account/marketing-consent"
+        ):
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "error": {
+                        "code": "invalid_marketing_request",
+                        "message": "La preferencia o el evento de medición no es válido.",
+                        "retryable": False,
+                    }
+                },
+            )
         return await handle_writing_validation_error(request, error)
 
     application.add_exception_handler(
@@ -307,6 +353,7 @@ def create_app(
     )
     application.include_router(build_usage_router(product_config, usage_repository))
     application.include_router(build_billing_router(billing_service))
+    application.include_router(build_marketing_router(marketing_repository, runtime_settings))
     application.include_router(build_writing_router(runtime_correction_service, usage_repository))
     application.include_router(build_video_router(runtime_video_service, usage_repository))
     application.include_router(build_speech_router(runtime_speech_service))

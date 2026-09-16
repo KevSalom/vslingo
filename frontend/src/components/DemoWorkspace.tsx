@@ -12,6 +12,7 @@ import {
 } from '../shared/auth/preferencesClient';
 import { saveSpeechVoice } from '../shared/speech/storage';
 import { EDGE_VOICES } from '../shared/speech/voiceCatalog';
+import { MarketingConsent, ROUTE_CHANGE_EVENT } from '../shared/marketing/MarketingConsent';
 import { ThemeProvider, useTheme } from '../shared/theme/ThemeProvider';
 import { loadPublicPlan, type PublicPlan } from '../shared/usage/usageClient';
 
@@ -110,7 +111,12 @@ function AccountScopedWorkspace() {
   if (!preferencesReady) {
     return <main aria-live="polite" className="auth-gate">Cargando tus preferencias…</main>;
   }
-  return <Workspace key={sessionKey} />;
+  return (
+    <>
+      <Workspace key={sessionKey} />
+      <MarketingConsent authenticated />
+    </>
+  );
 }
 
 function Workspace() {
@@ -167,6 +173,7 @@ function Workspace() {
                 event.preventDefault();
                 if (window.location.pathname !== `/app/${module.slug}`) {
                   window.history.pushState(null, '', `/app/${module.slug}`);
+                  window.dispatchEvent(new Event(ROUTE_CHANGE_EVENT));
                 }
                 setActiveId(module.id);
               }}

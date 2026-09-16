@@ -12,6 +12,7 @@ from app.billing.events import SUPPORTED_EVENT_TYPES, BillingEvent
 from app.billing.gateway import ProviderEnvironment, ProviderSubscriptionStatus
 from app.core.product import ProductConfig
 from app.persistence.database import Database
+from app.persistence.marketing import MarketingRepository
 
 
 class AlreadySubscribedError(RuntimeError):
@@ -58,9 +59,15 @@ class BillingEventResult:
 
 
 class BillingRepository:
-    def __init__(self, database: Database, product: ProductConfig) -> None:
+    def __init__(
+        self,
+        database: Database,
+        product: ProductConfig,
+        marketing: MarketingRepository | None = None,
+    ) -> None:
         self._database = database
         self._product = product
+        self._marketing = marketing
 
     def begin_checkout(
         self, clerk_user_id: str, environment: ProviderEnvironment
@@ -378,6 +385,11 @@ class BillingRepository:
         if existing is not None:
             return "processed"
 
+        previous_payment = connection.execute(
+            "SELECT 1 FROM payments WHERE user_id = ? LIMIT 1",
+            (subscription["user_id"],),
+        ).fetchone()
+
         starts_at, ends_at = _monthly_period(event.occurred_at)
         newer = connection.execute(
             """SELECT 1 FROM payments WHERE user_id = ? AND paid_at > ?
@@ -432,6 +444,16 @@ class BillingRepository:
                 period_id,
             ),
         )
+        if self._marketing is not None:
+            self._marketing.enqueue_purchase(
+                connection,
+                user_id=str(subscription["user_id"]),
+                transaction_id=event.provider_transaction_id,
+                amount_minor=event.amount_minor,
+                currency=event.currency,
+                occurred_at=event.occurred_at,
+                first_payment=previous_payment is None,
+            )
         if period_status == "active":
             connection.execute(
                 """UPDATE subscriptions SET status = 'active', access_ends_at = ?,
