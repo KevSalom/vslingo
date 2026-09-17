@@ -55,6 +55,21 @@ describe('WritingStudio', () => {
     expect(screen.getByText(MULTIPLE_CORRECTIONS.general_feedback)).toBeInTheDocument();
   });
 
+  it('normalizes surrounding whitespace before submitting and storing the draft', async () => {
+    const user = userEvent.setup();
+    const correctText = vi.fn().mockResolvedValue(MULTIPLE_CORRECTIONS);
+    render(<WritingStudio correctText={correctText} />);
+
+    const editor = screen.getByRole('textbox', { name: 'Tu texto en inglés' });
+    await user.type(editor, `  ${MULTIPLE_CORRECTIONS.original_text}  `);
+    await user.click(screen.getByRole('button', { name: 'Revisar texto' }));
+
+    await waitFor(() => {
+      expect(correctText).toHaveBeenCalledWith(MULTIPLE_CORRECTIONS.original_text);
+    });
+    expect(editor).toHaveValue(MULTIPLE_CORRECTIONS.original_text);
+  });
+
   it('copies the corrected text through the clipboard action', async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);

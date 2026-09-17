@@ -81,10 +81,14 @@ export function WritingStudio({
 
   const handleSubmit = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isSubmitting || !draft.trim()) {
+    const submittedText = draft.trim();
+    if (isSubmitting || !submittedText) {
       return;
     }
 
+    if (submittedText !== draft) {
+      setDraft(submittedText);
+    }
     setIsSubmitting(true);
     setError(null);
     setCopied(false);
@@ -93,8 +97,8 @@ export function WritingStudio({
       const operationId = pendingOperationId.current ?? createOperationId();
       pendingOperationId.current = operationId;
       const corrected = correctText === correctWriting
-        ? await correctWriting(draft, { operationId })
-        : await correctText(draft);
+        ? await correctWriting(submittedText, { operationId })
+        : await correctText(submittedText);
       pendingOperationId.current = null;
       setResult(corrected);
       markPracticeCompleted();

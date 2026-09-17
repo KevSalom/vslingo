@@ -29,12 +29,11 @@ class CorrectionService:
     async def correct(self, text: str) -> CorrectionResult:
         """Return a consistent correction or a typed input/provider error."""
 
-        if not text.strip():
+        canonical_text = text.strip()
+        if not canonical_text:
             raise WritingInputError(WritingInputErrorCode.EMPTY_TEXT)
-        if len(text) > MAX_CORRECTION_TEXT_LENGTH:
+        if len(canonical_text) > MAX_CORRECTION_TEXT_LENGTH:
             raise WritingInputError(WritingInputErrorCode.TEXT_TOO_LONG)
-
-        canonical_text = text.rstrip("\r\n")
 
         for attempt in range(1, MAX_CORRECTION_ATTEMPTS + 1):
             try:

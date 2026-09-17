@@ -343,11 +343,15 @@ def test_writing_retries_an_original_text_mismatch_once() -> None:
     assert provider.calls == [text, text]
 
 
-@pytest.mark.parametrize("terminal_line_ending", ["\n", "\r\n"])
-def test_writing_normalizes_terminal_line_endings_before_calling_provider(
-    terminal_line_ending: str,
+@pytest.mark.parametrize(
+    ("leading_whitespace", "trailing_whitespace"),
+    [("", " "), ("", "\t"), (" ", " \r\n\t")],
+)
+def test_writing_normalizes_surrounding_whitespace_before_calling_provider(
+    leading_whitespace: str,
+    trailing_whitespace: str,
 ) -> None:
-    canonical_text = "Hey, Can we ban the user?"
+    canonical_text = "Hey, can we ban the user?\n\nPlease confirm."
     valid_result = CorrectionResult(
         original_text=canonical_text,
         corrected_text=canonical_text,
@@ -359,7 +363,7 @@ def test_writing_normalizes_terminal_line_endings_before_calling_provider(
 
     response = _client_for_scripted_provider(provider).post(
         "/api/writing/correct",
-        json={"text": f"{canonical_text}{terminal_line_ending}"},
+        json={"text": f"{leading_whitespace}{canonical_text}{trailing_whitespace}"},
     )
 
     assert response.status_code == 200
