@@ -9,8 +9,10 @@ services:
         value: 22.12.0
       - key: PNPM_VERSION
         value: 10.32.0
+      - key: SITE_URL
+        value: https://inglesalgrano.com
       - key: PUBLIC_API_URL
-        value: https://api.vslingo.app
+        value: https://backend.inglesalgrano.com
       - key: PUBLIC_AUTH_MODE
         value: clerk
       - key: PUBLIC_CLERK_PUBLISHABLE_KEY
@@ -29,6 +31,9 @@ services:
         source: /demo/*
         destination: /demo/index.html
     headers:
+      - path: /app.webmanifest
+        name: Content-Type
+        value: application/manifest+json
       - path: /*
         name: X-Content-Type-Options
         value: nosniff
