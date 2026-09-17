@@ -9,6 +9,7 @@ from app.billing.gateway import BillingGateway, BillingGatewayError
 from app.core.config import Settings
 from app.core.product import ProductConfig
 from app.persistence.billing import (
+    AlreadySubscribedError,
     BillingAttempt,
     BillingEventRejectedError,
     BillingEventResult,
@@ -47,12 +48,42 @@ class BillingService:
         self._plan_id = settings.paypal_plan_id or FAKE_PLAN_ID
         self._merchant_id = settings.paypal_merchant_id or FAKE_MERCHANT_ID
 
-    async def start_checkout(self, clerk_user_id: str) -> BillingAttempt:
+    async def start_checkout(
+        self, clerk_user_id: str, *, replace_pending: bool = False
+    ) -> BillingAttempt:
         attempt = self._repository.begin_checkout(
             clerk_user_id, self._gateway.environment
         )
         if attempt.status == "approval_pending" and attempt.approval_url is not None:
-            return attempt
+            if not replace_pending:
+                return attempt
+            subscription = self._repository.reconcilable_subscription(clerk_user_id)
+            provider_subscription = await self._gateway.get_subscription(
+                subscription.provider_subscription_id
+            )
+            if provider_subscription.plan_id != self._plan_id:
+                raise BillingGatewayError(
+                    "PayPal returned a subscription for another plan.", uncertain=False
+                )
+            if provider_subscription.status in {"approved", "active", "suspended"}:
+                self._repository.reconcile_subscription_status(
+                    subscription.provider_subscription_id,
+                    provider_subscription.status,
+                )
+                raise AlreadySubscribedError
+            if provider_subscription.status == "approval_pending":
+                await self._gateway.cancel_subscription(
+                    subscription.provider_subscription_id,
+                    request_id=attempt.id,
+                )
+            attempt = self._repository.replace_pending_checkout(
+                clerk_user_id, attempt.id
+            )
+            if attempt.status == "approval_pending" and attempt.approval_url is not None:
+                return attempt
+        return await self._create_checkout(attempt)
+
+    async def _create_checkout(self, attempt: BillingAttempt) -> BillingAttempt:
         try:
             session = await self._gateway.create_subscription(
                 request_id=attempt.provider_request_id,

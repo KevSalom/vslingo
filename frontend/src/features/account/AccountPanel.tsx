@@ -6,6 +6,7 @@ import {
   loadBillingAccount,
   startBillingCheckout,
   type BillingAccount,
+  BillingRequestError,
   type BillingSubscription,
 } from './billingClient';
 import {
@@ -105,15 +106,19 @@ export function AccountPanel() {
     };
   }, [reloadBilling, reloadQuota, verifyReturnedPayment]);
 
-  const beginCheckout = async () => {
+  const beginCheckout = async (replacePending = false) => {
     setAction('checkout');
     setActionMessage('');
     try {
-      const checkout = await startBillingCheckout();
+      const checkout = await startBillingCheckout({ replacePending });
       if (!checkout.approval_url) throw new Error('Missing approval URL');
       window.location.assign(checkout.approval_url);
-    } catch {
+    } catch (cause) {
       setAction(null);
+      if (cause instanceof BillingRequestError && cause.code === 'subscription_exists') {
+        await verifyReturnedPayment();
+        return;
+      }
       setActionMessage('No pudimos abrir PayPal. Tu saldo no cambió; inténtalo de nuevo.');
     }
   };
@@ -155,7 +160,7 @@ export function AccountPanel() {
           onCancel={() => setConfirmCancel(true)}
           onCancelAbort={() => setConfirmCancel(false)}
           onCancelConfirm={() => void cancelRenewal()}
-          onCheckout={() => void beginCheckout()}
+          onCheckout={(replacePending) => void beginCheckout(replacePending)}
           onVerify={() => void verifyReturnedPayment()}
         />
       ) : (
@@ -193,7 +198,7 @@ type BillingCardProps = {
   billing: BillingAccount;
   action: 'checkout' | 'cancel' | null;
   confirmCancel: boolean;
-  onCheckout: () => void;
+  onCheckout: (replacePending?: boolean) => void;
   onCancel: () => void;
   onCancelAbort: () => void;
   onCancelConfirm: () => void;
@@ -241,14 +246,21 @@ function BillingCard(props: BillingCardProps) {
           <button
             className="writing-btn writing-btn-primary"
             disabled={action !== null}
-            onClick={props.onCheckout}
+            onClick={() => props.onCheckout(false)}
             type="button"
           >
             {action === 'checkout' ? 'Abriendo PayPal…' : 'Activar plan'}
           </button>
         ) : null}
         {approvalUrl && subscription?.status === 'approval_pending' ? (
-          <a className="writing-btn writing-btn-primary" href={approvalUrl}>Continuar en PayPal</a>
+          <button
+            className="writing-btn writing-btn-primary"
+            disabled={action !== null}
+            onClick={() => props.onCheckout(true)}
+            type="button"
+          >
+            {action === 'checkout' ? 'Abriendo PayPal…' : 'Continuar en PayPal'}
+          </button>
         ) : null}
         {awaitingPayment ? (
           <button className="writing-btn writing-btn-primary" onClick={props.onVerify} type="button">

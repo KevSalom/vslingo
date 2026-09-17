@@ -107,6 +107,57 @@ def test_checkout_is_idempotent_and_browser_return_does_not_activate(
         ] == 1
 
 
+def test_pending_checkout_is_transparently_replaced_before_returning_to_paypal(
+    tmp_path: Path,
+) -> None:
+    application, database, gateway = _app(tmp_path)
+    with TestClient(application, headers=AUTH) as client:
+        first = _checkout(client)
+        first_subscription_id = first["approval_url"].rsplit("/", 1)[-1]
+
+        replacement = client.post(
+            "/api/billing/checkout", params={"replace_pending": "true"}
+        )
+
+        assert replacement.status_code == 200
+        replacement_body = replacement.json()
+        assert replacement_body["attempt_id"] != first["attempt_id"]
+        assert replacement_body["approval_url"] != first["approval_url"]
+        assert gateway.cancel_calls == [first_subscription_id]
+        assert len(gateway.create_calls) == 2
+        assert database.query_one(
+            "SELECT status FROM billing_attempts WHERE id = ?",
+            (first["attempt_id"],),
+        )["status"] == "cancelled"
+        assert database.query_one(
+            "SELECT status FROM subscriptions WHERE provider_subscription_id = ?",
+            (first_subscription_id,),
+        )["status"] == "cancelled"
+        assert database.query_one(
+            "SELECT COUNT(*) AS count FROM billing_attempts "
+            "WHERE status IN ('creating', 'approval_pending', 'uncertain')"
+        )["count"] == 1
+
+
+def test_pending_checkout_is_never_replaced_after_provider_approval(
+    tmp_path: Path,
+) -> None:
+    application, _database, gateway = _app(tmp_path)
+    with TestClient(application, headers=AUTH) as client:
+        first = _checkout(client)
+        subscription_id = first["approval_url"].rsplit("/", 1)[-1]
+        gateway.set_status(subscription_id, "active")
+
+        response = client.post(
+            "/api/billing/checkout", params={"replace_pending": "true"}
+        )
+
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "subscription_exists"
+        assert gateway.cancel_calls == []
+        assert len(gateway.create_calls) == 1
+
+
 def test_verified_payment_activates_once_and_duplicate_transaction_is_safe(
     tmp_path: Path,
 ) -> None:

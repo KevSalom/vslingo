@@ -27,9 +27,12 @@ def build_billing_router(service: BillingService) -> APIRouter:
         return service.account(_identity(request).user_id)
 
     @router.post("/api/billing/checkout")
-    async def start_checkout(request: Request) -> Any:
+    async def start_checkout(request: Request, replace_pending: bool = False) -> Any:
         try:
-            attempt = await service.start_checkout(_identity(request).user_id)
+            attempt = await service.start_checkout(
+                _identity(request).user_id,
+                replace_pending=replace_pending,
+            )
         except AlreadySubscribedError:
             return _error(
                 409,

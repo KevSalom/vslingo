@@ -4,11 +4,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AccountPanel } from './AccountPanel';
 
-const { cancelBillingSubscriptionMock, confirmBillingPaymentMock, loadAccountQuotaMock, loadBillingAccountMock } = vi.hoisted(() => ({
+const {
+  cancelBillingSubscriptionMock,
+  confirmBillingPaymentMock,
+  loadAccountQuotaMock,
+  loadBillingAccountMock,
+  startBillingCheckoutMock,
+} = vi.hoisted(() => ({
   cancelBillingSubscriptionMock: vi.fn(),
   confirmBillingPaymentMock: vi.fn(),
   loadAccountQuotaMock: vi.fn(),
   loadBillingAccountMock: vi.fn(),
+  startBillingCheckoutMock: vi.fn(),
 }));
 
 vi.mock('../../shared/usage/usageClient', () => ({
@@ -21,10 +28,15 @@ vi.mock('../../shared/usage/usageClient', () => ({
 }));
 
 vi.mock('./billingClient', () => ({
+  BillingRequestError: class BillingRequestError extends Error {
+    constructor(readonly code: string, message: string, readonly status: number) {
+      super(message);
+    }
+  },
   cancelBillingSubscription: cancelBillingSubscriptionMock,
   confirmBillingPayment: confirmBillingPaymentMock,
   loadBillingAccount: loadBillingAccountMock,
-  startBillingCheckout: vi.fn(),
+  startBillingCheckout: startBillingCheckoutMock,
 }));
 
 const QUOTA = {
@@ -155,5 +167,77 @@ describe('AccountPanel', () => {
     expect(await screen.findByText('Confirmando pago')).toBeInTheDocument();
     expect(screen.queryByText('Activo')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Verificar pago' })).toBeInTheDocument();
+  });
+
+  it('refreshes a pending checkout transparently instead of reusing its stale link', async () => {
+    const user = userEvent.setup();
+    loadAccountQuotaMock.mockResolvedValueOnce(QUOTA);
+    loadBillingAccountMock.mockResolvedValueOnce({
+      ...TRIAL_BILLING,
+      subscription: {
+        id: 'subscription-pending',
+        status: 'approval_pending',
+        auto_renew: true,
+        access_ends_at: null,
+        can_cancel: false,
+      },
+      pending_checkout: {
+        id: 'attempt-pending',
+        status: 'approval_pending',
+        approval_url: 'https://sandbox.paypal.test/stale',
+      },
+    });
+    startBillingCheckoutMock.mockRejectedValueOnce(new Error('provider unavailable'));
+    render(<AccountPanel />);
+
+    expect(await screen.findByRole('button', { name: 'Continuar en PayPal' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Continuar en PayPal' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Continuar en PayPal' }));
+
+    expect(startBillingCheckoutMock).toHaveBeenCalledWith({ replacePending: true });
+    expect(await screen.findByText(/tu saldo no cambió/i)).toBeInTheDocument();
+  });
+
+  it('verifies an already approved checkout instead of replacing it', async () => {
+    const user = userEvent.setup();
+    const { BillingRequestError } = await import('./billingClient');
+    const pendingBilling = {
+      ...TRIAL_BILLING,
+      subscription: {
+        id: 'subscription-provider-active',
+        status: 'approval_pending',
+        auto_renew: true,
+        access_ends_at: null,
+        can_cancel: false,
+      },
+      pending_checkout: {
+        id: 'attempt-provider-active',
+        status: 'approval_pending',
+        approval_url: 'https://sandbox.paypal.test/pending',
+      },
+    };
+    const confirmedBilling = {
+      ...pendingBilling,
+      subscription: {
+        ...pendingBilling.subscription,
+        status: 'active',
+        access_ends_at: '2026-10-17T12:00:00.000Z',
+        can_cancel: true,
+      },
+      pending_checkout: null,
+    };
+    loadAccountQuotaMock.mockResolvedValue(QUOTA);
+    loadBillingAccountMock.mockResolvedValueOnce(pendingBilling);
+    startBillingCheckoutMock.mockRejectedValueOnce(
+      new BillingRequestError('subscription_exists', 'already active', 409),
+    );
+    confirmBillingPaymentMock.mockResolvedValueOnce(confirmedBilling);
+    render(<AccountPanel />);
+
+    await user.click(await screen.findByRole('button', { name: 'Continuar en PayPal' }));
+
+    expect(confirmBillingPaymentMock).toHaveBeenCalledOnce();
+    expect(await screen.findByText('Pago confirmado.')).toBeInTheDocument();
+    expect(screen.getByText('Activo')).toBeInTheDocument();
   });
 });

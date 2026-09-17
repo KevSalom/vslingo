@@ -34,8 +34,11 @@ export async function loadBillingAccount(): Promise<BillingAccount> {
   return request<BillingAccount>('/api/account/billing');
 }
 
-export async function startBillingCheckout(): Promise<Checkout> {
-  return request<Checkout>('/api/billing/checkout', { method: 'POST' });
+export async function startBillingCheckout(
+  options: { replacePending?: boolean } = {},
+): Promise<Checkout> {
+  const query = options.replacePending ? '?replace_pending=true' : '';
+  return request<Checkout>(`/api/billing/checkout${query}`, { method: 'POST' });
 }
 
 export async function confirmBillingPayment(): Promise<BillingAccount> {

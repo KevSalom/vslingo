@@ -172,6 +172,77 @@ class BillingRepository:
     def mark_attempt_failed(self, attempt_id: str) -> None:
         self._set_attempt_status(attempt_id, "failed")
 
+    def replace_pending_checkout(
+        self, clerk_user_id: str, attempt_id: str
+    ) -> BillingAttempt:
+        """Retire one unapproved checkout and create its idempotent replacement."""
+
+        with self._database.transaction(immediate=True) as connection:
+            user_id = _user_id(connection, clerk_user_id)
+            attempt = connection.execute(
+                """SELECT * FROM billing_attempts WHERE id = ? AND user_id = ?
+                AND status = 'approval_pending'""",
+                (attempt_id, user_id),
+            ).fetchone()
+            if attempt is None:
+                current = connection.execute(
+                    """SELECT * FROM billing_attempts WHERE user_id = ?
+                    AND status IN ('creating', 'approval_pending', 'uncertain')
+                    ORDER BY created_at DESC, id DESC LIMIT 1""",
+                    (user_id,),
+                ).fetchone()
+                if current is not None:
+                    return _attempt(current)
+                raise BillingConflictError
+
+            subscription = connection.execute(
+                """SELECT * FROM subscriptions WHERE billing_attempt_id = ?
+                AND user_id = ?""",
+                (attempt_id, user_id),
+            ).fetchone()
+            if subscription is None or subscription["status"] != "approval_pending":
+                raise AlreadySubscribedError
+            payment = connection.execute(
+                "SELECT 1 FROM payments WHERE subscription_id = ? LIMIT 1",
+                (subscription["id"],),
+            ).fetchone()
+            if payment is not None:
+                raise AlreadySubscribedError
+
+            connection.execute(
+                """UPDATE subscriptions SET status = 'cancelled', auto_renew = 0,
+                    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                WHERE id = ?""",
+                (subscription["id"],),
+            )
+            connection.execute(
+                """UPDATE billing_attempts SET status = 'cancelled',
+                    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                WHERE id = ?""",
+                (attempt_id,),
+            )
+
+            replacement_id = str(uuid4())
+            request_id = str(uuid4())
+            connection.execute(
+                """INSERT INTO billing_attempts(
+                    id, user_id, plan_code, provider_environment,
+                    provider_request_id, status
+                ) VALUES (?, ?, ?, ?, ?, 'creating')""",
+                (
+                    replacement_id,
+                    user_id,
+                    attempt["plan_code"],
+                    attempt["provider_environment"],
+                    request_id,
+                ),
+            )
+            replacement = connection.execute(
+                "SELECT * FROM billing_attempts WHERE id = ?", (replacement_id,)
+            ).fetchone()
+        assert replacement is not None
+        return _attempt(replacement)
+
     def account(self, clerk_user_id: str) -> dict[str, Any]:
         with self._database.transaction() as connection:
             user_id = _user_id(connection, clerk_user_id)
