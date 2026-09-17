@@ -106,6 +106,24 @@ def test_api_sets_restrictive_cors_security_headers_and_rate_limits_by_socket_ip
     assert second.headers["retry-after"].isdigit()
 
 
+def test_authenticated_history_allows_cors_preflight_without_bearer_token() -> None:
+    app = create_app(settings())
+    client = TestClient(app)
+
+    preflight = client.options(
+        "/api/history/writings",
+        headers={
+            "Origin": "http://localhost:4321",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "Authorization, Content-Type",
+        },
+    )
+
+    assert preflight.status_code == 200
+    assert preflight.headers["access-control-allow-origin"] == "http://localhost:4321"
+    assert "Authorization" in preflight.headers["access-control-allow-headers"]
+
+
 def test_ws_rejects_wrong_or_missing_origin_before_accepting() -> None:
     client = TestClient(create_app(settings()), headers=AUTH_HEADERS)
 

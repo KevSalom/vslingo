@@ -242,25 +242,26 @@ def create_app(
         """Rate-limit costly direct API calls and apply neutral API response headers."""
 
         response: Response | None
-        protected_request = request.url.path.startswith("/api/history/") or (
-            request.method,
-            request.url.path,
-        ) in {
-            ("GET", "/api/session"),
-            ("POST", "/api/session/logout"),
-            ("POST", "/api/session/ws-ticket"),
-            ("GET", "/api/preferences"),
-            ("PUT", "/api/preferences"),
-            ("GET", "/api/account/quota"),
-            ("GET", "/api/account/billing"),
-            ("POST", "/api/billing/checkout"),
-            ("POST", "/api/billing/cancel"),
-            ("GET", "/api/account/marketing-consent"),
-            ("PUT", "/api/account/marketing-consent"),
-            ("POST", "/api/writing/correct"),
-            ("POST", "/api/video/transcript"),
-            ("POST", "/api/speech"),
-        }
+        protected_request = request.method != "OPTIONS" and (
+            request.url.path.startswith("/api/history/")
+            or (request.method, request.url.path)
+            in {
+                ("GET", "/api/session"),
+                ("POST", "/api/session/logout"),
+                ("POST", "/api/session/ws-ticket"),
+                ("GET", "/api/preferences"),
+                ("PUT", "/api/preferences"),
+                ("GET", "/api/account/quota"),
+                ("GET", "/api/account/billing"),
+                ("POST", "/api/billing/checkout"),
+                ("POST", "/api/billing/cancel"),
+                ("GET", "/api/account/marketing-consent"),
+                ("PUT", "/api/account/marketing-consent"),
+                ("POST", "/api/writing/correct"),
+                ("POST", "/api/video/transcript"),
+                ("POST", "/api/speech"),
+            }
+        )
         if protected_request:
             try:
                 identity = await runtime_authenticator.authenticate(request)
