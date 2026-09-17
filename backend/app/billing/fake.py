@@ -20,6 +20,7 @@ class FakeBillingGateway:
     cancel_calls: list[str] = field(default_factory=list)
     _sessions: dict[str, CheckoutSession] = field(default_factory=dict)
     _statuses: dict[str, ProviderSubscriptionStatus] = field(default_factory=dict)
+    _plan_ids: dict[str, str] = field(default_factory=dict)
     _transactions: dict[str, list[ProviderTransaction]] = field(default_factory=dict)
 
     async def create_subscription(
@@ -31,7 +32,7 @@ class FakeBillingGateway:
         return_url: str,
         cancel_url: str,
     ) -> CheckoutSession:
-        del custom_id, plan_id, return_url, cancel_url
+        del custom_id, return_url, cancel_url
         self.create_calls.append(request_id)
         existing = self._sessions.get(request_id)
         if existing is not None:
@@ -43,6 +44,7 @@ class FakeBillingGateway:
         )
         self._sessions[request_id] = session
         self._statuses[provider_id] = "approval_pending"
+        self._plan_ids[provider_id] = plan_id
         return session
 
     async def cancel_subscription(
@@ -58,6 +60,7 @@ class FakeBillingGateway:
         return ProviderSubscription(
             provider_subscription_id=provider_subscription_id,
             status=self._statuses.get(provider_subscription_id, "approval_pending"),
+            plan_id=self._plan_ids.get(provider_subscription_id, "P-FAKE-MONTHLY-V1"),
         )
 
     async def verify_webhook(

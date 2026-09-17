@@ -204,6 +204,19 @@ class BillingRepository:
             raise BillingNotFoundError
         return _owned_subscription(row)
 
+    def reconcilable_subscription(self, clerk_user_id: str) -> OwnedSubscription:
+        with self._database.transaction() as connection:
+            user_id = _user_id(connection, clerk_user_id)
+            row = connection.execute(
+                """SELECT * FROM subscriptions WHERE user_id = ?
+                AND status IN ('approval_pending', 'approved', 'active', 'suspended')
+                ORDER BY updated_at DESC, id DESC LIMIT 1""",
+                (user_id,),
+            ).fetchone()
+        if row is None:
+            raise BillingNotFoundError
+        return _owned_subscription(row)
+
     def mark_cancelled(self, clerk_user_id: str, provider_subscription_id: str) -> None:
         with self._database.transaction(immediate=True) as connection:
             user_id = _user_id(connection, clerk_user_id)

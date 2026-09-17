@@ -67,6 +67,30 @@ def build_billing_router(service: BillingService) -> APIRouter:
                 retryable=True,
             )
 
+    @router.post("/api/billing/confirm")
+    async def confirm_checkout(request: Request) -> Any:
+        try:
+            return await service.confirm_checkout(_identity(request).user_id)
+        except BillingNotFoundError:
+            return _error(
+                409,
+                "subscription_not_found",
+                "No encontramos una suscripción pendiente para confirmar.",
+            )
+        except BillingEventRejectedError:
+            return _error(
+                409,
+                "payment_not_verified",
+                "PayPal respondió, pero el pago no coincide con el plan esperado.",
+            )
+        except BillingGatewayError:
+            return _error(
+                503,
+                "billing_provider_unavailable",
+                "No pudimos consultar el pago en PayPal. Inténtalo de nuevo.",
+                retryable=True,
+            )
+
     @router.post("/api/billing/webhooks/paypal")
     async def paypal_webhook(request: Request) -> Any:
         raw = await request.body()

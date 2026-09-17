@@ -8,7 +8,12 @@ from app.billing.events import BillingEvent, normalize_paypal_event
 from app.billing.gateway import BillingGateway, BillingGatewayError
 from app.core.config import Settings
 from app.core.product import ProductConfig
-from app.persistence.billing import BillingAttempt, BillingEventResult, BillingRepository
+from app.persistence.billing import (
+    BillingAttempt,
+    BillingEventRejectedError,
+    BillingEventResult,
+    BillingRepository,
+)
 
 FAKE_PLAN_ID = "P-FAKE-MONTHLY-V1"
 FAKE_MERCHANT_ID = "MERCHANT-FAKE"
@@ -91,6 +96,39 @@ class BillingService:
         )
         return self.account(clerk_user_id)
 
+    async def confirm_checkout(self, clerk_user_id: str) -> dict[str, Any]:
+        """Verify the current user's PayPal return without trusting browser state."""
+
+        owned = self._repository.reconcilable_subscription(clerk_user_id)
+        subscription = await self._gateway.get_subscription(
+            owned.provider_subscription_id
+        )
+        if subscription.plan_id != self._plan_id:
+            raise BillingEventRejectedError("plan_mismatch")
+        self._repository.reconcile_subscription_status(
+            owned.provider_subscription_id, subscription.status
+        )
+        start_time, end_time = _reconciliation_window()
+        transactions = await self._gateway.list_transactions(
+            owned.provider_subscription_id,
+            start_time=start_time,
+            end_time=end_time,
+        )
+        for transaction in transactions:
+            self.process_normalized_event(
+                BillingEvent(
+                    event_id=f"confirm:{transaction.provider_transaction_id}",
+                    event_type="PAYMENT.SALE.COMPLETED",
+                    occurred_at=transaction.occurred_at,
+                    provider_subscription_id=owned.provider_subscription_id,
+                    provider_transaction_id=transaction.provider_transaction_id,
+                    merchant_id=self._merchant_id,
+                    amount_minor=transaction.amount_minor,
+                    currency=transaction.currency,
+                )
+            )
+        return self.account(clerk_user_id)
+
     async def process_webhook(
         self,
         headers: dict[str, str],
@@ -140,6 +178,8 @@ class BillingService:
                 subscription = await self._gateway.get_subscription(
                     provider_subscription_id
                 )
+                if subscription.plan_id != self._plan_id:
+                    raise BillingEventRejectedError("plan_mismatch")
                 self._repository.reconcile_subscription_status(
                     provider_subscription_id, subscription.status
                 )

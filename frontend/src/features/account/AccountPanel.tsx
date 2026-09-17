@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   cancelBillingSubscription,
+  confirmBillingPayment,
   loadBillingAccount,
   startBillingCheckout,
   type BillingAccount,
@@ -15,6 +16,7 @@ import {
 } from '../../shared/usage/usageClient';
 
 type ResourceKey = keyof UsageAmounts;
+type PaymentReturnState = 'idle' | 'confirming' | 'confirmed' | 'pending' | 'error';
 
 const RESOURCES: ReadonlyArray<{
   key: ResourceKey;
@@ -35,7 +37,8 @@ export function AccountPanel() {
   const [action, setAction] = useState<'checkout' | 'cancel' | null>(null);
   const [actionMessage, setActionMessage] = useState('');
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const [returning, setReturning] = useState(false);
+  const [paymentReturn, setPaymentReturn] = useState<PaymentReturnState>('idle');
+  const confirmationGeneration = useRef(0);
 
   const reloadQuota = useCallback(() => {
     setQuotaError(null);
@@ -55,15 +58,52 @@ export function AccountPanel() {
     });
   }, []);
 
+  const verifyReturnedPayment = useCallback(async () => {
+    const generation = confirmationGeneration.current + 1;
+    confirmationGeneration.current = generation;
+    setPaymentReturn('confirming');
+    setBillingError(false);
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        const updated = await confirmBillingPayment();
+        if (confirmationGeneration.current !== generation) return;
+        setBilling(updated);
+        if (updated.subscription?.access_ends_at) {
+          reloadQuota();
+          setPaymentReturn('confirmed');
+          window.history.replaceState({}, '', window.location.pathname);
+          return;
+        }
+      } catch {
+        if (confirmationGeneration.current !== generation) return;
+        reloadBilling();
+        setPaymentReturn('error');
+        return;
+      }
+      await wait(1_500);
+    }
+
+    if (confirmationGeneration.current === generation) {
+      setPaymentReturn('pending');
+    }
+  }, [reloadBilling, reloadQuota]);
+
   useEffect(() => {
     reloadQuota();
-    reloadBilling();
     const query = new URLSearchParams(window.location.search);
-    setReturning(query.get('billing') === 'return');
+    if (query.get('billing') === 'return') {
+      void verifyReturnedPayment();
+    } else {
+      reloadBilling();
+    }
     if (query.get('billing') === 'cancelled') {
       setActionMessage('No se realizó ningún cobro. Puedes continuar cuando quieras.');
     }
-  }, [reloadBilling, reloadQuota]);
+    return () => {
+      confirmationGeneration.current += 1;
+    };
+  }, [reloadBilling, reloadQuota, verifyReturnedPayment]);
 
   const beginCheckout = async () => {
     setAction('checkout');
@@ -95,10 +135,15 @@ export function AccountPanel() {
 
   return (
     <section className="account-panel" aria-label="Plan y saldo de la cuenta">
-      {returning ? (
-        <div className="account-notice" role="status">
-          <strong>Estamos confirmando tu pago.</strong>
-          <span>El saldo se actualizará cuando PayPal confirme la transacción.</span>
+      {paymentReturn !== 'idle' ? (
+        <div className="account-notice" role={paymentReturn === 'error' ? 'alert' : 'status'}>
+          <strong>{paymentReturnTitle(paymentReturn)}</strong>
+          <span>{paymentReturnDescription(paymentReturn)}</span>
+          {paymentReturn === 'pending' || paymentReturn === 'error' ? (
+            <button className="writing-btn" onClick={() => void verifyReturnedPayment()} type="button">
+              Verificar pago ahora
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -111,6 +156,7 @@ export function AccountPanel() {
           onCancelAbort={() => setConfirmCancel(false)}
           onCancelConfirm={() => void cancelRenewal()}
           onCheckout={() => void beginCheckout()}
+          onVerify={() => void verifyReturnedPayment()}
         />
       ) : (
         <div className="account-state" role={billingError ? 'alert' : 'status'}>
@@ -151,13 +197,16 @@ type BillingCardProps = {
   onCancel: () => void;
   onCancelAbort: () => void;
   onCancelConfirm: () => void;
+  onVerify: () => void;
 };
 
 function BillingCard(props: BillingCardProps) {
   const { billing, action, confirmCancel } = props;
   const subscription = billing.subscription;
   const approvalUrl = billing.pending_checkout?.approval_url;
-  const isPaid = subscription?.status === 'active' || subscription?.status === 'cancelled';
+  const isPaid = subscription?.access_ends_at !== null
+    && (subscription?.status === 'active' || subscription?.status === 'cancelled');
+  const awaitingPayment = subscription?.status === 'active' && !subscription.access_ends_at;
   const canPurchase = !subscription
     || subscription.status === 'expired'
     || (subscription.status === 'cancelled'
@@ -181,7 +230,7 @@ function BillingCard(props: BillingCardProps) {
       <div className="billing-status-row">
         <div>
           <span className={`billing-status billing-status-${subscription?.status ?? 'trial'}`}>
-            {subscriptionStatus(subscription?.status)}
+            {subscriptionStatus(subscription)}
           </span>
           <p>{subscription?.access_ends_at
             ? `Acceso hasta ${formatDate(subscription.access_ends_at)}`
@@ -200,6 +249,11 @@ function BillingCard(props: BillingCardProps) {
         ) : null}
         {approvalUrl && subscription?.status === 'approval_pending' ? (
           <a className="writing-btn writing-btn-primary" href={approvalUrl}>Continuar en PayPal</a>
+        ) : null}
+        {awaitingPayment ? (
+          <button className="writing-btn writing-btn-primary" onClick={props.onVerify} type="button">
+            Verificar pago
+          </button>
         ) : null}
         {subscription?.can_cancel && !confirmCancel ? (
           <button className="writing-btn" onClick={props.onCancel} type="button">
@@ -266,12 +320,13 @@ function QuotaCards({ quota }: { quota: AccountQuota }) {
   );
 }
 
-function subscriptionStatus(status?: BillingSubscription['status']): string {
-  if (status === 'active') return 'Activo';
-  if (status === 'approval_pending' || status === 'approved') return 'Pendiente de pago';
-  if (status === 'suspended') return 'Pago pendiente';
-  if (status === 'cancelled') return 'Renovación cancelada';
-  if (status === 'expired') return 'Periodo terminado';
+function subscriptionStatus(subscription?: BillingSubscription | null): string {
+  if (subscription?.status === 'active' && subscription.access_ends_at) return 'Activo';
+  if (subscription?.status === 'active') return 'Confirmando pago';
+  if (subscription?.status === 'approval_pending' || subscription?.status === 'approved') return 'Pendiente de pago';
+  if (subscription?.status === 'suspended') return 'Pago pendiente';
+  if (subscription?.status === 'cancelled') return 'Renovación cancelada';
+  if (subscription?.status === 'expired') return 'Periodo terminado';
   return 'Prueba gratuita';
 }
 
@@ -292,4 +347,22 @@ function formatMoney(minor: number, currency: string): string {
 
 function formatDate(value: string): string {
   return new Date(value).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function paymentReturnTitle(state: PaymentReturnState): string {
+  if (state === 'confirmed') return 'Pago confirmado.';
+  if (state === 'pending') return 'PayPal todavía está procesando el pago.';
+  if (state === 'error') return 'No pudimos verificar el pago.';
+  return 'Estamos confirmando tu pago.';
+}
+
+function paymentReturnDescription(state: PaymentReturnState): string {
+  if (state === 'confirmed') return 'Tu plan mensual y tu nuevo saldo ya están activos.';
+  if (state === 'pending') return 'Tu saldo no cambiará hasta encontrar una transacción confirmada.';
+  if (state === 'error') return 'Tu saldo no cambió. Puedes reintentar la consulta segura a PayPal.';
+  return 'Consultaremos directamente a PayPal; normalmente tarda solo unos segundos.';
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }

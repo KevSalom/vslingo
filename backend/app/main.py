@@ -254,6 +254,7 @@ def create_app(
                 ("GET", "/api/account/quota"),
                 ("GET", "/api/account/billing"),
                 ("POST", "/api/billing/checkout"),
+                ("POST", "/api/billing/confirm"),
                 ("POST", "/api/billing/cancel"),
                 ("GET", "/api/account/marketing-consent"),
                 ("PUT", "/api/account/marketing-consent"),

@@ -38,6 +38,10 @@ export async function startBillingCheckout(): Promise<Checkout> {
   return request<Checkout>('/api/billing/checkout', { method: 'POST' });
 }
 
+export async function confirmBillingPayment(): Promise<BillingAccount> {
+  return request<BillingAccount>('/api/billing/confirm', { method: 'POST' });
+}
+
 export async function cancelBillingSubscription(): Promise<BillingAccount> {
   return request<BillingAccount>('/api/billing/cancel', { method: 'POST' });
 }

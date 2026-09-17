@@ -248,6 +248,33 @@ def test_reconciliation_grants_a_missing_payment_without_browser_return(
         assert client.get("/api/account/quota").json()["source"] == "monthly"
 
 
+def test_authenticated_return_confirms_payment_immediately_and_idempotently(
+    tmp_path: Path,
+) -> None:
+    application, database, gateway = _app(tmp_path)
+    with TestClient(application, headers=AUTH) as client:
+        subscription_id = _checkout(client)["approval_url"].rsplit("/", 1)[-1]
+        gateway.set_status(subscription_id, "active")
+        gateway.add_transaction(
+            subscription_id,
+            ProviderTransaction(
+                provider_transaction_id="SALE-RETURN",
+                occurred_at="2026-09-16T12:00:00Z",
+                amount_minor=299,
+                currency="USD",
+            ),
+        )
+
+        first = client.post("/api/billing/confirm")
+        second = client.post("/api/billing/confirm")
+
+        assert first.status_code == 200
+        assert first.json()["subscription"]["access_ends_at"] is not None
+        assert second.status_code == 200
+        assert client.get("/api/account/quota").json()["source"] == "monthly"
+        assert database.query_one("SELECT COUNT(*) AS count FROM payments")["count"] == 1
+
+
 def test_fake_billing_is_rejected_outside_development_and_test() -> None:
     with pytest.raises(ValidationError, match="BILLING_MODE=fake"):
         Settings(
@@ -285,6 +312,19 @@ async def test_sandbox_adapter_uses_sandbox_and_stable_request_id() -> None:
             },
         )
     )
+    details = respx.get(
+        "https://api-m.sandbox.paypal.com/v1/billing/subscriptions/I-SANDBOX"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "I-SANDBOX",
+                "plan_id": "plan-id",
+                "status": "ACTIVE",
+                "billing_info": {"next_billing_time": "2026-10-16T12:00:00Z"},
+            },
+        )
+    )
     gateway = PayPalBillingGateway(
         Settings(
             _env_file=None,
@@ -309,3 +349,6 @@ async def test_sandbox_adapter_uses_sandbox_and_stable_request_id() -> None:
     assert token.called
     assert checkout.provider_subscription_id == "I-SANDBOX"
     assert create.calls.last.request.headers["PayPal-Request-Id"] == "stable-request-id"
+    subscription = await gateway.get_subscription("I-SANDBOX")
+    assert details.called
+    assert subscription.plan_id == "plan-id"

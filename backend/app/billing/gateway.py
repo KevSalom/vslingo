@@ -29,6 +29,7 @@ class CheckoutSession:
 class ProviderSubscription:
     provider_subscription_id: str
     status: ProviderSubscriptionStatus
+    plan_id: str
     next_billing_time: str | None = None
 
 

@@ -101,6 +101,11 @@ class PayPalBillingGateway:
             "GET", f"/v1/billing/subscriptions/{provider_subscription_id}"
         )
         data = _json_object(response)
+        plan_id = data.get("plan_id")
+        if not isinstance(plan_id, str) or not plan_id:
+            raise BillingGatewayError(
+                "PayPal returned a subscription without a plan.", uncertain=True
+            )
         billing_info = data.get("billing_info")
         next_billing_time = (
             billing_info.get("next_billing_time")
@@ -110,6 +115,7 @@ class PayPalBillingGateway:
         return ProviderSubscription(
             provider_subscription_id=provider_subscription_id,
             status=_status(data.get("status")),
+            plan_id=plan_id,
             next_billing_time=(
                 next_billing_time if isinstance(next_billing_time, str) else None
             ),

@@ -4,8 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AccountPanel } from './AccountPanel';
 
-const { cancelBillingSubscriptionMock, loadAccountQuotaMock, loadBillingAccountMock } = vi.hoisted(() => ({
+const { cancelBillingSubscriptionMock, confirmBillingPaymentMock, loadAccountQuotaMock, loadBillingAccountMock } = vi.hoisted(() => ({
   cancelBillingSubscriptionMock: vi.fn(),
+  confirmBillingPaymentMock: vi.fn(),
   loadAccountQuotaMock: vi.fn(),
   loadBillingAccountMock: vi.fn(),
 }));
@@ -21,6 +22,7 @@ vi.mock('../../shared/usage/usageClient', () => ({
 
 vi.mock('./billingClient', () => ({
   cancelBillingSubscription: cancelBillingSubscriptionMock,
+  confirmBillingPayment: confirmBillingPaymentMock,
   loadBillingAccount: loadBillingAccountMock,
   startBillingCheckout: vi.fn(),
 }));
@@ -48,6 +50,7 @@ const TRIAL_BILLING = {
 describe('AccountPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState({}, '', '/app/cuenta');
     loadBillingAccountMock.mockResolvedValue(TRIAL_BILLING);
   });
 
@@ -101,5 +104,56 @@ describe('AccountPanel', () => {
 
     expect(await screen.findByText(/conservas el acceso/i)).toBeInTheDocument();
     expect(cancelBillingSubscriptionMock).toHaveBeenCalledOnce();
+  });
+
+  it('verifies a PayPal return server-side and refreshes the paid quota', async () => {
+    const activeBilling = {
+      ...TRIAL_BILLING,
+      subscription: {
+        id: 'subscription-paid',
+        status: 'active',
+        auto_renew: true,
+        access_ends_at: '2026-10-16T12:00:00.000Z',
+        can_cancel: true,
+      },
+    };
+    const monthlyQuota = {
+      ...QUOTA,
+      source: 'monthly',
+      ends_at: '2026-10-16T12:00:00.000Z',
+      limits: { voice_seconds: 3600, voice_turns: 180, writings: 100, videos: 20 },
+      remaining: { voice_seconds: 3600, voice_turns: 180, writings: 100, videos: 20 },
+    };
+    window.history.replaceState({}, '', '/app/cuenta?billing=return');
+    confirmBillingPaymentMock.mockResolvedValueOnce(activeBilling);
+    loadAccountQuotaMock.mockResolvedValue(monthlyQuota);
+
+    render(<AccountPanel />);
+
+    expect(await screen.findByText('Pago confirmado.')).toBeInTheDocument();
+    expect(screen.getByText(/nuevo saldo ya están activos/i)).toBeInTheDocument();
+    expect(confirmBillingPaymentMock).toHaveBeenCalledOnce();
+    expect(window.location.search).toBe('');
+    expect(await screen.findByText('100')).toBeInTheDocument();
+  });
+
+  it('does not present an active provider subscription as paid before a period exists', async () => {
+    loadAccountQuotaMock.mockResolvedValueOnce(QUOTA);
+    loadBillingAccountMock.mockResolvedValueOnce({
+      ...TRIAL_BILLING,
+      subscription: {
+        id: 'subscription-awaiting-payment',
+        status: 'active',
+        auto_renew: true,
+        access_ends_at: null,
+        can_cancel: true,
+      },
+    });
+
+    render(<AccountPanel />);
+
+    expect(await screen.findByText('Confirmando pago')).toBeInTheDocument();
+    expect(screen.queryByText('Activo')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Verificar pago' })).toBeInTheDocument();
   });
 });
