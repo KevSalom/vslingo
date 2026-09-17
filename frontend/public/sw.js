@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ingles-al-grano-shell-v3';
+const CACHE_NAME = 'ingles-al-grano-shell-v4';
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [
   OFFLINE_URL,
@@ -7,7 +7,7 @@ const PRECACHE = [
   '/app-icon-192.png',
   '/app-icon-512.png',
   '/app-icon-maskable-512.png',
-  '/app.webmanifest',
+  '/app.webmanifest.json',
 ];
 
 self.addEventListener('install', (event) => {

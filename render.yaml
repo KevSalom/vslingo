@@ -31,7 +31,7 @@ services:
         source: /demo/*
         destination: /demo/index.html
     headers:
-      - path: /app.webmanifest
+      - path: /app.webmanifest.json
         name: Content-Type
         value: application/manifest+json
       - path: /*

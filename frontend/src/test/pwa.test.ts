@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-const manifest = JSON.parse(readFileSync('public/app.webmanifest', 'utf8')) as {
+const manifest = JSON.parse(readFileSync('public/app.webmanifest.json', 'utf8')) as {
   name: string;
   start_url: string;
   display: string;
@@ -25,7 +25,8 @@ describe('PWA shell', () => {
 
   it('publishes the manifest with its registered media type', () => {
     expect(pwaHead).toContain('type="application/manifest+json"');
-    expect(renderBlueprint).toContain('path: /app.webmanifest');
+    expect(pwaHead).toContain('href="/app.webmanifest.json"');
+    expect(renderBlueprint).toContain('path: /app.webmanifest.json');
     expect(renderBlueprint).toContain('value: application/manifest+json');
   });
 
