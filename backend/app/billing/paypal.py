@@ -7,6 +7,7 @@ import httpx
 
 from app.billing.gateway import (
     BillingGatewayError,
+    BillingProviderResponseError,
     CheckoutSession,
     ProviderEnvironment,
     ProviderSubscription,
@@ -214,9 +215,10 @@ class PayPalBillingGateway:
         except httpx.TimeoutException as exc:
             raise BillingGatewayError("PayPal timed out.", uncertain=True) from exc
         except httpx.HTTPStatusError as exc:
-            raise BillingGatewayError(
+            raise BillingProviderResponseError(
                 "PayPal rejected the billing request.",
-                uncertain=exc.response.status_code >= 500,
+                status_code=exc.response.status_code,
+                issue_codes=_issue_codes(exc.response),
             ) from exc
         except httpx.HTTPError as exc:
             raise BillingGatewayError("PayPal is unavailable.", uncertain=True) from exc
@@ -248,6 +250,26 @@ def _json_object(response: httpx.Response) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise BillingGatewayError("PayPal returned an invalid envelope.", uncertain=True)
     return cast(dict[str, Any], payload)
+
+
+def _issue_codes(response: httpx.Response) -> frozenset[str]:
+    """Keep machine-readable PayPal issues for safe server-side recovery decisions."""
+
+    try:
+        payload = response.json()
+    except ValueError:
+        return frozenset()
+    if not isinstance(payload, dict):
+        return frozenset()
+    details = payload.get("details")
+    if not isinstance(details, list):
+        return frozenset()
+    return frozenset(
+        issue
+        for detail in details
+        if isinstance(detail, dict)
+        and isinstance((issue := detail.get("issue")), str)
+    )
 
 
 def _status(value: object) -> ProviderSubscriptionStatus:

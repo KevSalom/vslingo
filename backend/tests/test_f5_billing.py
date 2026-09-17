@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from app.billing.fake import FakeBillingGateway
-from app.billing.gateway import ProviderTransaction
+from app.billing.gateway import BillingProviderResponseError, ProviderTransaction
 from app.billing.paypal import PayPalBillingGateway
 from app.core.config import Settings
 from app.main import create_app
@@ -155,6 +155,106 @@ def test_pending_checkout_is_never_replaced_after_provider_approval(
         assert response.status_code == 409
         assert response.json()["error"]["code"] == "subscription_exists"
         assert gateway.cancel_calls == []
+        assert len(gateway.create_calls) == 1
+
+
+def test_missing_provider_checkout_is_replaced_without_blocking_user(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    application, database, gateway = _app(tmp_path)
+
+    async def missing_subscription(
+        _gateway: FakeBillingGateway, provider_subscription_id: str
+    ) -> Any:
+        del provider_subscription_id
+        raise BillingProviderResponseError(
+            "missing stale checkout", status_code=404
+        )
+
+    monkeypatch.setattr(FakeBillingGateway, "get_subscription", missing_subscription)
+    with TestClient(application, headers=AUTH) as client:
+        first = _checkout(client)
+        replacement = client.post(
+            "/api/billing/checkout", params={"replace_pending": "true"}
+        )
+
+        assert replacement.status_code == 200
+        assert replacement.json()["attempt_id"] != first["attempt_id"]
+        assert gateway.cancel_calls == []
+        assert len(gateway.create_calls) == 2
+        assert database.query_one(
+            "SELECT status FROM billing_attempts WHERE id = ?",
+            (first["attempt_id"],),
+        )["status"] == "cancelled"
+
+
+def test_uncancellable_pending_checkout_is_rechecked_then_replaced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    application, _database, gateway = _app(tmp_path)
+
+    async def reject_cancel(
+        fake_gateway: FakeBillingGateway,
+        provider_subscription_id: str,
+        *,
+        request_id: str,
+    ) -> None:
+        del request_id
+        fake_gateway.cancel_calls.append(provider_subscription_id)
+        raise BillingProviderResponseError(
+            "invalid status",
+            status_code=422,
+            issue_codes=frozenset({"SUBSCRIPTION_STATUS_INVALID"}),
+        )
+
+    monkeypatch.setattr(FakeBillingGateway, "cancel_subscription", reject_cancel)
+    with TestClient(application, headers=AUTH) as client:
+        first = _checkout(client)
+        replacement = client.post(
+            "/api/billing/checkout", params={"replace_pending": "true"}
+        )
+
+        assert replacement.status_code == 200
+        assert replacement.json()["attempt_id"] != first["attempt_id"]
+        assert len(gateway.cancel_calls) == 1
+        assert len(gateway.create_calls) == 2
+
+
+def test_cancel_race_rechecks_and_never_replaces_newly_active_subscription(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    application, _database, gateway = _app(tmp_path)
+    reads = 0
+    original_get = FakeBillingGateway.get_subscription
+
+    async def activate_during_cancel(
+        fake_gateway: FakeBillingGateway, provider_subscription_id: str
+    ) -> Any:
+        nonlocal reads
+        reads += 1
+        if reads == 2:
+            fake_gateway.set_status(provider_subscription_id, "active")
+        return await original_get(fake_gateway, provider_subscription_id)
+
+    async def reject_cancel(
+        _gateway: FakeBillingGateway,
+        provider_subscription_id: str,
+        *,
+        request_id: str,
+    ) -> None:
+        del provider_subscription_id, request_id
+        raise BillingProviderResponseError("status changed", status_code=422)
+
+    monkeypatch.setattr(FakeBillingGateway, "get_subscription", activate_during_cancel)
+    monkeypatch.setattr(FakeBillingGateway, "cancel_subscription", reject_cancel)
+    with TestClient(application, headers=AUTH) as client:
+        _checkout(client)
+        response = client.post(
+            "/api/billing/checkout", params={"replace_pending": "true"}
+        )
+
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "subscription_exists"
         assert len(gateway.create_calls) == 1
 
 
@@ -403,3 +503,40 @@ async def test_sandbox_adapter_uses_sandbox_and_stable_request_id() -> None:
     subscription = await gateway.get_subscription("I-SANDBOX")
     assert details.called
     assert subscription.plan_id == "plan-id"
+
+
+@respx.mock
+async def test_paypal_response_error_preserves_status_and_issue_codes() -> None:
+    respx.post("https://api-m.sandbox.paypal.com/v1/oauth2/token").mock(
+        return_value=httpx.Response(200, json={"access_token": "sandbox-token"})
+    )
+    respx.post(
+        "https://api-m.sandbox.paypal.com/v1/billing/subscriptions/I-PENDING/cancel"
+    ).mock(
+        return_value=httpx.Response(
+            422,
+            json={
+                "name": "UNPROCESSABLE_ENTITY",
+                "details": [{"issue": "SUBSCRIPTION_STATUS_INVALID"}],
+            },
+        )
+    )
+    gateway = PayPalBillingGateway(
+        Settings(
+            _env_file=None,
+            environment="test",
+            billing_mode="paypal_sandbox",
+            paypal_client_id="client-id",
+            paypal_client_secret="client-secret",
+            paypal_webhook_id="webhook-id",
+            paypal_plan_id="plan-id",
+            paypal_merchant_id="merchant-id",
+        )
+    )
+
+    with pytest.raises(BillingProviderResponseError) as raised:
+        await gateway.cancel_subscription("I-PENDING", request_id="request-id")
+
+    assert raised.value.status_code == 422
+    assert raised.value.issue_codes == frozenset({"SUBSCRIPTION_STATUS_INVALID"})
+    assert raised.value.uncertain is False

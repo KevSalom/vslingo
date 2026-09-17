@@ -18,6 +18,21 @@ class BillingGatewayError(RuntimeError):
         self.uncertain = uncertain
 
 
+class BillingProviderResponseError(BillingGatewayError):
+    """A definitive HTTP response returned by the billing provider."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int,
+        issue_codes: frozenset[str] = frozenset(),
+    ) -> None:
+        super().__init__(message, uncertain=status_code >= 500)
+        self.status_code = status_code
+        self.issue_codes = issue_codes
+
+
 @dataclass(frozen=True, slots=True)
 class CheckoutSession:
     provider_subscription_id: str

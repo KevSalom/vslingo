@@ -5,7 +5,12 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.billing.events import BillingEvent, normalize_paypal_event
-from app.billing.gateway import BillingGateway, BillingGatewayError
+from app.billing.gateway import (
+    BillingGateway,
+    BillingGatewayError,
+    BillingProviderResponseError,
+    ProviderSubscription,
+)
 from app.core.config import Settings
 from app.core.product import ProductConfig
 from app.persistence.billing import (
@@ -58,30 +63,73 @@ class BillingService:
             if not replace_pending:
                 return attempt
             subscription = self._repository.reconcilable_subscription(clerk_user_id)
-            provider_subscription = await self._gateway.get_subscription(
-                subscription.provider_subscription_id
-            )
-            if provider_subscription.plan_id != self._plan_id:
-                raise BillingGatewayError(
-                    "PayPal returned a subscription for another plan.", uncertain=False
+            try:
+                provider_subscription = await self._gateway.get_subscription(
+                    subscription.provider_subscription_id
                 )
-            if provider_subscription.status in {"approved", "active", "suspended"}:
-                self._repository.reconcile_subscription_status(
+            except BillingProviderResponseError as error:
+                if error.status_code != 404:
+                    raise
+                provider_subscription = None
+            if provider_subscription is not None:
+                self._validate_replacement_candidate(
                     subscription.provider_subscription_id,
-                    provider_subscription.status,
+                    provider_subscription,
                 )
-                raise AlreadySubscribedError
-            if provider_subscription.status == "approval_pending":
-                await self._gateway.cancel_subscription(
-                    subscription.provider_subscription_id,
-                    request_id=attempt.id,
-                )
+                if provider_subscription.status == "approval_pending":
+                    await self._retire_provider_checkout(
+                        subscription.provider_subscription_id,
+                        request_id=attempt.id,
+                    )
             attempt = self._repository.replace_pending_checkout(
                 clerk_user_id, attempt.id
             )
             if attempt.status == "approval_pending" and attempt.approval_url is not None:
                 return attempt
         return await self._create_checkout(attempt)
+
+    def _validate_replacement_candidate(
+        self,
+        provider_subscription_id: str,
+        subscription: ProviderSubscription,
+    ) -> None:
+        if subscription.plan_id != self._plan_id:
+            raise BillingGatewayError(
+                "PayPal returned a subscription for another plan.", uncertain=False
+            )
+        if subscription.status in {"approved", "active", "suspended"}:
+            self._repository.reconcile_subscription_status(
+                provider_subscription_id,
+                subscription.status,
+            )
+            raise AlreadySubscribedError
+
+    async def _retire_provider_checkout(
+        self, provider_subscription_id: str, *, request_id: str
+    ) -> None:
+        try:
+            await self._gateway.cancel_subscription(
+                provider_subscription_id,
+                request_id=request_id,
+            )
+        except BillingProviderResponseError as error:
+            if error.status_code == 404:
+                return
+            if error.status_code != 422:
+                raise
+            # PayPal can refuse cancellation for an unapproved checkout. Re-read
+            # it to close the approval race before retiring only the local attempt.
+            try:
+                refreshed = await self._gateway.get_subscription(
+                    provider_subscription_id
+                )
+            except BillingProviderResponseError as refreshed_error:
+                if refreshed_error.status_code == 404:
+                    return
+                raise
+            self._validate_replacement_candidate(provider_subscription_id, refreshed)
+            if refreshed.status != "approval_pending":
+                return
 
     async def _create_checkout(self, attempt: BillingAttempt) -> BillingAttempt:
         try:
