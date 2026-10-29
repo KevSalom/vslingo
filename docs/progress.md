@@ -4,7 +4,64 @@
 
 Este es el único documento para el estado mutable de implementación. Debe actualizarse al cerrar cada incremento, sin convertir el roadmap estable en una lista de estados.
 
-Última actualización documental: 2026-09-17.
+Última actualización documental: 2026-10-28.
+
+## Limpieza de variantes de marca (2026-10-28)
+
+- `frontend/public/brand` conserva únicamente el icono elegido: [`grano.svg`](../frontend/public/brand/grano.svg) y [`grano.png`](../frontend/public/brand/grano.png) de 512 px. Se eliminaron catorce activos de propuestas descartadas y láminas comparativas; sus referencias históricas inferiores se conservan sin enlaces a archivos eliminados.
+- Verificación: inventario final de dos archivos, hashes idénticos a los iconos activos equivalentes, ausencia de referencias a las propuestas en el frontend y `git diff --check`. Sin cambios en código de aplicación ni pruebas adicionales. Próximo incremento sin cambios: gates externos de F7.
+
+## Corrección del icono antiguo conservado en caché (2026-10-28)
+
+- El usuario seguía viendo «IA» en `http://localhost:4321/`. La respuesta HTTP ya contenía el encabezado nuevo y el SVG del grano; se reprodujo el problema sembrando el antiguo SVG en la caché del service worker. Versionar sólo el favicon y aumentar la versión del worker no evitaba que un worker todavía activo devolviera `/app-icon.svg` antiguo.
+- Se versionó también la URL del icono visible (`/app-icon.svg?v=grain-2`) en [`index.astro`](../frontend/src/pages/index.astro), [`DemoWorkspace.tsx`](../frontend/src/components/DemoWorkspace.tsx) y [`ProductAuthProvider.tsx`](../frontend/src/shared/auth/ProductAuthProvider.tsx). El worker existente busca por URL completa, por lo que la nueva petición obtiene el grano sin borrar almacenamiento ni alterar sesiones.
+- Regresión en [`pwa.spec.ts`](../frontend/e2e/pwa.spec.ts): registra el worker, introduce un SVG «IA» en la caché, recarga y verifica que el encabezado obtiene el grano. Se observó fallo con la URL anterior y éxito después del arreglo. [`landing.spec.ts`](../frontend/e2e/landing.spec.ts) comprueba ahora la URL versionada.
+- Validación sobre el servidor del usuario en localhost con un perfil de pruebas aislado: **5/5 E2E Chrome** (landing/PWA), incluyendo captura del encabezado con el grano pese a la caché antigua. Astro check sin errores ni warnings (cinco hints heredados), build de siete rutas y `git diff --check`. La configuración temporal de pruebas contra el servidor existente se retiró al terminar; no se controló el navegador personal ni se alteraron sus datos.
+- Archivos de este ajuste: tres componentes/plantillas, dos archivos E2E y este registro. No se repitieron Edge, proveedores ni dispositivos físicos. Próximo incremento sin cambios: gates externos de F7.
+
+## Grano definitivo sin ondas (2026-10-28)
+
+- El usuario eligió la propuesta «Grano y voz», retirando las ondas laterales. [`app-icon.svg`](../frontend/public/app-icon.svg) conserva exactamente el grano inclinado marfil sobre terracota de esa referencia, sin bocadillo ni monograma EN. Se aplica mediante los enlaces existentes en los encabezados y el acceso de sesión.
+- Se regeneraron `favicon.svg`, `favicon.ico`, `app-icon-{180,192,512}.png` y `app-icon-maskable.{svg,png}` (PNG: `app-icon-maskable-512.png`). Se actualizó la versión de favicon en [`index.astro`](../frontend/src/pages/index.astro) y [`WorkspacePage.astro`](../frontend/src/components/WorkspacePage.astro), y la caché de [`sw.js`](../frontend/public/sw.js) a v6 para renovar los activos instalables.
+- Validación: igualdad del SVG con la referencia al quitar únicamente las ondas; favicon idéntico al activo principal; inspección visual del PNG y el encabezado oscuro; Astro check con 0 errores/0 warnings (cinco hints heredados), **5/5 tests dirigidos** de landing/PWA, build de siete rutas con Outfit, **8/8 E2E Chrome** de landing/PWA/legibilidad y `git diff --check`.
+- Archivos: ocho activos gráficos regenerados, ambas plantillas de página, el service worker y este registro. No se repitió Edge ni la instalación física. Próximo incremento sin cambios: gates externos de F7.
+
+## Cuatro propuestas de grano con monograma EN (2026-10-28)
+
+- Propuestas solicitadas con el grano como única silueta, sin bocadillos, ondas ni contenedores. «EN» se integra mediante espacios negativos, surco central, forma exterior o trazo. Todas usan terracota y transparencia real en los cortes.
+- Activos históricos: cuatro propuestas `grano-en-{surco,ligadura,silueta,trazo}.{svg,png}` y una lámina comparativa con muestras a 32/16 px. Eliminados posteriormente a petición del usuario durante la limpieza de variantes.
+- Verificación: rasterización de los cuatro SVG, inspección visual de cada PNG y de la lámina comparativa, y `git diff --check`. El renderer emitió avisos de caché de Fontconfig al rotular la lámina, pero exportó correctamente los rótulos y la imagen completa. No se alteraron componentes, favicon ni icono activo, ni se ejecutaron suites de aplicación por tratarse de propuestas gráficas.
+- Archivos de este ajuste: diez activos de propuestas/comparación y este registro. Próximo incremento sin cambios: gates externos de F7; la aplicación de una de estas propuestas queda a elección del usuario.
+
+## Sustitución de iniciales y variantes de marca (2026-10-28)
+
+- Se sustituyó el último distintivo «IA», presente en el inicio de sesión de [`ProductAuthProvider.tsx`](../frontend/src/shared/auth/ProductAuthProvider.tsx), por el símbolo actual. [`global.css`](../frontend/src/styles/global.css) conserva su tamaño de 44 px y elimina el tratamiento tipográfico de ese distintivo. No quedan iniciales «IA» en `frontend/src` ni `frontend/public`.
+- Dos propuestas adicionales entregadas como SVG y PNG de 192 px: «Grano y voz», con ondas a ambos lados del grano, y «G de Grano», con el grano dentro de una G. En ese momento eran alternativas para elegir; se eliminaron posteriormente durante la limpieza de variantes. La elección final fue el grano sin ondas.
+- Validación: inspección visual de ambos PNG, Astro check sin errores ni warnings (cinco hints heredados), build de siete rutas con Outfit, búsqueda de iniciales restantes y `git diff --check`. No se añadieron ni repitieron tests funcionales para este cambio de presentación; el inicio de sesión real de Clerk no se ejercitó.
+- Archivos de este ajuste: el proveedor de acceso, la hoja global, los cuatro activos de variantes y este registro. Próximo incremento sin cambios: gates externos de F7.
+
+## Símbolo de marca solicitado (2026-10-28)
+
+- Símbolo vectorial propio: bocadillo de conversación marfil con un grano central, sobre terracota. Sustituye las iniciales del encabezado en landing y workspace, con una sola fuente gráfica y sin duplicar el nombre accesible del enlace.
+- Fuente: [`app-icon.svg`](../frontend/public/app-icon.svg). Se regeneraron `favicon.svg`, `favicon.ico` (16/32/48 px), `app-icon-180.png`, `app-icon-192.png`, `app-icon-512.png` y las variantes `app-icon-maskable.svg`/`app-icon-maskable-512.png`. El generador reproducible es [`generate-brand-icons.mjs`](../frontend/scripts/generate-brand-icons.mjs), ejecutable con `node scripts/generate-brand-icons.mjs` desde frontend, usando el renderer ya instalado con Astro.
+- Integración: [`index.astro`](../frontend/src/pages/index.astro), [`DemoWorkspace.tsx`](../frontend/src/components/DemoWorkspace.tsx), [`WorkspacePage.astro`](../frontend/src/components/WorkspacePage.astro) y [`global.css`](../frontend/src/styles/global.css). Favicon versionado en ambas plantillas y caché del shell actualizada a v5 en [`sw.js`](../frontend/public/sw.js).
+- Validación: Astro check con **0 errores y 0 warnings** (cinco hints heredados), **149 tests Vitest**, build de siete rutas con Outfit y `git diff --check`. **8/8 E2E Chrome** de landing, PWA y legibilidad: icono cargado, favicon idéntico al símbolo del header, ambos temas y anchos 320/768/1440 px. Inspección visual del icono y capturas de landing y workspace oscuro.
+- Se corrigió además la configuración de movimiento reducido del test anterior: Playwright 1.50.1 requiere `contextOptions.reducedMotion`. [`landing.spec.ts`](../frontend/e2e/landing.spec.ts) comprueba los activos de marca y [`ui-readability.spec.ts`](../frontend/e2e/ui-readability.spec.ts) vuelve a pasar con esa emulación activa.
+- No se repitió Edge por el fallo de arranque registrado abajo ni se validaron instalaciones en dispositivos físicos. Próximo incremento: cerrar los gates externos de F7, sin cambios de roadmap.
+
+## Ajustes de legibilidad solicitados (2026-10-28)
+
+- Luna redibujada y ampliada a 22 px en landing y aplicación; se conservan nombre accesible, foco y persistencia del tema.
+- Tipografía auxiliar normalizada a un mínimo de `.875rem` (14 px con tamaño base normal), incluidas etiquetas, miniaturas de módulos, controles, historial y estilos Tailwind `text-xs`.
+- Encabezados de «Lo que dejamos fuera» y «Lo que sí encuentras» con jerarquía, espaciado, separador e indicador de signo; las filas mantienen su significado sin depender sólo del color.
+- El diff de la landing usaba texto pastel fijo sobre fondos claros. Ahora `del`/`ins` usan los tokens semánticos del tema, igual que Escribir y Hablar. Revisadas también las miniaturas y el diff animado de cabecera.
+- Selección con terracota sólido/texto blanco en claro y naranja claro/texto oscuro en oscuro; tokens CSS y TypeScript sincronizados.
+- Validación: `pnpm run quality` completado; Astro check sin errores ni warnings (cinco hints heredados de Web Audio), **149 tests Vitest** y build de siete rutas. Se repitió el build con acceso al proveedor configurado para incluir Outfit después de que la compilación restringida usara fallback.
+- Chrome: **9/9 E2E** de landing, Cuenta y legibilidad, con mediciones de fuentes, contraste de diffs y selección, reflujo a 320/768/1440 px en claro/oscuro y corrección de escritura con red simulada. Revisión visual de capturas de landing y Escribir. Se conserva `frontend/e2e/ui-readability.spec.ts` como regresión.
+- Segunda pasada dirigida: **4/4 Chrome**, añadiendo la comprobación de visibilidad de la cabecera con movimiento reducido. Build final con Outfit completado y `git diff --check` sin errores.
+- Archivos modificados: [`global.css`](../frontend/src/styles/global.css), [`index.astro`](../frontend/src/pages/index.astro), [`DemoWorkspace.tsx`](../frontend/src/components/DemoWorkspace.tsx), [`VoiceStudio.tsx`](../frontend/src/features/voice/VoiceStudio.tsx), [`themeTokens.ts`](../frontend/src/shared/theme/themeTokens.ts), [`ui-readability.spec.ts`](../frontend/e2e/ui-readability.spec.ts) y este registro.
+- Edge: los cuatro casos de legibilidad no llegaron a ejecutarse porque el navegador se cierra al arrancar (`browserType.launch: Target page, context or browser has been closed`). Sin certificación física, lectores de pantalla ni llamadas a proveedores reales.
+- Próximo incremento sin cambios: cerrar los gates externos de F7; estos ajustes de UI no adelantan F8 ni constituyen un lanzamiento.
 
 ## Estado actual
 

@@ -1,5 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#fdf6f0"/>
-  <rect x="76" y="76" width="360" height="360" rx="76" fill="#ffffff" stroke="#ca6a43" stroke-width="20"/>
-  <text x="256" y="306" fill="#a64e2d" font-family="Arial, sans-serif" font-size="156" font-weight="700" text-anchor="middle">IA</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" fill="#b85732"/>
+  <g transform="translate(8 8) scale(.75)">
+  <rect width="64" height="64" rx="18" fill="#b85732"/>
+  <ellipse cx="32" cy="32" rx="11" ry="18" transform="rotate(30 32 32)" fill="#fff7ed"/>
+  <path d="M38 17c-18 12 6 17-12 30" fill="none" stroke="#b85732" stroke-width="3.5" stroke-linecap="round"/>
+</g>
 </svg>

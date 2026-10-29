@@ -111,7 +111,7 @@ function ClerkSession({ children }: { children: ReactNode }) {
 function SignInGate() {
   return (
     <main className="auth-gate">
-      <span aria-hidden="true" className="auth-gate-mark">IA</span>
+      <img alt="" aria-hidden="true" className="auth-gate-mark" src="/app-icon.svg?v=grain-2" width="44" height="44" />
       <p className="auth-gate-kicker">Inglés al Grano</p>
       <h1>Tu práctica continúa aquí.</h1>
       <p>Inicia sesión para guardar tus preferencias y mantener cada práctica separada.</p>

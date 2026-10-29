@@ -16,6 +16,15 @@ test.describe('Landing Page E2E', () => {
     await expect(page.getByRole('link', { name: /Entrenar el oído/i })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 
+    const brandIcon = page.locator('.site-header .brand-mark');
+    await expect(brandIcon).toHaveAttribute('src', '/app-icon.svg?v=grain-2');
+    expect(await brandIcon.evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+    const faviconHref = await page.locator('link[rel="icon"]').getAttribute('href');
+    const favicon = await page.request.get(faviconHref!);
+    const headerIcon = await page.request.get('/app-icon.svg');
+    expect(favicon.ok()).toBe(true);
+    expect(await favicon.text()).toBe(await headerIcon.text());
+
     await page.getByRole('button', { name: 'Activar modo oscuro' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   });

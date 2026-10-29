@@ -150,7 +150,7 @@ function Workspace() {
     <section className="workspace" aria-label="Aplicación de Inglés al Grano">
       <header className="workspace-topbar">
         <a className="brand" href="/">
-          <span aria-hidden="true" className="brand-mark">IA</span>
+          <img alt="" aria-hidden="true" className="brand-mark" src="/app-icon.svg?v=grain-2" width="32" height="32" />
           Inglés al Grano
         </a>
         <div className="workspace-actions">
@@ -311,8 +311,8 @@ function ThemeModeToggle() {
 
 function MoonGlyph() {
   return (
-    <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
-      <path d="M20 15.4A8 8 0 0 1 8.6 4a8 8 0 1 0 11.4 11.4Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+    <svg aria-hidden="true" className="theme-icon-moon" viewBox="0 0 24 24">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
     </svg>
   );
 }

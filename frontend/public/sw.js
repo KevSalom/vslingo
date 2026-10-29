@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ingles-al-grano-shell-v4';
+const CACHE_NAME = 'ingles-al-grano-shell-v6';
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [
   OFFLINE_URL,

@@ -63,8 +63,8 @@ const LIGHT_TOKENS: ThemeTokens = {
   diffAddedText: '#047857',
   diffRemovedText: '#B91C1C',
   warning: '#EA580C',
-  selectionBg: '#FDF6F0',
-  selectionFg: '#292524',
+  selectionBg: '#A64E2D',
+  selectionFg: '#FFFFFF',
   accentColor: '#CA6A43',
 };
 
@@ -93,8 +93,8 @@ const DARK_TOKENS: ThemeTokens = {
   diffAddedText: '#A7F3D0',
   diffRemovedText: '#FECACA',
   warning: '#FB923C',
-  selectionBg: '#431407',
-  selectionFg: '#F5F5F4',
+  selectionBg: '#FDBA74',
+  selectionFg: '#292524',
   accentColor: '#CC6236',
 };
 

@@ -945,7 +945,7 @@ export function VoiceStudio() {
                   value={scenario}
                   onChange={(event) => handleScenarioChange(event.target.value as ScenarioType)}
                   disabled={state === 'connecting'}
-                  className="h-[2.15rem] rounded border border-[#3b4d60] bg-[#18212c] px-3 text-[0.82rem] font-medium text-[#f1f5f9] outline-none transition-colors hover:border-slate-500 focus:border-[#22d3ee] focus:ring-1 focus:ring-[#22d3ee] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="h-[2.15rem] rounded border border-[#3b4d60] bg-[#18212c] px-3 text-sm font-medium text-[#f1f5f9] outline-none transition-colors hover:border-slate-500 focus:border-[#22d3ee] focus:ring-1 focus:ring-[#22d3ee] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {(Object.keys(SCENARIO_LABELS) as ScenarioType[]).map((key) => (
                     <option key={key} value={key} className="bg-[#18212c] text-[#f1f5f9]">
