@@ -13,6 +13,7 @@ import {
   resetAuthTokenProvider,
   setAuthTokenProvider,
 } from './sessionClient';
+import { SessionLoading } from './SessionLoading';
 
 const API_BASE_URL = import.meta.env.PUBLIC_API_URL?.trim() || 'http://127.0.0.1:8000';
 const AUTH_MODE = import.meta.env.PUBLIC_AUTH_MODE?.trim() || 'fake';
@@ -123,7 +124,7 @@ function SignInGate() {
 }
 
 function AuthLoading() {
-  return <main aria-live="polite" className="auth-gate">Preparando tu sesión…</main>;
+  return <SessionLoading />;
 }
 
 function AuthConfigurationError() {

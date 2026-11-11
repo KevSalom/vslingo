@@ -266,7 +266,7 @@ export function WritingStudio({
               maxLength={MAX_CORRECTION_TEXT_LENGTH}
               onChange={(event) => handleDraftChange(event.currentTarget.value)}
               onKeyDown={handleEditorKeyDown}
-              placeholder="Ejemplo: Yesterday I deploy the API and the tests was passing..."
+              placeholder="Ejemplo: Yesterday I go to the beach with my friends and we have a great time."
               value={draft}
             />
             <div className="writing-editor-footer">

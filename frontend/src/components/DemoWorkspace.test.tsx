@@ -1,25 +1,42 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DemoWorkspace } from './DemoWorkspace';
+
+const { loadQuota } = vi.hoisted(() => ({ loadQuota: vi.fn() }));
+vi.mock('../shared/usage/usageClient', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../shared/usage/usageClient')>(),
+  loadAccountQuota: loadQuota,
+}));
 
 describe('DemoWorkspace', () => {
   beforeEach(() => {
     localStorage.clear();
     document.documentElement.removeAttribute('data-theme');
     window.history.replaceState(null, '', '/app/hablar');
+    loadQuota.mockResolvedValue({ source: 'trial', ends_at: null });
   });
 
   it('starts in Hablar, exposes the commercial beta, and marks the active module', async () => {
     render(<DemoWorkspace />);
 
-    expect(screen.getByText('Prueba gratis')).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Tu plan: Gratis' })).toBeInTheDocument();
+    expect(screen.queryByText('Tu prueba gratuita')).not.toBeInTheDocument();
     expect(screen.getByText('Sesión local')).toBeInTheDocument();
     const voiceLink = screen.getByRole('link', { name: 'Hablar' });
     expect(voiceLink).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('status', { name: /cargando Hablar/i })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: /Hablar/i })).toBeInTheDocument();
+  });
+
+  it('shows Pro only for a current paid period, and does not guess on a failed request', async () => {
+    loadQuota.mockResolvedValueOnce({ source: 'monthly', ends_at: '2099-01-01T00:00:00Z' });
+    render(<DemoWorkspace />);
+    expect(await screen.findByRole('link', { name: 'Tu plan: Pro' })).toBeInTheDocument();
+    loadQuota.mockRejectedValueOnce(new Error('offline'));
+    window.dispatchEvent(new Event('focus'));
+    expect(await screen.findByRole('link', { name: 'Tu plan: Ver plan' })).toBeInTheDocument();
   });
 
   it('starts in light mode and toggles directly to dark mode', async () => {

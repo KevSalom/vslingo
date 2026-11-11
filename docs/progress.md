@@ -4,7 +4,15 @@
 
 Este es el único documento para el estado mutable de implementación. Debe actualizarse al cerrar cada incremento, sin convertir el roadmap estable en una lista de estados.
 
-Última actualización documental: 2026-10-28.
+Última actualización documental: 2026-11-11.
+
+## Ajustes de carga y navegación móvil (2026-11-11)
+
+- Sesión y preferencias comparten un estado de carga con el grano de marca, indicador indeterminado y barras animadas; se respeta movimiento reducido sin inventar porcentajes ni retrasar la carga real.
+- El header móvil permanece en una fila: el cierre de sesión conserva nombre accesible y muestra sólo su icono; el correo se trunca en escritorio. La navegación de cuatro módulos se fija abajo en móvil, con espacio reservado y safe area; los avisos de red, consentimiento e instalación quedan encima.
+- Se retiró el footer de prueba y se sustituyó por un enlace de plan Gratis/Pro basado en el periodo real de cuota. Un fallo de consulta muestra «Ver plan», sin atribuir un plan gratuito incorrectamente. El placeholder de Escribir usa una salida a la playa con amigos.
+- Validación: Astro check sin errores ni warnings (cinco hints heredados), **150 pruebas Vitest** aprobadas y build final de siete rutas. Chrome: tres E2E de Cuenta/navegación, y seis de carga, legibilidad y navegación en claro/oscuro. Edge: tres E2E de Cuenta/navegación aprobados. Capturas revisadas a 320, 390 y 1440 px, comprobación adicional a 768 px y Cuenta con texto al 200 %. El fixture temporal de carga se retiró antes de entregar. No se probaron autenticación Clerk real, dispositivos físicos ni proveedores; los gates externos F7 siguen pendientes.
+- Archivos: shell y su prueba, autenticación y nuevo componente `SessionLoading`, estilos globales, placeholder de Escribir y nueva regresión E2E `workspace-mobile.spec.ts`. Próximo incremento: continuar las verificaciones externas de F7.
 
 ## Limpieza de variantes de marca (2026-10-28)
 

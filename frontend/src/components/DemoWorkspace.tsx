@@ -5,6 +5,7 @@ import { VideoLabProvider } from '../features/video/VideoLabContext';
 import { WritingStudio } from '../features/writing/WritingStudio';
 import { AccountPanel } from '../features/account/AccountPanel';
 import { ProductAuthProvider, useProductSession } from '../shared/auth/ProductAuthProvider';
+import { SessionLoading } from '../shared/auth/SessionLoading';
 import {
   loadAccountPreferences,
   resetAccountPreferences,
@@ -15,7 +16,7 @@ import { EDGE_VOICES } from '../shared/speech/voiceCatalog';
 import { MarketingConsent, ROUTE_CHANGE_EVENT } from '../shared/marketing/MarketingConsent';
 import { PwaInstallPrompt } from '../shared/pwa/PwaInstallPrompt';
 import { ThemeProvider, useTheme } from '../shared/theme/ThemeProvider';
-import { loadPublicPlan, type PublicPlan } from '../shared/usage/usageClient';
+import { loadAccountQuota, type AccountQuota } from '../shared/usage/usageClient';
 
 const VoiceStudio = lazy(() =>
   import('../features/voice/VoiceStudio').then(({ VoiceStudio: Component }) => ({
@@ -110,7 +111,7 @@ function AccountScopedWorkspace() {
   }, [mode, sessionKey, setThemeId]);
 
   if (!preferencesReady) {
-    return <main aria-live="polite" className="auth-gate">Cargando tus preferencias…</main>;
+    return <SessionLoading preferences />;
   }
   return (
     <>
@@ -151,10 +152,10 @@ function Workspace() {
       <header className="workspace-topbar">
         <a className="brand" href="/">
           <img alt="" aria-hidden="true" className="brand-mark" src="/app-icon.svg?v=grain-2" width="32" height="32" />
-          Inglés al Grano
+          <span>Inglés al Grano</span>
         </a>
         <div className="workspace-actions">
-          <span className="alpha-badge">Prueba gratis</span>
+          <AccountPlanBadge activeModule={activeId} />
           <SessionControl />
           <ThemeModeToggle />
         </div>
@@ -203,11 +204,6 @@ function Workspace() {
           {activeId === 'account' ? <AccountPanel /> : null}
         </section>
       </main>
-
-      <footer className="workspace-panel" aria-live="polite">
-        <strong>Tu prueba gratuita</strong>
-        <PlanTrialSummary />
-      </footer>
     </section>
   );
 
@@ -218,38 +214,39 @@ function Workspace() {
   );
 }
 
-function PlanTrialSummary() {
-  const [plan, setPlan] = useState<PublicPlan | null>(null);
+function AccountPlanBadge({ activeModule }: { activeModule: ModuleId }) {
+  const [quota, setQuota] = useState<AccountQuota | null>(null);
 
   useEffect(() => {
     let active = true;
-    void loadPublicPlan()
-      .then((loaded) => { if (active) setPlan(loaded); })
-      .catch(() => undefined);
-    return () => { active = false; };
-  }, []);
+    const refresh = () => {
+      void loadAccountQuota()
+        .then((loaded) => { if (active) setQuota(loaded); })
+        .catch(() => { if (active) setQuota(null); });
+    };
+    refresh();
+    window.addEventListener('focus', refresh);
+    return () => { active = false; window.removeEventListener('focus', refresh); };
+  }, [activeModule]);
 
-  const trial = plan?.trial;
+  const hasAccess = quota && (!quota.ends_at || Date.parse(quota.ends_at) > Date.now());
+  const label = !quota ? 'Ver plan' : quota.source === 'trial' ? 'Gratis' : hasAccess ? 'Pro' : 'Vencido';
   return (
-    <span>
-      {trial
-        ? `${formatPlanMinutes(trial.voice_seconds)} min de voz · hasta ${trial.voice_turns} intervenciones · ${trial.writings} correcciones · ${trial.videos} videos`
-        : '10 min de voz · hasta 30 intervenciones · 10 correcciones · 3 videos'}
-    </span>
+    <a className="account-plan-badge" href="/app/cuenta" aria-label={`Tu plan: ${label}`} title={`Tu plan: ${label}`}>
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="m12 3 7 4v5c0 4-3 7-7 9-4-2-7-5-7-9V7z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /><path d="m9 12 2 2 4-4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      <span>{label}</span>
+    </a>
   );
-}
-
-function formatPlanMinutes(seconds: number): number {
-  return Math.floor(seconds / 60);
 }
 
 function SessionControl() {
   const session = useProductSession();
   if (!session.signOut) return <span className="session-chip">{session.label}</span>;
   return (
-    <button className="session-chip session-button" onClick={() => void session.signOut?.()} type="button">
-      <span>{session.label}</span>
-      <span aria-hidden="true">Salir</span>
+    <button aria-label="Cerrar sesión" title="Cerrar sesión" className="session-chip session-button" onClick={() => void session.signOut?.()} type="button">
+      <span className="session-email">{session.label}</span>
+      <span className="session-exit-label" aria-hidden="true">Salir</span>
+      <svg className="session-exit-icon" aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M9 5H5v14h4m6-11 4 4-4 4m-6-4h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
     </button>
   );
 }
